@@ -1,0 +1,2455 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>A4a · Боковая панель</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#EAE3D2;overflow:hidden;height:100vh}
+#tb{position:fixed;top:0;left:0;right:0;height:44px;background:#1C1208;
+    display:flex;align-items:center;gap:10px;padding:0 14px;z-index:100}
+#tb h1{font-size:.8rem;color:#EDD890;font-weight:normal}
+.btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);
+     color:#EDD890;padding:4px 11px;border-radius:3px;cursor:pointer;
+     font-size:.72rem;font-family:inherit}
+.btn:hover{background:rgba(255,255,255,.2)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:disabled:hover{background:rgba(255,255,255,.1)}
+#vp{position:fixed;top:44px;left:0;right:0;bottom:32px;overflow:hidden;
+    background:radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.12),transparent 70%),#EAE3D2}
+/* bottom info bar */
+#bbar{position:fixed;bottom:0;left:0;right:0;height:32px;background:#1C1208;
+      display:flex;align-items:center;padding:0 14px;gap:12px;z-index:100}
+#info{font-size:.63rem;color:rgba(237,216,144,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+/* lang switcher */
+.lang-btns{display:flex;gap:3px}
+.lbtn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+      color:rgba(237,216,144,.6);padding:2px 8px;border-radius:3px;cursor:pointer;
+      font-size:.68rem;font-family:inherit;transition:.15s}
+.lbtn:hover{background:rgba(255,255,255,.18);color:#EDD890}
+.lbtn.active{background:rgba(192,152,40,.5);border-color:#C09828;color:#EDD890}
+#world{position:absolute;transform-origin:0 0}
+
+/* ── animation ── */
+svg { transition: opacity 0.22s ease-out; }
+svg.fading { opacity: 0 !important; }
+
+/* ── BOTTOM INFO PANEL ── */
+#panel {
+  position: fixed; left: 0; right: 0;
+  bottom: -220px; height: 220px;
+  background: #FAF7F0;
+  border-top: 1px solid rgba(184,144,48,.28);
+  box-shadow: 0 -3px 20px rgba(40,24,10,.13);
+  z-index: 200; overflow: hidden;
+  transition: bottom 0.36s cubic-bezier(.4,0,.2,1);
+  font-family: 'Segoe UI', sans-serif;
+}
+#panel.open { bottom: 32px; }
+#panel::-webkit-scrollbar { height: 3px; }
+#panel::-webkit-scrollbar-thumb { background: rgba(184,144,48,.3); border-radius: 2px; }
+
+/* panel inner layout: horizontal flex */
+#panel-inner {
+  display: flex; flex-direction: row; gap: 0;
+  height: 100%; overflow: hidden;
+}
+/* left column: name + dates */
+#panel-col1 {
+  min-width: 220px; max-width: 260px;
+  padding: 12px 14px 12px 16px;
+  border-right: 1px solid rgba(184,144,48,.18);
+  overflow-y: auto; flex-shrink: 0;
+}
+/* right column: relatives */
+#panel-col2 {
+  flex: 1; padding: 12px 14px;
+  overflow-y: auto;
+  display: flex; flex-wrap: wrap; gap: 0 20px; align-content: flex-start;
+}
+#panel-col2 .p-sec { flex: 0 0 auto; min-width: 160px; }
+
+#panel-close {
+  position: absolute; top: 8px; right: 11px;
+  background: none; border: none; font-size: 1.1rem;
+  cursor: pointer; color: #7A5828; opacity: .55; line-height: 1; z-index: 1;
+}
+#panel-close:hover { opacity: 1; }
+
+#panel h2 {
+  font-size: .95rem; font-weight: 600; color: #28180A;
+  line-height: 1.35; padding-right: 20px; margin-bottom: 3px;
+}
+/* viewport shrinks when panel open */
+#vp.panel-open { bottom: 252px; }
+.p-rel {
+  font-size: .6rem; text-transform: uppercase; letter-spacing: .09em;
+  color: #B89030; font-weight: 700; margin-bottom: 10px; display: block;
+}
+.p-block { font-size: .74rem; line-height: 1.85; color: #28180A; }
+.p-lbl   { color: #7A5828; font-size: .65rem; display: block; }
+.p-hw    { color: rgba(40,24,10,.38); font-size: .6rem; font-style: italic; direction: rtl; }
+.p-sec   { border-top: 1px solid rgba(184,144,48,.2); margin-top: 10px; padding-top: 8px; }
+.p-sec h3 {
+  font-size: .58rem; text-transform: uppercase; letter-spacing: .1em;
+  color: #7A5828; font-weight: 700; margin-bottom: 5px;
+}
+.p-lnk {
+  display: block; font-size: .74rem; padding: 3px 7px; border-radius: 3px;
+  cursor: pointer; color: #28180A; transition: background .12s;
+}
+.p-lnk:hover { background: rgba(184,144,48,.12); }
+.p-warn { font-size: .66rem; color: #A03818; margin-top: 6px; line-height: 1.55; }
+.p-nav-btn {
+  display: block; width: 100%; margin-top: 12px;
+  background: #1E4870; color: white; border: none;
+  padding: 7px; border-radius: 4px; font-size: .74rem;
+  cursor: pointer; font-family: inherit; transition: background .15s;
+}
+.p-nav-btn:hover { background: #2A5E90; }
+
+/* RTL support for Hebrew — text direction only, preserve flex layout */
+body.rtl #tb { direction: ltr; } /* keep toolbar LTR order, items stay in place */
+body.rtl #tb h1 { direction: rtl; } /* only title text flips */
+body.rtl #panel { direction: rtl; }
+body.rtl #panel-col1 { border-right: none; border-left: 1px solid rgba(184,144,48,.18); }
+body.rtl #panel-close { right: auto; left: 11px; }
+body.rtl #modal { direction: rtl; }
+body.rtl #help-bubble { direction: rtl; text-align: right; }
+body.rtl #bbar { direction: ltr; } /* keep lang buttons on right */
+body.rtl #info { direction: rtl; text-align: right; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#cards > g {
+  animation: cardIn 0.32s ease-out both;
+}
+
+/* stagger siblings so they appear sequentially */
+#cards > g:nth-child(1)  { animation-delay: 0.00s; }
+#cards > g:nth-child(2)  { animation-delay: 0.03s; }
+#cards > g:nth-child(3)  { animation-delay: 0.06s; }
+#cards > g:nth-child(4)  { animation-delay: 0.09s; }
+#cards > g:nth-child(5)  { animation-delay: 0.12s; }
+#cards > g:nth-child(6)  { animation-delay: 0.15s; }
+#cards > g:nth-child(7)  { animation-delay: 0.18s; }
+#cards > g:nth-child(8)  { animation-delay: 0.21s; }
+#cards > g:nth-child(n+9){ animation-delay: 0.24s; }
+svg{position:absolute;top:0;left:0;overflow:visible}
+
+/* ── DIAGNOSTIC PANEL ── */
+#diag-overlay{display:none;position:fixed;inset:0;background:rgba(10,6,2,.7);z-index:700;align-items:flex-start;justify-content:center;padding-top:50px}
+#diag-overlay.open{display:flex}
+#diag-box{background:#1C1208;border:1px solid rgba(237,216,144,.25);border-radius:6px;
+  width:560px;max-width:96vw;max-height:80vh;overflow-y:auto;padding:18px 20px;
+  box-shadow:0 8px 40px rgba(0,0,0,.6);color:#EDD890;font-family:monospace;font-size:.72rem}
+#diag-box h3{font-family:Segoe UI,sans-serif;font-size:.88rem;margin-bottom:12px;color:#EDD890}
+.dt{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05);display:flex;gap:8px}
+.dt-ok{color:#5DB85D}.dt-fail{color:#E05050}.dt-warn{color:#E0A050}
+.dt-label{flex:1;color:rgba(237,216,144,.75)}
+.dt-val{color:rgba(255,255,255,.5);font-size:.67rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#diag-close{float:right;background:none;border:none;color:#EDD890;cursor:pointer;font-size:1rem;opacity:.6}
+#diag-close:hover{opacity:1}
+#diag-run{margin-top:10px;background:rgba(237,216,144,.15);border:1px solid rgba(237,216,144,.3);
+  color:#EDD890;padding:4px 14px;border-radius:3px;cursor:pointer;font-size:.75rem}
+#diag-run:hover{background:rgba(237,216,144,.25)}
+#print-overlay{display:none;position:fixed;inset:0;background:rgba(20,12,4,.7);z-index:600;
+               align-items:center;justify-content:center;flex-direction:column;gap:12px}
+#print-overlay.open{display:flex}
+#print-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:480px;width:94vw;
+           box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#print-box h3{font-size:.95rem;font-weight:600;color:#1C1208;margin-bottom:12px}
+#print-box p{font-size:.78rem;color:#555;line-height:1.55;margin-bottom:10px}
+.print-opts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.print-opt{padding:7px 14px;border:1px solid #C09828;border-radius:4px;cursor:pointer;
+           font-size:.78rem;background:#fff;color:#5A3C10;transition:.15s}
+.print-opt:hover{background:#FFF8E8}
+.print-opt.active{background:#C09828;color:#fff}
+.print-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.pbtn{padding:7px 16px;border-radius:4px;border:none;font-family:inherit;font-size:.8rem;cursor:pointer}
+.pbtn-primary{background:#C09828;color:#fff}.pbtn-primary:hover{background:#A07820}
+.pbtn-cancel{background:#eee;color:#555}.pbtn-cancel:hover{background:#ddd}
+
+/* print-frame not used in new-window approach */
+#print-frame { display: none; }
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,12,4,.55);z-index:500;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal{background:#FAF7F0;border-radius:8px;width:420px;max-width:94vw;max-height:88vh;overflow-y:auto;
+       box-shadow:0 8px 40px rgba(20,12,4,.4);padding:22px 22px 18px}
+#modal h3{font-size:.95rem;font-weight:600;color:#28180A;margin-bottom:14px}
+#modal label{display:block;font-size:.75rem;color:#7A5828;margin:10px 0 3px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+#modal input,#modal select,#modal textarea{width:100%;padding:7px 10px;border:1px solid rgba(184,144,48,.35);
+  border-radius:4px;font-family:inherit;font-size:.82rem;background:#FFFDF7;color:#28180A;outline:none}
+#modal input:focus,#modal select:focus,#modal textarea:focus{border-color:#C09828}
+#modal textarea{resize:vertical;min-height:72px}
+.modal-types{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.mtype{padding:6px 12px;border:1px solid rgba(184,144,48,.35);border-radius:20px;
+        font-size:.78rem;cursor:pointer;background:#FFFDF7;color:#5A3C10;transition:.15s}
+.mtype:hover{background:rgba(192,152,40,.12)}
+.mtype.active{background:#C09828;color:#fff;border-color:#C09828}
+.mfields{display:none}
+.mfields.active{display:block}
+#prompt-out{background:#F0EBD8;font-family:monospace;font-size:.75rem;color:#2A1A08;
+            border:1px solid rgba(184,144,48,.3);border-radius:4px;padding:10px;
+            white-space:pre-wrap;margin-top:10px;min-height:60px}
+.modal-btns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.mbtn{padding:7px 16px;border-radius:4px;border:none;font-family:inherit;font-size:.8rem;cursor:pointer}
+.mbtn-primary{background:#C09828;color:#fff}
+.mbtn-primary:hover{background:#A07820}
+.mbtn-secondary{background:rgba(184,144,48,.15);color:#7A5828;border:1px solid rgba(184,144,48,.3)}
+.mbtn-secondary:hover{background:rgba(184,144,48,.25)}
+.mbtn-email{background:#2E7D32;color:#fff}
+.mbtn-email:hover{background:#1B5E20}
+.mbtn-close{margin-right:auto;background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 4px}
+.mbtn-close:hover{color:#555}
+/* help tooltip */
+#help-bubble{display:none;position:fixed;top:52px;right:14px;width:280px;background:#1C1208;
+             color:#EDD890;font-size:.75rem;padding:12px 14px;border-radius:6px;z-index:600;
+             box-shadow:0 4px 20px rgba(0,0,0,.4);line-height:1.5}
+#help-bubble.open{display:block}
+#help-bubble b{display:block;margin-bottom:4px;font-size:.8rem}
+#help-bubble ol{padding-left:16px;margin-top:4px}
+#help-bubble li{margin-bottom:3px}
+</style>
+</head>
+<body>
+<div id="tb">
+  <h1 data-i="tree_title">🌳 Мостовые · Журахинские · Лейцис</h1>
+  <button class="btn" id="btn-back" data-i="back">◀ Назад</button>
+  <button class="btn" id="btn-p3" data-i="nav_miroslaw">★ Мирослав</button>
+  <button class="btn" id="btn-p1" data-i="nav_yakov">Яков (P1)</button>
+  <button class="btn" id="btn-p42" data-i="nav_levik">Левик (P42)</button>
+  <button class="btn" id="btn-p11" data-i="nav_evgeny">Евгений (P11)</button>
+  <button class="btn" id="btn-edit" style="margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
+  <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1">🖨</button>
+  <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика">⚙</button>
+  <button class="btn" id="btn-help" style="padding:4px 8px;opacity:.7">?</button>
+</div>
+<!-- ── BOTTOM BAR ── -->
+<div id="bbar">
+  <div id="info"></div>
+  <div class="lang-btns">
+    <button class="lbtn active" data-lang="ru">РУС</button>
+    <button class="lbtn" data-lang="en">ENG</button>
+    <button class="lbtn" data-lang="he">עב</button>
+  </div>
+</div>
+<!-- ── BOTTOM INFO PANEL ── -->
+<div id="panel">
+  <button id="panel-close">×</button>
+  <div id="panel-inner">
+    <div id="panel-col1"></div>
+    <div id="panel-col2"></div>
+  </div>
+</div>
+
+<!-- ── EDIT MODAL ── -->
+<div id="modal-overlay">
+<div id="modal">
+  <button class="mbtn-close" id="modal-close">×</button>
+  <h3 data-i="modal_title">✏️ Дополнить дерево</h3>
+
+  <label data-i="lbl_add_type">Тип дополнения</label>
+  <div class="modal-types">
+    <div class="mtype active" data-type="person" data-i="mtype_person">👤 Новый человек</div>
+    <div class="mtype" data-type="photo"  data-i="mtype_photo">📷 Фото</div>
+    <div class="mtype" data-type="bio"    data-i="mtype_bio">📝 Биография</div>
+    <div class="mtype" data-type="date"   data-i="mtype_date">📅 Дата / место</div>
+    <div class="mtype" data-type="fix"    data-i="mtype_fix">🔧 Исправить</div>
+  </div>
+
+  <!-- Поля: Новый человек -->
+  <div class="mfields active" id="mf-person">
+    <label data-i="lbl_name">Имя (полное)</label>
+    <input id="f-name" type="text" data-ph="ph_name" placeholder="Например: Анна Иванова">
+    <label data-i="lbl_sex">Пол</label>
+    <select id="f-sex"><option value="" data-i="sex_choose">— выбрать —</option><option value="F" data-i="sex_f">Женский</option><option value="M" data-i="sex_m">Мужской</option></select>
+    <label data-i="lbl_birth">Дата рождения</label>
+    <input id="f-birth" type="text" data-ph="ph_birth" placeholder="Например: 15 марта 1975">
+    <label data-i="lbl_death">Дата смерти (если есть)</label>
+    <input id="f-death" type="text" data-ph="ph_death" placeholder="оставьте пустым если жив(а)">
+    <label data-i="lbl_rel_person">Связь с кем</label>
+    <input id="f-rel-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_rel_type">Тип связи</label>
+    <select id="f-rel-type">
+      <option value="" data-i="rel_choose">— выбрать —</option>
+      <option value="жена" data-i="rel_wife">Жена</option>
+      <option value="муж" data-i="rel_husband">Муж</option>
+      <option value="ребёнок" data-i="rel_child">Ребёнок</option>
+      <option value="родитель" data-i="rel_parent">Родитель</option>
+    </select>
+    <label data-i="lbl_phone">Телефон</label>
+    <input id="f-phone" type="tel" data-ph="ph_phone" placeholder="+972-50-000-0000">
+    <label data-i="lbl_email">Email</label>
+    <input id="f-email" type="email" data-ph="ph_email" placeholder="example@mail.com">
+  </div>
+
+  <!-- Поля: Фото -->
+  <div class="mfields" id="mf-photo">
+    <label data-i="lbl_person">Персона</label>
+    <input id="f-photo-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_photo_url">URL фотографии</label>
+    <input id="f-photo-url" type="url" data-ph="ph_url" placeholder="https://drive.google.com/...">
+    <label data-i="lbl_caption">Подпись (год, место)</label>
+    <input id="f-photo-cap" type="text" data-ph="ph_caption" placeholder="Например: 1965, Одесса">
+  </div>
+
+  <!-- Поля: Биография -->
+  <div class="mfields" id="mf-bio">
+    <label data-i="lbl_person">Персона</label>
+    <input id="f-bio-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_bio_text">Текст биографии</label>
+    <textarea id="f-bio-text" data-ph="ph_bio" placeholder="Краткое жизнеописание, воспоминания..."></textarea>
+    <label data-i="lbl_bio_url">Ссылка на подробный документ (необязательно)</label>
+    <input id="f-bio-url" type="url" data-ph="ph_gdoc" placeholder="https://docs.google.com/...">
+  </div>
+
+  <!-- Поля: Дата / место -->
+  <div class="mfields" id="mf-date">
+    <label data-i="lbl_person">Персона</label>
+    <input id="f-date-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_note">Уточнение (что именно)</label>
+    <textarea id="f-date-note" data-ph="ph_note" placeholder="Например: дата рождения — 3 апреля 1932, место рождения — Харьков"></textarea>
+  </div>
+
+  <!-- Поля: Исправить -->
+  <div class="mfields" id="mf-fix">
+    <label data-i="lbl_fix_person">Персона (кого исправить)</label>
+    <input id="f-fix-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <!-- Current data card — populated by openModal when called from panel -->
+    <div id="fix-current-data" style="display:none;background:#F5F0E8;border:1px solid rgba(184,144,48,.3);
+      border-radius:4px;padding:10px 12px;margin:8px 0;font-size:.75rem;color:#5A3C10;line-height:1.8;
+      white-space:pre-wrap;font-family:inherit"></div>
+    <label data-i="lbl_fix_field">Что исправить</label>
+    <select id="f-fix-field">
+      <option value="name"     data-i="fix_name">Имя</option>
+      <option value="birth"    data-i="fix_birth">Дата рождения</option>
+      <option value="death"    data-i="fix_death">Дата смерти</option>
+      <option value="birth_he" data-i="fix_birth_he">Дата рождения (еврейский календарь)</option>
+      <option value="death_he" data-i="fix_death_he">Дата смерти (еврейский календарь)</option>
+      <option value="phone"    data-i="lbl_phone">Телефон</option>
+      <option value="email"    data-i="lbl_email">Email</option>
+      <option value="sex"      data-i="lbl_sex">Пол</option>
+      <option value="rel"      data-i="fix_rel">Степень родства</option>
+      <option value="family"   data-i="fix_family">Семейная связь</option>
+      <option value="other"    data-i="fix_other">Другое</option>
+    </select>
+    <label data-i="lbl_fix_old">Текущее значение (если знаете)</label>
+    <textarea id="f-fix-old" data-ph="ph_fix_old" placeholder="Что сейчас написано (необязательно)" style="min-height:90px;resize:vertical"></textarea>
+    <label data-i="lbl_fix_new">Верное значение / исправление</label>
+    <textarea id="f-fix-new" data-ph="ph_fix_new" placeholder="Что должно быть вместо этого"></textarea>
+    <label data-i="lbl_comment">Комментарий (необязательно)</label>
+    <input id="f-fix-comment" type="text" data-ph="ph_comment" placeholder="Источник, пояснение...">
+  </div>
+
+  <datalist id="names-list"></datalist>
+
+  <div class="modal-btns">
+    <button class="mbtn mbtn-secondary" id="modal-cancel" data-i="btn_cancel">Отмена</button>
+    <button class="mbtn mbtn-primary" id="modal-generate" data-i="btn_generate">✉ Сформировать и отправить по email</button>
+  </div>
+
+  <div id="prompt-out" style="display:none"></div>
+  <div id="copy-row" style="display:none;margin-top:8px;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <button class="mbtn mbtn-primary" id="btn-copy" data-i="btn_copy">📋 Копировать</button>
+    <button class="mbtn mbtn-email" id="btn-email" data-i="btn_email">✉️ Отправить по email</button>
+  </div>
+</div>
+</div>
+
+<!-- ── HELP BUBBLE ── -->
+<div id="help-bubble">
+  <b>Как дополнить дерево?</b>
+  <ol>
+    <li>Нажмите «✏️ Дополнить» и заполните форму</li>
+    <li>Скопируйте сформированный запрос</li>
+    <li>Откройте <b>claude.ai</b></li>
+    <li>Загрузите этот HTML-файл</li>
+    <li>Вставьте скопированный текст и отправьте</li>
+    <li>Скачайте обновлённый файл</li>
+  </ol>
+</div>
+
+<!-- ── DIAGNOSTIC PANEL ── -->
+<div id="diag-overlay">
+  <div id="diag-box">
+    <button id="diag-close">×</button>
+    <h3>⚙ Диагностика системы</h3>
+    <div id="diag-results"></div>
+    <button id="diag-run">↺ Повторить тест</button>
+  </div>
+</div>
+
+<!-- ── PRINT PREVIEW ── -->
+<div id="print-overlay">
+  <div id="print-box">
+    <h3>🖨 Печать генеалогического дерева</h3>
+    <p>Будет сформирован и скачан HTML-файл. Откройте его в браузере и нажмите <strong>Ctrl+P</strong> (или ⌘P на Mac) — выберите принтер или «Сохранить как PDF».</p>
+    <div class="print-opts">
+      <div class="print-opt active" data-fmt="A1L">A1 альбом</div>
+      <div class="print-opt" data-fmt="A0L">A0 альбом</div>
+      <div class="print-opt" data-fmt="A2L">A2 альбом</div>
+    </div>
+    <p id="print-stats" style="font-size:.72rem;color:#888"></p>
+    <div class="print-btns">
+      <button class="pbtn pbtn-cancel" id="print-cancel">Отмена</button>
+      <button class="pbtn pbtn-primary" id="print-go">⬇ Скачать для печати</button>
+    </div>
+  </div>
+</div>
+<!-- hidden SVG frame used during printing -->
+<svg id="print-frame" xmlns="http://www.w3.org/2000/svg"></svg>
+
+<div id="vp"><div id="world"><svg id="svg"></svg></div></div>
+
+<script>
+const IDX = {"nodes": {"P1": {"id": "P1", "name": "Яков Мостовой", "birth": "15 NOV 1936", "death": "25 JAN 2021", "sex": "M", "gen": 2, "missing": [], "death_he": "יב שבט תשפ״א", "birth_he": "א כסלו תרצ״ז", "rel": "Отец", "hd": "יב שבט תשפ״א"}, "P2": {"id": "P2", "name": "Сицилия Мостовая", "birth": "3 SEP 1938", "death": "28 OCT 2022", "sex": "F", "gen": 2, "missing": [], "death_he": "ג חשון תשפ״ג", "birth_he": "ח אלול תרצ״ח", "rel": "Мать", "hd": "ג חשון תשפ״ג"}, "P3": {"id": "P3", "name": "Мирослав Мостовой", "birth": "9 OCT 1970", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": "Составитель"}, "P4": {"id": "P4", "name": "Моисей Мостовой", "birth": "1901", "death": "OCT 1942", "sex": "M", "gen": 1, "missing": [], "rel": "Дедушка (по отцу)"}, "P5": {"id": "P5", "name": "Александр Лейцис", "birth": "17 NOV 1913", "death": "1941", "sex": "M", "gen": 1, "missing": [], "rel": "Дедушка (по матери)"}, "P6": {"id": "P6", "name": "Людмила Гинзбург", "birth": "6 DEC 1973", "death": "", "sex": "F", "gen": 3, "missing": [], "birth_he": "יא כסלו תשל״ד", "rel": "Сестра"}, "P7": {"id": "P7", "name": "Татьяна Журахинская", "birth": "1 JAN 1912", "death": "4 SEP 2006", "sex": "F", "gen": 1, "missing": [], "rel": "Бабушка (по отцу)"}, "P8": {"id": "P8", "name": "Розалия Мостовая", "birth": "9 MAR 1958", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": "Тётя"}, "P9": {"id": "P9", "name": "Михаил Мостовой", "birth": "21 APR 1974", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P10": {"id": "P10", "name": "Елена Мостовая", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения: требует уточнения (указанная дата 22 MAR 1963 невозможна — мать Розалия р.1958)"], "rel": ""}, "P11": {"id": "P11", "name": "Евгений Гинзбург", "birth": "8 APR 1971", "death": "", "sex": "M", "gen": 3, "missing": [], "birth_he": "יג ניסן תשל'א", "hebrew_name": "יעקב", "rel": "Зять"}, "P12": {"id": "P12", "name": "Йосеф Хаим Гинзбург", "birth": "29 JAN 1999", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "יב שבט תשנ״ט", "rel": "Племянник"}, "P13": {"id": "P13", "name": "Йуда Леви Гинзбург", "birth": "31 JAN 2000", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "כד שבט תש״ס", "rel": "Племянник"}, "P14": {"id": "P14", "name": "Ривка Хайа Гинзбург", "birth": "3 AUG 2001", "death": "", "sex": "F", "gen": 4, "missing": [], "birth_he": "יד אב תשס״א", "rel": "Племянница"}, "P15": {"id": "P15", "name": "Элиэзер Ицхак Гинзбург", "birth": "29 OCT 2002", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "כג חשון תשס״ג", "rel": "Племянник"}, "P16": {"id": "P16", "name": "Адасса Рахель Гинзбург", "birth": "20 MAR 2005", "death": "", "sex": "F", "gen": 4, "missing": [], "birth_he": "ט אדר ב' תשס״ה", "rel": "Племянница"}, "P17": {"id": "P17", "name": "Моше Давид Гинзбург", "birth": "20 JAN 2007", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "ב שבט תשס״ז", "rel": "Племянник"}, "P18": {"id": "P18", "name": "Леонид Гинзбург", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": "Зять (Леонид Гинзбург)"}, "P19": {"id": "P19", "name": "Малка Журахинская", "birth": "1875", "death": "26 JUN 1947", "sex": "F", "gen": 0, "missing": [], "rel": "Прабабушка"}, "P20": {"id": "P20", "name": "Герш Журахинский", "birth": "1877", "death": "", "sex": "M", "gen": 1, "missing": ["дата смерти"], "rel": "Прадедушка"}, "P21": {"id": "P21", "name": "Ефим Хаим Журахинский", "birth": "1897", "death": "15 MAR 1975", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P22": {"id": "P22", "name": "Миша Журахинский", "birth": "8 MAR 1903", "death": "MAR 1989", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P23": {"id": "P23", "name": "Аня Журахинская", "birth": "17 OCT 1907", "death": "1992", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P24": {"id": "P24", "name": "Маша Пейсахович", "birth": "1913", "death": "17 FEB 1948", "sex": "F", "gen": 1, "missing": [], "rel": "Бабушка (по матери)"}, "P25": {"id": "P25", "name": "Ира Витинбергская", "birth": "11 OCT 1941", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": "Тётя"}, "P26": {"id": "P26", "name": "Эдик Витинбергский", "birth": "24 MAR 1938", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P27": {"id": "P27", "name": "Вика Кравцова", "birth": "23 JAN 1968", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P28": {"id": "P28", "name": "Борис Рабинович", "birth": "5 NOV 1935", "death": "23 MAR 1979", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P29": {"id": "P29", "name": "Лева Лейцис", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": "Прадедушка"}, "P30": {"id": "P30", "name": "Маня", "birth": "1977", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": "Прабабушка"}, "P31": {"id": "P31", "name": "Женя Итигина", "birth": "24 JAN 1918", "death": "13 FEB 2006", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P32": {"id": "P32", "name": "Даня Лейцис", "birth": "1942", "death": "", "sex": "M", "gen": 2, "missing": ["дата смерти"], "rel": "Дядя по матери (Даня Лейцис)"}, "P33": {"id": "P33", "name": "Александр Итигин", "birth": "1 JAN 1905", "death": "1990", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P34": {"id": "P34", "name": "Люба Итигина", "birth": "30 OCT 1946", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P35": {"id": "P35", "name": "Боря", "birth": "27 SEP 1969", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P36": {"id": "P36", "name": "Ницан Кравцов", "birth": "25 JUL 1991", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P37": {"id": "P37", "name": "Карина Кравцова", "birth": "8 OCT 1998", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P38": {"id": "P38", "name": "Юра", "birth": "", "death": "", "sex": "M", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P39": {"id": "P39", "name": "Юстин", "birth": "4 AUG 1992", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P40": {"id": "P40", "name": "Юлия", "birth": "6 MAY 1970", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P41": {"id": "P41", "name": "Яков Мостовой (ст.)", "birth": "1872", "death": "1918", "sex": "M", "gen": 0, "missing": [], "rel": "Прадедушка"}, "P42": {"id": "P42", "name": "Левик Ицик Пейсахович", "birth": "1888", "death": "5 JUN 1969", "sex": "M", "gen": 1, "missing": [], "rel": "Прадедушка"}, "P43": {"id": "P43", "name": "Ицик Пейсахович", "birth": "", "death": "ум.", "sex": "M", "gen": 0, "missing": ["дата рождения"], "rel": ""}, "P44": {"id": "P44", "name": "Циля", "birth": "", "death": "", "sex": "F", "gen": 1, "missing": ["дата рождения"], "rel": "Прабабушка"}, "P45": {"id": "P45", "name": "Зина", "birth": "", "death": "ум.", "sex": "F", "gen": 1, "missing": ["дата рождения"], "rel": ""}, "P46": {"id": "P46", "name": "Ида Пейсахович", "birth": "21 JUN 1926", "death": "", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P47": {"id": "P47", "name": "Лазарь Хаскилевич Вайнтроб", "birth": "7 JUN 1926", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P48": {"id": "P48", "name": "Леонид Вайнтроб", "birth": "1960", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P49": {"id": "P49", "name": "Оля Вайнтроб", "birth": "23 SEP 1956", "death": "10 OCT 2023", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P50": {"id": "P50", "name": "Светлана Игнатенко", "birth": "1959", "death": "", "sex": "F", "gen": 2, "missing": ["дата смерти"], "rel": ""}, "P51": {"id": "P51", "name": "Денис Игнатенко", "birth": "5 JUN 1990", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P52": {"id": "P52", "name": "Марио Игнатенко", "birth": "26 JUN 2000", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P53": {"id": "P53", "name": "Маня (Мирьям) Коган", "birth": "17 JUN 1888", "death": "5 JUN 1977", "sex": "F", "gen": 0, "missing": [], "rel": ""}, "P54": {"id": "P54", "name": "Сеня Журахинский", "birth": "1915", "death": "1941", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P55": {"id": "P55", "name": "Шая Журахинский", "birth": "1908", "death": "1941", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P56": {"id": "P56", "name": "Роза Гелис", "birth": "1902", "death": "1939", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P57": {"id": "P57", "name": "Циля Журахинская", "birth": "28 FEB 1922", "death": "1959", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P58": {"id": "P58", "name": "Соня Журахинская", "birth": "15 SEP 1925", "death": "2001", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P59": {"id": "P59", "name": "Григорий (Гриша) Журахинский", "birth": "28 MAR 1926", "death": "19 MAR 2005", "sex": "M", "gen": 1, "missing": [], "rel": "", "dp": "Цфат, Израиль"}, "P60": {"id": "P60", "name": "Миля", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P61": {"id": "P61", "name": "Фима Щиглик", "birth": "1920", "death": "ум.", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P62": {"id": "P62", "name": "Алик Щиглик", "birth": "21 APR 1954", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P63": {"id": "P63", "name": "Саша Щиглик", "birth": "19 NOV 1957", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P64": {"id": "P64", "name": "Софа", "birth": "1955", "death": "", "sex": "F", "gen": 2, "missing": ["дата смерти"], "rel": ""}, "P65": {"id": "P65", "name": "Лена", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P66": {"id": "P66", "name": "Света Щиглик", "birth": "1988", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P67": {"id": "P67", "name": "Юля", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P68": {"id": "P68", "name": "Фима Щиглик (мл.)", "birth": "2002", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P69": {"id": "P69", "name": "Ханка (Ляля) Элиновна Скородинская", "birth": "5 FEB 1925", "death": "25 APR 2002", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P70": {"id": "P70", "name": "Бася", "birth": "1879", "death": "1942", "sex": "F", "gen": 0, "missing": [], "rel": "Прабабушка"}, "P71": {"id": "P71", "name": "Натаниэль-Шломо Гинзбург", "birth": "29 MAY 2014", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "כט אייר תשע״ד", "rel": "Племянник"}, "P73": {"id": "P73", "name": "Менахем-Меир Гинзбург", "birth": "11 AUG 2011", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "יא אב תשע״א", "rel": "Племянник"}, "P74": {"id": "P74", "name": "Даниэль-Симха Гинзбург", "birth": "1 OCT 2009", "death": "", "sex": "M", "gen": 4, "missing": [], "birth_he": "יג תשרי תש״ע", "rel": "Племянник"}, "P80": {"id": "P80", "name": "Хана Мостовая", "birth": "1899", "death": "1985", "sex": "F", "gen": 1, "missing": [], "rel": "Сестра деда (Мостовая)"}, "P81": {"id": "P81", "name": "Маша Мостовая", "birth": "1904", "death": "", "sex": "F", "gen": 1, "missing": ["дата смерти"], "rel": "Сестра деда (Мостовая)"}, "P82": {"id": "P82", "name": "Поля Мостовая", "birth": "1910", "death": "1986", "sex": "F", "gen": 1, "missing": [], "rel": "Двоюродная прабабушка (Поля Мостовая)"}, "P83": {"id": "P83", "name": "Сурка (Соня) Яковлевна Мостовая", "birth": "5 JUN 1912", "death": "", "sex": "F", "gen": 1, "missing": [], "rel": "Сестра деда (Мостовая)"}, "P84": {"id": "P84", "name": "Неизвестно Мостовой", "birth": "1918", "death": "", "sex": "M", "gen": 1, "missing": ["дата смерти"], "rel": "Брат деда (Мостовой)"}, "P90": {"id": "P90", "name": "Володя Кандыба", "birth": "9 MAY 1905", "death": "1986", "sex": "M", "gen": 1, "missing": [], "rel": "Прадедушка (Кандыба)"}, "P91": {"id": "P91", "name": "Беба Берман (ур. Кандыба)", "birth": "30 AUG 1934", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P92": {"id": "P92", "name": "Гриша Кандыба", "birth": "15 AUG 1937", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P93": {"id": "P93", "name": "Роза Кандыба", "birth": "4 AUG 1941", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P94": {"id": "P94", "name": "Евгений (Женя) Кандыба", "birth": "16 MAY 1977", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P95": {"id": "P95", "name": "Слава Кандыба", "birth": "11 JAN 1983", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P96": {"id": "P96", "name": "Эмили Кандыба", "birth": "", "death": "", "sex": "F", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P100": {"id": "P100", "name": "Давид Зицер (ст.)", "birth": "1905", "death": "1935", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P101": {"id": "P101", "name": "Борис Зицер", "birth": "15 MAY 1916", "death": "13 OCT 1986", "sex": "M", "gen": 1, "missing": [], "rel": "Прадедушка (Зицер)"}, "P102": {"id": "P102", "name": "Клара Наула", "birth": "4 APR 1922", "death": "9 JAN 2006", "sex": "F", "gen": 1, "missing": [], "rel": ""}, "P103": {"id": "P103", "name": "Аня Зицер", "birth": "17 APR 1954", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P104": {"id": "P104", "name": "Давид Зицер", "birth": "24 JUN 1948", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P105": {"id": "P105", "name": "Светлана Зицер", "birth": "12 DEC 1975", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P106": {"id": "P106", "name": "Евгений Зицер", "birth": "3 FEB 1981", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P110": {"id": "P110", "name": "Митя Яновский", "birth": "26 SEP 1913", "death": "20 SEP 2006", "sex": "M", "gen": 1, "missing": [], "rel": "Муж двоюродной прабабушки (Яновский)"}, "P111": {"id": "P111", "name": "Дима Яновский", "birth": "22 JAN 1946", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": "Троюродный дядя (Дима Яновский)"}, "P112": {"id": "P112", "name": "Гена Яновский", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": "Троюродный дядя (Гена Яновский)"}, "P113": {"id": "P113", "name": "Ира Яновская", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": "Троюродная тётя (Ира Яновская)"}, "P120": {"id": "P120", "name": "Леня Бердичевский", "birth": "16 FEB 1936", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P121": {"id": "P121", "name": "Митя Берман", "birth": "20 JAN 1931", "death": "2005", "sex": "M", "gen": 1, "missing": [], "rel": "Прадедушка (Берман)"}, "P122": {"id": "P122", "name": "Янэк Берман", "birth": "22 JUN 1964", "death": "17 AUG 2003", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P123": {"id": "P123", "name": "Игорь Берман", "birth": "4 JUN 1966", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P124": {"id": "P124", "name": "Владик Берман", "birth": "17 OCT 1990", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P125": {"id": "P125", "name": "Аркадий Абрамович", "birth": "25 DEC 1955", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P126": {"id": "P126", "name": "Александр Абрамович", "birth": "10 JAN 1983", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P127": {"id": "P127", "name": "Ирина Абрамович", "birth": "30 DEC 1985", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P130": {"id": "P130", "name": "Александр Анапольский", "birth": "1972", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P131": {"id": "P131", "name": "Илиана Анапольская", "birth": "21 JUN 1996", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P132": {"id": "P132", "name": "Брендон Анапольский", "birth": "14 JUL 2003", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P140": {"id": "P140", "name": "Люда Журахинская (Игдал)", "birth": "16 DEC 1951", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P141": {"id": "P141", "name": "Элеонора (Элла) Журахинская (Ямпольская)", "birth": "13 MAR 1958", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P150": {"id": "P150", "name": "Миша Кульницкий", "birth": "1915", "death": "1990", "sex": "M", "gen": 1, "missing": [], "rel": "Прадедушка (Кульницкий)"}, "P151": {"id": "P151", "name": "Леня Кульницкий", "birth": "1947", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P152": {"id": "P152", "name": "Неизвестно Кульницкий", "birth": "1970", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P153": {"id": "P153", "name": "Маша Кульницкий", "birth": "1981", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P160": {"id": "P160", "name": "Алла Берман", "birth": "19 SEP 1969", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": "Двоюродная родственница (Берман)"}, "P161": {"id": "P161", "name": "Арик", "birth": "23 JUN 1998", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P162": {"id": "P162", "name": "Вадим", "birth": "1996", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P163": {"id": "P163", "name": "Дина Кандыба", "birth": "1942", "death": "", "sex": "F", "gen": 2, "missing": ["дата смерти"], "rel": ""}, "P164": {"id": "P164", "name": "Женя", "birth": "1985", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P165": {"id": "P165", "name": "Лев", "birth": "1939", "death": "", "sex": "M", "gen": 2, "missing": ["дата смерти"], "rel": ""}, "P166": {"id": "P166", "name": "Максим", "birth": "1990", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P167": {"id": "P167", "name": "Мишель", "birth": "24 APR 2004", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P168": {"id": "P168", "name": "Павел", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P169": {"id": "P169", "name": "Рая Берман", "birth": "1964", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": "Двоюродная родственница (Берман)"}, "P170": {"id": "P170", "name": "Света", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P171": {"id": "P171", "name": "Сеня", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P172": {"id": "P172", "name": "Софа Байтман", "birth": "29 JUN 1951", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P173": {"id": "P173", "name": "Марьяна Бердичевская", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P174": {"id": "P174", "name": "Хана (2)", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P175": {"id": "P175", "name": "Шели", "birth": "24 APR 2004", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P176": {"id": "P176", "name": "Ива", "birth": "1924", "death": "", "sex": "F", "gen": 1, "missing": ["дата смерти"], "rel": ""}, "P200": {"id": "P200", "name": "Феня Мойсеевна Мининская", "birth": "1912", "death": "1990", "sex": "F", "gen": 1, "missing": [], "rel": "Жена дяди (Феня Мининская)"}, "P201": {"id": "P201", "name": "Рома Мостовой", "birth": "12 DEC 2011", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": "Племянник (сын Михаила)"}, "P203": {"id": "P203", "name": "Адам Кандыба", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P204": {"id": "P204", "name": "Елена Рудинска", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P205": {"id": "P205", "name": "Alexander Goldberg", "birth": "", "death": "", "sex": "M", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P206": {"id": "P206", "name": "Marina Kaplan Rudinski", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P207": {"id": "P207", "name": "Golda Kleinberg", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P208": {"id": "P208", "name": "Ира Бенджаминович", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P209": {"id": "P209", "name": "Stanley Goldberg", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P210": {"id": "P210", "name": "Stas Tubelski", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P211": {"id": "P211", "name": "Gennadiy Goldberg", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P212": {"id": "P212", "name": "Толик", "birth": "1958", "death": "", "sex": "M", "gen": 2, "missing": ["дата смерти"], "rel": ""}, "P213": {"id": "P213", "name": "Юля Кандыба", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P214": {"id": "P214", "name": "Ида Львовна Вайнтроб", "birth": "21 JUL 1927", "death": "8 MAY 2022", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P215": {"id": "P215", "name": "Станислав Семеновский", "birth": "14 NOV 1955", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P216": {"id": "P216", "name": "Зина Семеновская", "birth": "10 JUL 1982", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P217": {"id": "P217", "name": "Эмили Роман", "birth": "20 JUN 2023", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P218": {"id": "P218", "name": "Зинаида Исааковна Розенберг", "birth": "", "death": "", "sex": "F", "gen": 0, "missing": ["дата рождения", "дата смерти"], "rel": ""}, "P219": {"id": "P219", "name": "Хаскил Вайнтроб", "birth": "", "death": "", "sex": "M", "gen": 1, "missing": ["дата рождения", "дата смерти"], "rel": ""}, "P220": {"id": "P220", "name": "Миша Моисеевич Дмитвенко", "birth": "1904", "death": "1984", "sex": "M", "gen": 1, "missing": [], "rel": ""}, "P221": {"id": "P221", "name": "Моисей Мининский", "birth": "", "death": "", "sex": "M", "gen": 0, "missing": ["дата рождения", "дата смерти"], "rel": ""}, "P222": {"id": "P222", "name": "Семён Игдал", "birth": "15 JAN 1948", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P223": {"id": "P223", "name": "Евгения Игдал", "birth": "26 MAR 1976", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P224": {"id": "P224", "name": "Неизвестно Лейцис (отец)", "birth": "", "death": "", "sex": "M", "gen": 0, "missing": ["дата рождения", "дата смерти", "имя"], "rel": ""}, "P225": {"id": "P225", "name": "Владислав Игдал", "birth": "30 DEC 1972", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P226": {"id": "P226", "name": "Шон Игдал", "birth": "12 OCT 2001", "death": "", "sex": "M", "gen": 4, "missing": [], "rel": ""}, "P227": {"id": "P227", "name": "Лия Игдал", "birth": "27 AUG 2005", "death": "", "sex": "F", "gen": 4, "missing": [], "rel": ""}, "P228": {"id": "P228", "name": "Анатолий Ямпольский", "birth": "10 OCT 1956", "death": "13 SEP 2023", "sex": "M", "gen": 2, "missing": [], "rel": "", "dp": "Кармиэль, Израиль"}, "P229": {"id": "P229", "name": "Михаэль Ямпольский", "birth": "30 JUL 1980", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": "", "bp": "Киев, Украина"}, "P230": {"id": "P230", "name": "Виктория Ямпольская", "birth": "25 OCT 1982", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": "", "bp": "Мариуполь, Украина"}, "P231": {"id": "P231", "name": "Вадим Ямпольский", "birth": "8 NOV 1987", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": "", "bp": "Киев, Украина"}, "P232": {"id": "P232", "name": "Борис (Борух) Рувимович Фирштер", "birth": "9 MAY 1908", "death": "", "sex": "M", "gen": 1, "missing": ["дата смерти"], "rel": ""}, "P233": {"id": "P233", "name": "Бася Фирштер (Рогинская)", "birth": "4 NOV 1949", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P234": {"id": "P234", "name": "Алик (Олег/Цудик) Мостовой", "birth": "12 DEC 1946", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": ""}, "P235": {"id": "P235", "name": "Борис Рогинский", "birth": "", "death": "", "sex": "M", "gen": 2, "missing": ["дата рождения"], "rel": ""}, "P236": {"id": "P236", "name": "Оля Рогинская", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P237": {"id": "P237", "name": "Аня Рогинская", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P238": {"id": "P238", "name": "Юра Кретинген", "birth": "", "death": "", "sex": "M", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P239": {"id": "P239", "name": "Изя (Исраэль) Кретинген", "birth": "9 NOV 1973", "death": "", "sex": "M", "gen": 2, "missing": [], "rel": "", "bp": "Баку"}, "P240": {"id": "P240", "name": "Лидор Авигад", "birth": "10 MAY 1978", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P241": {"id": "P241", "name": "Люба Мостовая", "birth": "7 JUL 1947", "death": "", "sex": "F", "gen": 2, "missing": [], "rel": ""}, "P242": {"id": "P242", "name": "Семён (Сеня) Мостовой", "birth": "30 SEP 1967", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P243": {"id": "P243", "name": "Майа Мостовая", "birth": "2 MAY 1967", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}, "P244": {"id": "P244", "name": "Полина Мостовая", "birth": "", "death": "", "sex": "F", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P245": {"id": "P245", "name": "Лиза Мостовая", "birth": "", "death": "", "sex": "F", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P246": {"id": "P246", "name": "Леня Мостовой", "birth": "1974", "death": "", "sex": "M", "gen": 3, "missing": [], "rel": ""}, "P248": {"id": "P248", "name": "Светлана Винаковская", "birth": "", "death": "", "sex": "F", "gen": 2, "missing": ["дата рождения"], "rel": "Свекровь Людмилы"}, "P249": {"id": "P249", "name": "Инна Гинзбург", "birth": "", "death": "", "sex": "F", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P250": {"id": "P250", "name": "Кальман Гайштат", "birth": "", "death": "", "sex": "M", "gen": 3, "missing": ["дата рождения"], "rel": ""}, "P251": {"id": "P251", "name": "Ицик Гайштат", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P252": {"id": "P252", "name": "Яков Гайштат", "birth": "", "death": "", "sex": "M", "gen": 4, "missing": ["дата рождения"], "rel": ""}, "P247": {"id": "P247", "name": "Кристина Мостовая-Папай", "birth": "22 FEB 1985", "death": "", "sex": "F", "gen": 3, "missing": [], "rel": ""}}, "families": {"F1": {"id": "F1", "husband": "P1", "wife": "P2", "children": ["P3", "P6"]}, "F2": {"id": "F2", "husband": "P4", "wife": "P7", "children": ["P1", "P8"]}, "F3": {"id": "F3", "husband": "P5", "wife": "P24", "children": ["P2", "P25"]}, "F4": {"id": "F4", "husband": "P28", "wife": "P8", "children": ["P10", "P9"]}, "F5": {"id": "F5", "husband": "P11", "wife": "P6", "children": ["P12", "P13", "P14", "P15", "P16", "P17", "P74", "P73", "P71"]}, "F6": {"id": "F6", "husband": "P18", "wife": "P248", "children": ["P11", "P249"]}, "F7": {"id": "F7", "husband": "P20", "wife": "P19", "children": ["P21", "P22", "P23", "P55", "P7", "P54"]}, "F8": {"id": "F8", "husband": "P26", "wife": "P25", "children": ["P27"]}, "F9": {"id": "F9", "husband": "P29", "wife": "P30", "children": []}, "F10": {"id": "F10", "husband": "P33", "wife": "P31", "children": ["P34"]}, "F11": {"id": "F11", "husband": "P35", "wife": "P27", "children": ["P36", "P37"]}, "F12": {"id": "F12", "husband": "P38", "wife": "P10", "children": ["P39"]}, "F13": {"id": "F13", "husband": "P9", "wife": "P40", "children": ["P201"]}, "F14": {"id": "F14", "husband": "P41", "wife": "P70", "children": ["P4", "P80", "P81", "P82", "P83", "P84"]}, "F15": {"id": "F15", "husband": "P42", "wife": "P44", "children": ["P24"]}, "F16": {"id": "F16", "husband": "P43", "wife": null, "children": ["P42"]}, "F17": {"id": "F17", "husband": "P42", "wife": "P45", "children": ["P46"]}, "F18": {"id": "F18", "husband": "P47", "wife": "P214", "children": ["P49", "P48"]}, "F19": {"id": "F19", "husband": "P48", "wife": "P50", "children": ["P51", "P52"]}, "F20": {"id": "F20", "husband": "P42", "wife": "P53", "children": []}, "F21": {"id": "F21", "husband": "P21", "wife": "P56", "children": ["P57", "P58", "P59"]}, "F22": {"id": "F22", "husband": "P60", "wife": "P57", "children": []}, "F23": {"id": "F23", "husband": "P61", "wife": "P58", "children": ["P62", "P63"]}, "F24": {"id": "F24", "husband": "P63", "wife": "P64", "children": ["P66"]}, "F25": {"id": "F25", "husband": "P62", "wife": "P65", "children": []}, "F26": {"id": "F26", "husband": "P63", "wife": "P67", "children": ["P68"]}, "F30": {"id": "F30", "husband": "P90", "wife": "P23", "children": ["P91", "P92", "P93"]}, "F32": {"id": "F32", "husband": "P101", "wife": "P102", "children": ["P103", "P104"]}, "F33": {"id": "F33", "husband": "P104", "wife": null, "children": ["P105", "P106"]}, "F34": {"id": "F34", "husband": "P110", "wife": "P82", "children": ["P111", "P112", "P113"]}, "F35": {"id": "F35", "husband": "P121", "wife": "P91", "children": ["P122", "P169", "P123", "P160"]}, "F36": {"id": "F36", "husband": "P123", "wife": null, "children": ["P124"]}, "F37": {"id": "F37", "husband": "P125", "wife": null, "children": ["P126", "P127"]}, "F38": {"id": "F38", "husband": "P130", "wife": null, "children": ["P131", "P132"]}, "F39": {"id": "F39", "husband": "P150", "wife": null, "children": ["P151"]}, "F40": {"id": "F40", "husband": "P151", "wife": null, "children": ["P152", "P153"]}, "F41": {"id": "F41", "husband": null, "wife": "P160", "children": ["P161"]}, "F31": {"id": "F31", "husband": "P120", "wife": "P93", "children": ["P173"]}, "F50": {"id": "F50", "husband": "P32", "wife": "P200", "children": []}, "F52": {"id": "F52", "husband": "P92", "wife": "P163", "children": ["P94", "P95", "P213"]}, "F53": {"id": "F53", "husband": "P94", "wife": null, "children": ["P203", "P96"]}, "F54": {"id": "F54", "husband": null, "wife": "P204", "children": ["P205", "P206", "P207", "P208"]}, "F55": {"id": "F55", "husband": "P95", "wife": null, "children": ["P209", "P210", "P211"]}, "F27": {"id": "F27", "husband": "P59", "wife": "P69", "children": ["P171", "P140", "P141"]}, "F56": {"id": "F56", "husband": "P212", "wife": "P140", "children": ["P166", "P162"]}, "F57": {"id": "F57", "husband": "P171", "wife": null, "children": ["P164"]}, "F58": {"id": "F58", "husband": "P215", "wife": "P49", "children": ["P216"]}, "F59": {"id": "F59", "husband": "P51", "wife": null, "children": ["P217"]}, "F60": {"id": "F60", "husband": "P219", "wife": "P218", "children": ["P47"]}, "F61": {"id": "F61", "husband": "P221", "wife": null, "children": ["P220", "P200"]}, "F62": {"id": "F62", "husband": "P222", "wife": "P140", "children": ["P223"]}, "F63": {"id": "F63", "husband": "P224", "wife": null, "children": ["P5", "P32"]}, "F64": {"id": "F64", "husband": "P225", "wife": "P223", "children": ["P226", "P227"]}, "F65": {"id": "F65", "husband": "P228", "wife": "P141", "children": ["P229", "P231"]}, "F66": {"id": "F66", "husband": "P229", "wife": "P230", "children": []}, "F67": {"id": "F67", "husband": "P232", "wife": "P83", "children": ["P233", "P234"]}, "F68": {"id": "F68", "husband": "P235", "wife": "P233", "children": ["P236", "P237"]}, "F69": {"id": "F69", "husband": "P239", "wife": null, "children": ["P238"]}, "F70": {"id": "F70", "husband": "P238", "wife": "P236", "children": []}, "F71": {"id": "F71", "husband": "P240", "wife": "P237", "children": []}, "F72": {"id": "F72", "husband": "P234", "wife": "P241", "children": ["P242", "P246"]}, "F73": {"id": "F73", "husband": "P242", "wife": "P243", "children": ["P244", "P245"]}, "F74": {"id": "F74", "husband": "P246", "wife": "P247", "children": []}, "F75": {"id": "F75", "husband": "P250", "wife": "P249", "children": ["P251", "P252"]}}, "child_of": {"P3": "F1", "P6": "F1", "P1": "F2", "P8": "F2", "P2": "F3", "P25": "F3", "P10": "F4", "P9": "F4", "P12": "F5", "P13": "F5", "P14": "F5", "P15": "F5", "P16": "F5", "P17": "F5", "P74": "F5", "P73": "F5", "P71": "F5", "P11": "F6", "P21": "F7", "P22": "F7", "P23": "F7", "P55": "F7", "P7": "F7", "P54": "F7", "P27": "F8", "P34": "F10", "P36": "F11", "P37": "F11", "P39": "F12", "P201": "F13", "P4": "F14", "P80": "F14", "P81": "F14", "P82": "F14", "P83": "F14", "P84": "F14", "P24": "F15", "P42": "F16", "P46": "F17", "P49": "F18", "P48": "F18", "P51": "F19", "P52": "F19", "P57": "F21", "P58": "F21", "P59": "F21", "P62": "F23", "P63": "F23", "P66": "F24", "P68": "F26", "P91": "F30", "P92": "F30", "P93": "F30", "P103": "F32", "P104": "F32", "P105": "F33", "P106": "F33", "P111": "F34", "P112": "F34", "P113": "F34", "P122": "F35", "P169": "F35", "P123": "F35", "P160": "F35", "P124": "F36", "P126": "F37", "P127": "F37", "P131": "F38", "P132": "F38", "P151": "F39", "P152": "F40", "P153": "F40", "P161": "F41", "P173": "F31", "P94": "F52", "P95": "F52", "P213": "F52", "P203": "F53", "P96": "F53", "P205": "F54", "P206": "F54", "P207": "F54", "P208": "F54", "P209": "F55", "P210": "F55", "P211": "F55", "P171": "F27", "P140": "F27", "P141": "F27", "P166": "F56", "P162": "F56", "P164": "F57", "P216": "F58", "P217": "F59", "P47": "F60", "P220": "F61", "P200": "F61", "P223": "F62", "P5": "F63", "P32": "F63", "P226": "F64", "P227": "F64", "P229": "F65", "P231": "F65", "P233": "F67", "P234": "F67", "P236": "F68", "P237": "F68", "P238": "F69", "P242": "F72", "P246": "F72", "P244": "F73", "P245": "F73", "P249": "F6", "P251": "F75", "P252": "F75"}, "parent_in": {"P1": ["F1"], "P2": ["F1"], "P4": ["F2"], "P7": ["F2"], "P5": ["F3"], "P24": ["F3"], "P28": ["F4"], "P8": ["F4"], "P11": ["F5"], "P6": ["F5"], "P18": ["F6"], "P248": ["F6"], "P249": ["F75"], "P250": ["F75"], "P20": ["F7"], "P19": ["F7"], "P26": ["F8"], "P25": ["F8"], "P29": ["F9"], "P30": ["F9"], "P33": ["F10"], "P31": ["F10"], "P35": ["F11"], "P27": ["F11"], "P38": ["F12"], "P10": ["F12"], "P9": ["F13"], "P40": ["F13"], "P41": ["F14"], "P70": ["F14"], "P42": ["F15", "F17", "F20"], "P44": ["F15"], "P43": ["F16"], "P45": ["F17"], "P47": ["F18"], "P214": ["F18"], "P48": ["F19"], "P50": ["F19"], "P53": ["F20"], "P21": ["F21"], "P56": ["F21"], "P60": ["F22"], "P57": ["F22"], "P61": ["F23"], "P58": ["F23"], "P63": ["F24", "F26"], "P64": ["F24"], "P62": ["F25"], "P65": ["F25"], "P67": ["F26"], "P90": ["F30"], "P23": ["F30"], "P101": ["F32"], "P102": ["F32"], "P104": ["F33"], "P110": ["F34"], "P82": ["F34"], "P121": ["F35"], "P91": ["F35"], "P123": ["F36"], "P125": ["F37"], "P130": ["F38"], "P150": ["F39"], "P151": ["F40"], "P160": ["F41"], "P120": ["F31"], "P93": ["F31"], "P32": ["F50"], "P200": ["F50"], "P92": ["F52"], "P163": ["F52"], "P94": ["F53"], "P204": ["F54"], "P95": ["F55"], "P59": ["F27"], "P69": ["F27"], "P212": ["F56"], "P140": ["F56", "F62"], "P171": ["F57"], "P215": ["F58"], "P49": ["F58"], "P51": ["F59"], "P219": ["F60"], "P218": ["F60"], "P221": ["F61"], "P222": ["F62"], "P224": ["F63"], "P225": ["F64"], "P223": ["F64"], "P228": ["F65"], "P141": ["F65"], "P229": ["F66"], "P230": ["F66"], "P232": ["F67"], "P83": ["F67"], "P235": ["F68"], "P233": ["F68"], "P239": ["F69"], "P238": ["F70"], "P236": ["F70"], "P240": ["F71"], "P237": ["F71"], "P234": ["F72"], "P241": ["F72"], "P242": ["F73"], "P243": ["F73"], "P246": ["F74"], "P247": ["F74"]}, "relatives": {"P1": {"parents": ["P4", "P7"], "siblings": ["P8"], "spouses": ["P2"], "children": ["P3", "P6"]}, "P2": {"parents": ["P5", "P24"], "siblings": ["P25"], "spouses": ["P1"], "children": ["P3", "P6"]}, "P3": {"parents": ["P1", "P2"], "siblings": ["P6"], "spouses": [], "children": []}, "P4": {"parents": ["P41", "P70"], "siblings": ["P80", "P81", "P82", "P83", "P84"], "spouses": ["P7"], "children": ["P1", "P8"]}, "P5": {"parents": ["P224"], "siblings": ["P32"], "spouses": ["P24"], "children": ["P2", "P25"]}, "P6": {"parents": ["P1", "P2"], "siblings": ["P3"], "spouses": ["P11"], "children": ["P12", "P13", "P14", "P15", "P16", "P17", "P74", "P73", "P71"]}, "P7": {"parents": ["P20", "P19"], "siblings": ["P21", "P22", "P23", "P55", "P54"], "spouses": ["P4"], "children": ["P1", "P8"]}, "P8": {"parents": ["P4", "P7"], "siblings": ["P1"], "spouses": ["P28"], "children": ["P10", "P9"]}, "P9": {"parents": ["P28", "P8"], "siblings": ["P10"], "spouses": ["P40"], "children": ["P201"]}, "P10": {"parents": ["P28", "P8"], "siblings": ["P9"], "spouses": ["P38"], "children": ["P39"]}, "P11": {"parents": ["P18", "P248"], "siblings": ["P249"], "spouses": ["P6"], "children": ["P12", "P13", "P14", "P15", "P16", "P17", "P74", "P73", "P71"]}, "P12": {"parents": ["P11", "P6"], "siblings": ["P13", "P14", "P15", "P16", "P17", "P74", "P73", "P71"], "spouses": [], "children": []}, "P13": {"parents": ["P11", "P6"], "siblings": ["P12", "P14", "P15", "P16", "P17", "P74", "P73", "P71"], "spouses": [], "children": []}, "P14": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P15", "P16", "P17", "P74", "P73", "P71"], "spouses": [], "children": []}, "P15": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P16", "P17", "P74", "P73", "P71"], "spouses": [], "children": []}, "P16": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P15", "P17", "P74", "P73", "P71"], "spouses": [], "children": []}, "P17": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P15", "P16", "P74", "P73", "P71"], "spouses": [], "children": []}, "P18": {"parents": [], "siblings": [], "spouses": ["P248"], "children": ["P11", "P249"]}, "P248": {"parents": [], "siblings": [], "spouses": ["P18"], "children": ["P11", "P249"]}, "P249": {"parents": ["P18", "P248"], "siblings": ["P11"], "spouses": ["P250"], "children": ["P251", "P252"]}, "P250": {"parents": [], "siblings": [], "spouses": ["P249"], "children": ["P251", "P252"]}, "P251": {"parents": ["P250", "P249"], "siblings": ["P252"], "spouses": [], "children": []}, "P252": {"parents": ["P250", "P249"], "siblings": ["P251"], "spouses": [], "children": []}, "P19": {"parents": [], "siblings": [], "spouses": ["P20"], "children": ["P21", "P22", "P23", "P55", "P7", "P54"]}, "P20": {"parents": [], "siblings": [], "spouses": ["P19"], "children": ["P21", "P22", "P23", "P55", "P7", "P54"]}, "P21": {"parents": ["P20", "P19"], "siblings": ["P22", "P23", "P55", "P7", "P54"], "spouses": ["P56"], "children": ["P57", "P58", "P59"]}, "P22": {"parents": ["P20", "P19"], "siblings": ["P21", "P23", "P55", "P7", "P54"], "spouses": [], "children": []}, "P23": {"parents": ["P20", "P19"], "siblings": ["P21", "P22", "P55", "P7", "P54"], "spouses": ["P90"], "children": ["P91", "P92", "P93"]}, "P24": {"parents": ["P42", "P44"], "siblings": [], "spouses": ["P5"], "children": ["P2", "P25"]}, "P25": {"parents": ["P5", "P24"], "siblings": ["P2"], "spouses": ["P26"], "children": ["P27"]}, "P26": {"parents": [], "siblings": [], "spouses": ["P25"], "children": ["P27"]}, "P27": {"parents": ["P26", "P25"], "siblings": [], "spouses": ["P35"], "children": ["P36", "P37"]}, "P28": {"parents": [], "siblings": [], "spouses": ["P8"], "children": ["P10", "P9"]}, "P29": {"parents": [], "siblings": [], "spouses": ["P30"], "children": []}, "P30": {"parents": [], "siblings": [], "spouses": ["P29"], "children": []}, "P31": {"parents": [], "siblings": [], "spouses": ["P33"], "children": ["P34"]}, "P32": {"parents": ["P224"], "siblings": ["P5"], "spouses": ["P200"], "children": []}, "P33": {"parents": [], "siblings": [], "spouses": ["P31"], "children": ["P34"]}, "P34": {"parents": ["P33", "P31"], "siblings": [], "spouses": [], "children": []}, "P35": {"parents": [], "siblings": [], "spouses": ["P27"], "children": ["P36", "P37"]}, "P36": {"parents": ["P35", "P27"], "siblings": ["P37"], "spouses": [], "children": []}, "P37": {"parents": ["P35", "P27"], "siblings": ["P36"], "spouses": [], "children": []}, "P38": {"parents": [], "siblings": [], "spouses": ["P10"], "children": ["P39"]}, "P39": {"parents": ["P38", "P10"], "siblings": [], "spouses": [], "children": []}, "P40": {"parents": [], "siblings": [], "spouses": ["P9"], "children": ["P201"]}, "P41": {"parents": [], "siblings": [], "spouses": ["P70"], "children": ["P80", "P4", "P81", "P82", "P83", "P84"]}, "P42": {"parents": ["P43"], "siblings": [], "spouses": ["P44", "P45", "P53"], "children": ["P24", "P46"]}, "P43": {"parents": [], "siblings": [], "spouses": [], "children": ["P42"]}, "P44": {"parents": [], "siblings": [], "spouses": ["P42"], "children": ["P24"]}, "P45": {"parents": [], "siblings": [], "spouses": ["P42"], "children": ["P46"]}, "P46": {"parents": ["P42", "P45"], "siblings": [], "spouses": [], "children": []}, "P47": {"parents": ["P219", "P218"], "siblings": [], "spouses": ["P214"], "children": ["P49", "P48"]}, "P48": {"parents": ["P47", "P214"], "siblings": ["P49"], "spouses": ["P50"], "children": ["P51", "P52"]}, "P49": {"parents": ["P47", "P214"], "siblings": ["P48"], "spouses": ["P215"], "children": ["P216"]}, "P50": {"parents": [], "siblings": [], "spouses": ["P48"], "children": ["P51", "P52"]}, "P51": {"parents": ["P48", "P50"], "siblings": ["P52"], "spouses": [], "children": ["P217"]}, "P52": {"parents": ["P48", "P50"], "siblings": ["P51"], "spouses": [], "children": []}, "P53": {"parents": [], "siblings": [], "spouses": ["P42"], "children": []}, "P54": {"parents": ["P20", "P19"], "siblings": ["P21", "P22", "P23", "P55", "P7"], "spouses": [], "children": []}, "P55": {"parents": ["P20", "P19"], "siblings": ["P21", "P22", "P23", "P7", "P54"], "spouses": [], "children": []}, "P56": {"parents": [], "siblings": [], "spouses": ["P21"], "children": ["P57", "P58", "P59"]}, "P57": {"parents": ["P21", "P56"], "siblings": ["P58", "P59"], "spouses": ["P60"], "children": []}, "P58": {"parents": ["P21", "P56"], "siblings": ["P57", "P59"], "spouses": ["P61"], "children": ["P62", "P63"]}, "P59": {"parents": ["P21", "P56"], "siblings": ["P57", "P58"], "spouses": ["P69"], "children": ["P171", "P140", "P141"]}, "P60": {"parents": [], "siblings": [], "spouses": ["P57"], "children": []}, "P61": {"parents": [], "siblings": [], "spouses": ["P58"], "children": ["P62", "P63"]}, "P62": {"parents": ["P61", "P58"], "siblings": ["P63"], "spouses": ["P65"], "children": []}, "P63": {"parents": ["P61", "P58"], "siblings": ["P62"], "spouses": ["P64", "P67"], "children": ["P66", "P68"]}, "P64": {"parents": [], "siblings": [], "spouses": ["P63"], "children": ["P66"]}, "P65": {"parents": [], "siblings": [], "spouses": ["P62"], "children": []}, "P66": {"parents": ["P63", "P64"], "siblings": [], "spouses": [], "children": []}, "P67": {"parents": [], "siblings": [], "spouses": ["P63"], "children": ["P68"]}, "P68": {"parents": ["P63", "P67"], "siblings": [], "spouses": [], "children": []}, "P69": {"parents": [], "siblings": [], "spouses": ["P59"], "children": ["P171", "P140", "P141"]}, "P70": {"parents": [], "siblings": [], "spouses": ["P41"], "children": ["P80", "P4", "P81", "P82", "P83", "P84"]}, "P71": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P15", "P16", "P17", "P74", "P73"], "spouses": [], "children": []}, "P73": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P15", "P16", "P17", "P74", "P71"], "spouses": [], "children": []}, "P74": {"parents": ["P11", "P6"], "siblings": ["P12", "P13", "P14", "P15", "P16", "P17", "P73", "P71"], "spouses": [], "children": []}, "P80": {"parents": ["P41", "P70"], "siblings": ["P4", "P81", "P82", "P83", "P84"], "spouses": [], "children": []}, "P81": {"parents": ["P41", "P70"], "siblings": ["P80", "P4", "P82", "P83", "P84"], "spouses": [], "children": []}, "P82": {"parents": ["P41", "P70"], "siblings": ["P80", "P4", "P81", "P83", "P84"], "spouses": ["P110"], "children": ["P112", "P113", "P111"]}, "P83": {"parents": ["P41", "P70"], "siblings": ["P80", "P4", "P81", "P82", "P84"], "spouses": ["P232"], "children": ["P234", "P233"]}, "P84": {"parents": ["P41", "P70"], "siblings": ["P80", "P4", "P81", "P82", "P83"], "spouses": [], "children": []}, "P90": {"parents": [], "siblings": [], "spouses": ["P23"], "children": ["P91", "P92", "P93"]}, "P91": {"parents": ["P90", "P23"], "siblings": ["P92", "P93"], "spouses": ["P121"], "children": ["P122", "P169", "P123", "P160"]}, "P92": {"parents": ["P90", "P23"], "siblings": ["P91", "P93"], "spouses": ["P163"], "children": ["P213", "P94", "P95"]}, "P93": {"parents": ["P90", "P23"], "siblings": ["P91", "P92"], "spouses": ["P120"], "children": ["P173"]}, "P94": {"parents": ["P92", "P163"], "siblings": ["P213", "P95"], "spouses": [], "children": ["P203", "P96"]}, "P95": {"parents": ["P92", "P163"], "siblings": ["P213", "P94"], "spouses": [], "children": ["P209", "P210", "P211"]}, "P96": {"parents": ["P94"], "siblings": ["P203"], "spouses": [], "children": []}, "P100": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P101": {"parents": [], "siblings": [], "spouses": ["P102"], "children": ["P104", "P103"]}, "P102": {"parents": [], "siblings": [], "spouses": ["P101"], "children": ["P104", "P103"]}, "P103": {"parents": ["P101", "P102"], "siblings": ["P104"], "spouses": [], "children": []}, "P104": {"parents": ["P101", "P102"], "siblings": ["P103"], "spouses": [], "children": ["P105", "P106"]}, "P105": {"parents": ["P104"], "siblings": ["P106"], "spouses": [], "children": []}, "P106": {"parents": ["P104"], "siblings": ["P105"], "spouses": [], "children": []}, "P110": {"parents": [], "siblings": [], "spouses": ["P82"], "children": ["P112", "P113", "P111"]}, "P111": {"parents": ["P110", "P82"], "siblings": ["P112", "P113"], "spouses": [], "children": []}, "P112": {"parents": ["P110", "P82"], "siblings": ["P113", "P111"], "spouses": [], "children": []}, "P113": {"parents": ["P110", "P82"], "siblings": ["P112", "P111"], "spouses": [], "children": []}, "P120": {"parents": [], "siblings": [], "spouses": ["P93"], "children": ["P173"]}, "P121": {"parents": [], "siblings": [], "spouses": ["P91"], "children": ["P122", "P169", "P123", "P160"]}, "P122": {"parents": ["P121", "P91"], "siblings": ["P169", "P123", "P160"], "spouses": [], "children": []}, "P123": {"parents": ["P121", "P91"], "siblings": ["P122", "P169", "P160"], "spouses": [], "children": ["P124"]}, "P124": {"parents": ["P123"], "siblings": [], "spouses": [], "children": []}, "P125": {"parents": [], "siblings": [], "spouses": [], "children": ["P126", "P127"]}, "P126": {"parents": ["P125"], "siblings": ["P127"], "spouses": [], "children": []}, "P127": {"parents": ["P125"], "siblings": ["P126"], "spouses": [], "children": []}, "P130": {"parents": [], "siblings": [], "spouses": [], "children": ["P131", "P132"]}, "P131": {"parents": ["P130"], "siblings": ["P132"], "spouses": [], "children": []}, "P132": {"parents": ["P130"], "siblings": ["P131"], "spouses": [], "children": []}, "P140": {"parents": ["P59", "P69"], "siblings": ["P171", "P141"], "spouses": ["P212", "P222"], "children": ["P223", "P166", "P162"]}, "P141": {"parents": ["P59", "P69"], "siblings": ["P171", "P140"], "spouses": ["P228"], "children": ["P229", "P231"]}, "P150": {"parents": [], "siblings": [], "spouses": [], "children": ["P151"]}, "P151": {"parents": ["P150"], "siblings": [], "spouses": [], "children": ["P152", "P153"]}, "P152": {"parents": ["P151"], "siblings": ["P153"], "spouses": [], "children": []}, "P153": {"parents": ["P151"], "siblings": ["P152"], "spouses": [], "children": []}, "P160": {"parents": ["P121", "P91"], "siblings": ["P122", "P169", "P123"], "spouses": [], "children": ["P161"]}, "P161": {"parents": ["P160"], "siblings": [], "spouses": [], "children": []}, "P162": {"parents": ["P212", "P140"], "siblings": ["P166"], "spouses": [], "children": []}, "P163": {"parents": [], "siblings": [], "spouses": ["P92"], "children": ["P213", "P94", "P95"]}, "P164": {"parents": ["P171"], "siblings": [], "spouses": [], "children": []}, "P165": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P166": {"parents": ["P212", "P140"], "siblings": ["P162"], "spouses": [], "children": []}, "P167": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P168": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P169": {"parents": ["P121", "P91"], "siblings": ["P122", "P123", "P160"], "spouses": [], "children": []}, "P170": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P171": {"parents": ["P59", "P69"], "siblings": ["P140", "P141"], "spouses": [], "children": ["P164"]}, "P172": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P173": {"parents": ["P120", "P93"], "siblings": [], "spouses": [], "children": []}, "P174": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P175": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P176": {"parents": [], "siblings": [], "spouses": [], "children": []}, "P200": {"parents": ["P221"], "siblings": ["P220"], "spouses": ["P32"], "children": []}, "P201": {"parents": ["P9", "P40"], "siblings": [], "spouses": [], "children": []}, "P203": {"parents": ["P94"], "siblings": ["P96"], "spouses": [], "children": []}, "P204": {"parents": [], "siblings": [], "spouses": [], "children": ["P205", "P206", "P207", "P208"]}, "P205": {"parents": ["P204"], "siblings": ["P206", "P207", "P208"], "spouses": [], "children": []}, "P206": {"parents": ["P204"], "siblings": ["P205", "P207", "P208"], "spouses": [], "children": []}, "P207": {"parents": ["P204"], "siblings": ["P205", "P206", "P208"], "spouses": [], "children": []}, "P208": {"parents": ["P204"], "siblings": ["P205", "P206", "P207"], "spouses": [], "children": []}, "P209": {"parents": ["P95"], "siblings": ["P210", "P211"], "spouses": [], "children": []}, "P210": {"parents": ["P95"], "siblings": ["P209", "P211"], "spouses": [], "children": []}, "P211": {"parents": ["P95"], "siblings": ["P209", "P210"], "spouses": [], "children": []}, "P212": {"parents": [], "siblings": [], "spouses": ["P140"], "children": ["P166", "P162"]}, "P213": {"parents": ["P92", "P163"], "siblings": ["P94", "P95"], "spouses": [], "children": []}, "P214": {"parents": [], "siblings": [], "spouses": ["P47"], "children": ["P49", "P48"]}, "P215": {"parents": [], "siblings": [], "spouses": ["P49"], "children": ["P216"]}, "P216": {"parents": ["P215", "P49"], "siblings": [], "spouses": [], "children": []}, "P217": {"parents": ["P51"], "siblings": [], "spouses": [], "children": []}, "P218": {"parents": [], "siblings": [], "spouses": ["P219"], "children": ["P47"]}, "P219": {"parents": [], "siblings": [], "spouses": ["P218"], "children": ["P47"]}, "P220": {"parents": ["P221"], "siblings": ["P200"], "spouses": [], "children": []}, "P221": {"parents": [], "siblings": [], "spouses": [], "children": ["P220", "P200"]}, "P222": {"parents": [], "siblings": [], "spouses": ["P140"], "children": ["P223"]}, "P223": {"parents": ["P222", "P140"], "siblings": [], "spouses": ["P225"], "children": ["P226", "P227"]}, "P224": {"parents": [], "siblings": [], "spouses": [], "children": ["P5", "P32"]}, "P225": {"parents": [], "siblings": [], "spouses": ["P223"], "children": ["P226", "P227"]}, "P226": {"parents": ["P225", "P223"], "siblings": ["P227"], "spouses": [], "children": []}, "P227": {"parents": ["P225", "P223"], "siblings": ["P226"], "spouses": [], "children": []}, "P228": {"parents": [], "siblings": [], "spouses": ["P141"], "children": ["P229", "P231"]}, "P229": {"parents": ["P228", "P141"], "siblings": ["P231"], "spouses": ["P230"], "children": []}, "P230": {"parents": [], "siblings": [], "spouses": ["P229"], "children": []}, "P231": {"parents": ["P228", "P141"], "siblings": ["P229"], "spouses": [], "children": []}, "P232": {"parents": [], "siblings": [], "spouses": ["P83"], "children": ["P234", "P233"]}, "P233": {"parents": ["P232", "P83"], "siblings": ["P234"], "spouses": ["P235"], "children": ["P236", "P237"]}, "P234": {"parents": ["P232", "P83"], "siblings": ["P233"], "spouses": ["P241"], "children": ["P242", "P246"]}, "P235": {"parents": [], "siblings": [], "spouses": ["P233"], "children": ["P236", "P237"]}, "P236": {"parents": ["P235", "P233"], "siblings": ["P237"], "spouses": ["P238"], "children": []}, "P237": {"parents": ["P235", "P233"], "siblings": ["P236"], "spouses": ["P240"], "children": []}, "P238": {"parents": ["P239"], "siblings": [], "spouses": ["P236"], "children": []}, "P239": {"parents": [], "siblings": [], "spouses": [], "children": ["P238"]}, "P240": {"parents": [], "siblings": [], "spouses": ["P237"], "children": []}, "P241": {"parents": [], "siblings": [], "spouses": ["P234"], "children": ["P242", "P246"]}, "P242": {"parents": ["P234", "P241"], "siblings": ["P246"], "spouses": ["P243"], "children": ["P244", "P245"]}, "P243": {"parents": [], "siblings": [], "spouses": ["P242"], "children": ["P244", "P245"]}, "P244": {"parents": ["P242", "P243"], "siblings": ["P245"], "spouses": [], "children": []}, "P245": {"parents": ["P242", "P243"], "siblings": ["P244"], "spouses": [], "children": []}, "P246": {"parents": ["P234", "P241"], "siblings": ["P242"], "spouses": ["P247"], "children": []}, "P247": {"parents": [], "siblings": [], "spouses": ["P246"], "children": []}}, "grandparents": {"P1": [{"family": "F14", "husband": "P41", "wife": "P70"}, {"family": "F7", "husband": "P20", "wife": "P19"}], "P2": [{"family": "F63", "husband": "P224", "wife": null}, {"family": "F15", "husband": "P42", "wife": "P44"}], "P3": [{"family": "F2", "husband": "P4", "wife": "P7"}, {"family": "F3", "husband": "P5", "wife": "P24"}], "P4": [], "P5": [], "P6": [{"family": "F2", "husband": "P4", "wife": "P7"}, {"family": "F3", "husband": "P5", "wife": "P24"}], "P7": [], "P8": [{"family": "F14", "husband": "P41", "wife": "P70"}, {"family": "F7", "husband": "P20", "wife": "P19"}], "P9": [{"family": "F2", "husband": "P4", "wife": "P7"}], "P10": [{"family": "F2", "husband": "P4", "wife": "P7"}], "P11": [], "P12": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P13": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P14": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P15": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P16": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P17": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P18": [], "P19": [], "P20": [], "P21": [], "P22": [], "P23": [], "P24": [{"family": "F16", "husband": "P43", "wife": null}], "P25": [{"family": "F63", "husband": "P224", "wife": null}, {"family": "F15", "husband": "P42", "wife": "P44"}], "P26": [], "P27": [{"family": "F3", "husband": "P5", "wife": "P24"}], "P28": [], "P29": [], "P30": [], "P31": [], "P32": [], "P33": [], "P34": [], "P35": [], "P36": [{"family": "F8", "husband": "P26", "wife": "P25"}], "P37": [{"family": "F8", "husband": "P26", "wife": "P25"}], "P38": [], "P39": [{"family": "F4", "husband": "P28", "wife": "P8"}], "P40": [], "P41": [], "P42": [], "P43": [], "P44": [], "P45": [], "P46": [{"family": "F16", "husband": "P43", "wife": null}], "P47": [], "P48": [{"family": "F60", "husband": "P219", "wife": "P218"}], "P49": [{"family": "F60", "husband": "P219", "wife": "P218"}], "P50": [], "P51": [{"family": "F18", "husband": "P47", "wife": "P214"}], "P52": [{"family": "F18", "husband": "P47", "wife": "P214"}], "P53": [], "P54": [], "P55": [], "P56": [], "P57": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P58": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P59": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P60": [], "P61": [], "P62": [{"family": "F21", "husband": "P21", "wife": "P56"}], "P63": [{"family": "F21", "husband": "P21", "wife": "P56"}], "P64": [], "P65": [], "P66": [{"family": "F23", "husband": "P61", "wife": "P58"}], "P67": [], "P68": [{"family": "F23", "husband": "P61", "wife": "P58"}], "P69": [], "P70": [], "P71": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P73": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P74": [{"family": "F6", "husband": "P18", "wife": null}, {"family": "F1", "husband": "P1", "wife": "P2"}], "P80": [], "P81": [], "P82": [], "P83": [], "P84": [], "P90": [], "P91": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P92": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P93": [{"family": "F7", "husband": "P20", "wife": "P19"}], "P94": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P95": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P96": [{"family": "F52", "husband": "P92", "wife": "P163"}], "P100": [], "P101": [], "P102": [], "P103": [], "P104": [], "P105": [{"family": "F32", "husband": "P101", "wife": "P102"}], "P106": [{"family": "F32", "husband": "P101", "wife": "P102"}], "P110": [], "P111": [{"family": "F14", "husband": "P41", "wife": "P70"}], "P112": [{"family": "F14", "husband": "P41", "wife": "P70"}], "P113": [{"family": "F14", "husband": "P41", "wife": "P70"}], "P120": [], "P121": [], "P122": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P123": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P124": [{"family": "F35", "husband": "P121", "wife": "P91"}], "P125": [], "P126": [], "P127": [], "P130": [], "P131": [], "P132": [], "P140": [{"family": "F21", "husband": "P21", "wife": "P56"}], "P141": [{"family": "F21", "husband": "P21", "wife": "P56"}], "P150": [], "P151": [], "P152": [{"family": "F39", "husband": "P150", "wife": null}], "P153": [{"family": "F39", "husband": "P150", "wife": null}], "P160": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P161": [{"family": "F35", "husband": "P121", "wife": "P91"}], "P162": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P163": [], "P164": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P165": [], "P166": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P167": [], "P168": [], "P169": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P170": [], "P171": [{"family": "F21", "husband": "P21", "wife": "P56"}], "P172": [], "P173": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P174": [], "P175": [], "P176": [], "P200": [], "P201": [{"family": "F4", "husband": "P28", "wife": "P8"}], "P203": [{"family": "F52", "husband": "P92", "wife": "P163"}], "P204": [], "P205": [], "P206": [], "P207": [], "P208": [], "P209": [{"family": "F52", "husband": "P92", "wife": "P163"}], "P210": [{"family": "F52", "husband": "P92", "wife": "P163"}], "P211": [{"family": "F52", "husband": "P92", "wife": "P163"}], "P212": [], "P213": [{"family": "F30", "husband": "P90", "wife": "P23"}], "P214": [], "P215": [], "P216": [{"family": "F18", "husband": "P47", "wife": "P214"}], "P217": [{"family": "F19", "husband": "P48", "wife": "P50"}], "P218": [], "P219": [], "P220": [], "P221": [], "P222": [], "P223": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P224": [], "P225": [], "P226": [{"family": "F62", "husband": "P222", "wife": "P140"}], "P227": [{"family": "F62", "husband": "P222", "wife": "P140"}], "P228": [], "P229": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P230": [], "P231": [{"family": "F27", "husband": "P59", "wife": "P69"}], "P232": [], "P233": [{"family": "F14", "husband": "P41", "wife": "P70"}], "P234": [{"family": "F14", "husband": "P41", "wife": "P70"}], "P235": [], "P236": [{"family": "F67", "husband": "P232", "wife": "P83"}], "P237": [{"family": "F67", "husband": "P232", "wife": "P83"}], "P238": [], "P239": [], "P240": [], "P241": [], "P242": [{"family": "F67", "husband": "P232", "wife": "P83"}], "P243": [], "P244": [{"family": "F72", "husband": "P234", "wife": "P241"}], "P245": [{"family": "F72", "husband": "P234", "wife": "P241"}], "P246": [{"family": "F67", "husband": "P232", "wife": "P83"}], "P247": [], "P248": [], "P249": [], "P250": [], "P251": [{"family": "F6", "husband": "P18", "wife": "P248"}], "P252": [{"family": "F6", "husband": "P18", "wife": "P248"}]}};
+const NS  = 'http://www.w3.org/2000/svg';
+
+// ── constants ─────────────────────────────────────────────
+const CW = 150, CH = 100;
+const COUPLE_GAP  = 12;   // gap between focal and spouse
+const SIBLING_GAP = 22;   // gap between siblings / focal+spouse and sibling
+const LEVEL_H     = 168;  // vertical distance between generation rows
+
+// ── helpers ───────────────────────────────────────────────
+function py(s){ const m = s && s.match(/\d{4}/); return m ? +m[0] : 9999; }
+
+function svgEl(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  for(const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  if(parent) parent.appendChild(e);
+  return e;
+}
+
+// ── CARD COLORS ───────────────────────────────────────────
+function cardCol(id, role){
+  if(role === 'focal') return {fill:'#1C4060', stroke:'#0C2840'};
+  const n = IDX.nodes[id];
+  if(!n) return {fill:'#888', stroke:'#555'};
+  const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
+  if(dead) return {fill:'#3A4A55', stroke:'#1A2A35'};
+  return n.sex === 'M'
+    ? {fill:'#1E4870', stroke:'#122840'}
+    : {fill:'#701838', stroke:'#400C20'};
+}
+
+// ── NAME SPLIT ────────────────────────────────────────────
+function splitName(name){
+  if(name.length <= 14) return [name];
+  const words = name.split(' ');
+  if(words.length < 2) return [name.slice(0,13)+'…'];
+  let bi=0, bd=Infinity;
+  for(let i=0;i<words.length-1;i++){
+    const L1=words.slice(0,i+1).join(' ').length;
+    const L2=words.slice(i+1).join(' ').length;
+    const d=Math.abs(L1-L2);
+    if(d<bd&&L1<=16&&L2<=16){bd=d;bi=i;}
+  }
+  let l1=words.slice(0,bi+1).join(' ');
+  let l2=words.slice(bi+1).join(' ');
+  if(l1.length>15) l1=l1.slice(0,14)+'…';
+  if(l2.length>15) l2=l2.slice(0,14)+'…';
+  return [l1,l2];
+}
+
+// ── place a couple centered on anchorX at given y ─────────
+// returns [{id, x, y, role}]
+function placeCouple(husband, wife, anchorX, y, role){
+  const people = [husband, wife].filter(Boolean);
+  const totalW = people.length * CW + (people.length - 1) * COUPLE_GAP;
+  let x = anchorX - totalW / 2;
+  return people.map(id => {
+    const node = {id, x, y, role};
+    x += CW + COUPLE_GAP;
+    return node;
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  getCenteredLayout  —  LEVELS −2, −1, 0  (A2b)
+// ════════════════════════════════════════════════════════
+function getCenteredLayout(focalId){
+  const nmap = IDX.nodes;
+  const rel  = IDX.relatives[focalId];
+  const gps  = IDX.grandparents[focalId] || [];
+  const fams = IDX.families;
+  if(!rel) return {nodes:[], focalId, coupleAnchorX: 0};
+
+  const placed = new Set();  // avoid placing same person twice
+  const nodes  = [];
+
+  function add(n){
+    if(placed.has(n.id)) return;
+    placed.add(n.id);
+    nodes.push(n);
+  }
+
+  // ── LEVEL 0: siblings + focal + spouses ───────────────
+  const siblings = [...rel.siblings].sort(
+    (a,b) => py(nmap[a]?.birth) - py(nmap[b]?.birth)
+  );
+  const focalBY  = py(nmap[focalId]?.birth);
+  const leftSibs  = siblings.filter(s => py(nmap[s]?.birth) <= focalBY);
+  const rightSibs = siblings.filter(s => py(nmap[s]?.birth) >  focalBY);
+
+  let x = -(leftSibs.length * (CW + SIBLING_GAP));
+  for(const sid of leftSibs){ add({id:sid, x, y:0, role:'sibling'}); x += CW+SIBLING_GAP; }
+  add({id:focalId, x, y:0, role:'focal'});
+  x += CW;
+  for(const spId of rel.spouses){ x+=COUPLE_GAP; add({id:spId,x,y:0,role:'spouse'}); x+=CW; }
+  for(const sid of rightSibs){ x+=SIBLING_GAP; add({id:sid,x,y:0,role:'sibling'}); x+=CW; }
+
+  // couple anchor for centering parent/child levels
+  const fNode     = nodes.find(n => n.id === focalId);
+  const lastSp    = rel.spouses.length > 0
+    ? nodes.find(n => n.id === rel.spouses[rel.spouses.length-1])
+    : null;
+  const coupleAnchorX = lastSp
+    ? (fNode.x + CW/2 + lastSp.x + CW/2) / 2
+    : fNode.x + CW/2;
+
+  // ── LEVEL −1: parents ─────────────────────────────────
+  // parents are rel.parents = [fatherId, motherId] (0–2 entries)
+  // place them as a couple centred over coupleAnchorX
+  const [fatherId, motherId] = rel.parents;
+  const parentNodes = placeCouple(fatherId, motherId, coupleAnchorX, -LEVEL_H, 'parent');
+  parentNodes.forEach(n => add(n));
+
+  // build map: parentId → their x centre (for GP anchoring)
+  const parentCX = {};
+  for(const pn of parentNodes) parentCX[pn.id] = pn.x + CW/2;
+
+  // ── LEVEL −2: grandparents ────────────────────────────
+  // For each grandparent family, centre above the parent who is their child
+  // First compute raw positions
+  const gpRaw = []; // [{nodes: [{id,x,y,role}], left, right}]
+  for(const gp of gps){
+    const parId = rel.parents.find(p => IDX.child_of[p] === gp.family);
+    if(!parId || !(parId in parentCX)) continue;
+    const anchor = parentCX[parId];
+    const gpNodes = placeCouple(gp.husband, gp.wife, anchor, -2*LEVEL_H, 'grandparent');
+    gpRaw.push({
+      nodes: gpNodes,
+      left:  gpNodes[0].x,
+      right: gpNodes[gpNodes.length-1].x + CW
+    });
+  }
+
+  // Overlap fix: if two GP families overlap, push the right one further right
+  // (keeps left family in place, shifts right family)
+  const MIN_GAP = 20; // minimum gap between GP families
+  for(let i = 1; i < gpRaw.length; i++){
+    const prev = gpRaw[i-1];
+    const curr = gpRaw[i];
+    const overlap = prev.right + MIN_GAP - curr.left;
+    if(overlap > 0){
+      const shift = overlap;
+      curr.nodes.forEach(n => { n.x += shift; });
+      curr.left  += shift;
+      curr.right += shift;
+    }
+  }
+
+  // Add all GP nodes (skip duplicates)
+  for(const family of gpRaw) family.nodes.forEach(n => add(n));
+
+  // ── LEVEL +1: children ────────────────────────────────
+  // All children of focal sorted by birth year
+  const childrenSorted = [...rel.children]
+    .sort((a,b) => py(nmap[a]?.birth) - py(nmap[b]?.birth));
+
+  if(childrenSorted.length > 0){
+    const totalW = childrenSorted.length * CW
+                 + (childrenSorted.length - 1) * SIBLING_GAP;
+    let cx = coupleAnchorX - totalW / 2;
+    for(const cId of childrenSorted){
+      add({id: cId, x: cx, y: LEVEL_H, role: 'child'});
+      cx += CW + SIBLING_GAP;
+    }
+
+    // ── LEVEL +2: grandchildren (max 3 per child) ──────
+    const MAX_GC = 3;
+    for(const cId of childrenSorted){
+      const cNode = nodes.find(n => n.id === cId);
+      if(!cNode) continue;
+      const cRel = IDX.relatives[cId];
+      if(!cRel || !cRel.children.length) continue;
+
+      const gcList = [...cRel.children]
+        .sort((a,b) => py(nmap[a]?.birth) - py(nmap[b]?.birth))
+        .slice(0, MAX_GC);
+
+      const gcW   = gcList.length * CW + (gcList.length - 1) * SIBLING_GAP;
+      const childCX = cNode.x + CW / 2;
+      let gx = childCX - gcW / 2;
+
+      for(const gcId of gcList){
+        add({id: gcId, x: gx, y: 2 * LEVEL_H, role: 'grandchild'});
+        gx += CW + SIBLING_GAP;
+      }
+    }
+  }
+
+  return { nodes, focalId, coupleAnchorX };
+}
+
+// ════════════════════════════════════════════════════════
+//  drawEdges  —  lines between all visible family units
+// ════════════════════════════════════════════════════════
+function drawEdges(layout, parent){
+  const LCOL = '#C09828';
+  const LW   = '1.8';
+  const OPACITY = '.72';
+
+  // Build position lookup from layout
+  const pos = {};
+  for(const n of layout.nodes) pos[n.id] = {x: n.x, y: n.y};
+
+  function cX(id){ return pos[id] ? pos[id].x + CW/2 : null; }  // centre X
+  function bY(id){ return pos[id] ? pos[id].y + CH   : null; }  // bottom Y
+  function tY(id){ return pos[id] ? pos[id].y        : null; }  // top Y
+
+  function line(x1,y1,x2,y2){
+    svgEl('line',{x1,y1,x2,y2,stroke:LCOL,'stroke-width':LW,
+                  opacity:OPACITY,class:'eline'},parent);
+  }
+  function heart(x,y){
+    const t = svgEl('text',{x,y,
+      'text-anchor':'middle','font-size':'10',
+      fill:LCOL,opacity:'.9','pointer-events':'none'},parent);
+    t.textContent = '♥';
+  }
+
+  // Iterate every family in the index; draw only if members are visible
+  for(const [, fam] of Object.entries(IDX.families)){
+    const h = fam.husband, w = fam.wife;
+    const hIn = h && pos[h], wIn = w && pos[w];
+    const visCh = (fam.children || []).filter(c => pos[c]);
+
+    if(!hIn && !wIn) continue;  // no parents visible → skip
+
+    // ── couple connector ───────────────────────────────
+    const parentRowY = Math.max(hIn ? pos[h].y : 0, wIn ? pos[w].y : 0);
+    const coupleLineY = parentRowY + CH / 2;  // mid-height of card
+
+    let anchorX;
+    if(hIn && wIn){
+      // horizontal bar between inner edges of the two cards
+      const leftCX  = Math.min(pos[h].x, pos[w].x) + CW;   // right edge of left card
+      const rightCX = Math.max(pos[h].x, pos[w].x);         // left edge of right card
+      anchorX = (pos[h].x + CW/2 + pos[w].x + CW/2) / 2;
+      if(rightCX > leftCX) line(leftCX, coupleLineY, rightCX, coupleLineY);
+      heart(anchorX, coupleLineY + 5);
+    } else {
+      anchorX = hIn ? pos[h].x + CW/2 : pos[w].x + CW/2;
+    }
+
+    // ── stem + crossbar + drops to children ───────────
+    if(visCh.length === 0) continue;
+
+    const junctionY = parentRowY + CH + 10;     // just below the couple
+    const childRowY = pos[visCh[0]].y;           // top of child cards
+    const crossbarY = childRowY - 12;            // just above child cards
+
+    const childXs = visCh.map(c => pos[c].x + CW/2);
+    const crossL  = Math.min(...childXs);
+    const crossR  = Math.max(...childXs);
+
+    // Stem meet-point: clamp anchorX to [crossL, crossR] so stem always hits crossbar
+    const stemX = Math.max(crossL, Math.min(crossR, anchorX));
+
+    // vertical stem: couple → crossbarY (using stemX so it lands on crossbar)
+    line(anchorX, junctionY, anchorX, crossbarY);
+
+    // bridge: if anchor is outside child range, draw horizontal to crossbar edge
+    if(anchorX < crossL){
+      line(anchorX, crossbarY, crossL, crossbarY);
+    } else if(anchorX > crossR){
+      line(crossR, crossbarY, anchorX, crossbarY);
+    }
+
+    // horizontal crossbar connecting all visible children (only between children)
+    if(visCh.length > 1){
+      line(crossL, crossbarY, crossR, crossbarY);
+    }
+
+    // vertical drop to each child
+    for(const cId of visCh){
+      line(pos[cId].x + CW/2, crossbarY, pos[cId].x + CW/2, childRowY);
+    }
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────
+function render(focalId){
+  const layout = getCenteredLayout(focalId);
+  const svg    = document.getElementById('svg');
+  svg.innerHTML = '';
+
+  // size the SVG around ALL nodes (including negative y)
+  if(!layout.nodes.length){
+    document.getElementById('info').textContent = t('no_data')||'—';
+    return;
+  }
+  const xs   = layout.nodes.map(n => n.x);
+  const ys   = layout.nodes.map(n => n.y);
+  const minX = Math.min(...xs) - 60;
+  const maxX = Math.max(...xs) + CW + 60;
+  const minY = Math.min(...ys) - 40;
+  const maxY = Math.max(...ys) + CH + 40;
+  const W = maxX - minX, H = maxY - minY;
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+
+  // offset: shift all coords into positive SVG space
+  const offX = -minX, offY = -minY;
+
+  // ── Layer 1: edges (drawn first, behind cards) ────────
+  // Translate the layout nodes by offset for drawEdges
+  const offsetLayout = {
+    ...layout,
+    nodes: layout.nodes.map(n => ({...n, x: n.x + offX, y: n.y + offY}))
+  };
+  const edgeG = svgEl('g', {id:'edges'}, svg);
+  // Temporarily redirect drawing to use offset coords
+  const origLayout = layout;
+  drawEdges(offsetLayout, edgeG);
+
+  // ── Layer 2: cards (drawn on top) ─────────────────────
+  const cardG = svgEl('g', {id:'cards'}, svg);
+
+  for(const n of layout.nodes){
+    const {fill, stroke} = cardCol(n.id, n.role);
+    const nx = n.x + offX, ny = n.y + offY;
+    const ndata = IDX.nodes[n.id] || {};
+    const lines = splitName(pname(n.id) || n.id);
+    const isFocal = n.role === 'focal';
+
+    const g = svgEl('g',{
+      'data-nodeid': n.id,
+      style: n.role === 'focal' ? 'cursor:default' : 'cursor:pointer'
+    }, cardG);
+
+    // click + touch: navigate to this person (non-focal only)
+    if(n.role !== 'focal'){
+      const cardId = n.id;
+      const onActivate = () => {
+        showPanel(cardId);
+        navigateTo(cardId);
+      };
+      g.addEventListener('click', onActivate);
+      // Touch: fire on touchend only if no significant move (not a pan gesture)
+      let touchStartX = 0, touchStartY = 0;
+      g.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+      g.addEventListener('touchend', e => {
+        const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+        const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+        if(dx < 8 && dy < 8){   // tap, not swipe
+          e.preventDefault();
+          onActivate();
+        }
+      }, { passive: false });
+    }
+
+    // shadow
+    svgEl('rect',{x:nx+2,y:ny+3,width:CW,height:CH,rx:5,
+                  fill:'rgba(0,0,0,.22)'},g);
+    // body
+    svgEl('rect',{x:nx,y:ny,width:CW,height:CH,rx:5,
+                  fill, stroke,
+                  'stroke-width': isFocal ? '3' : '1.2',
+                  'stroke-dasharray': (ndata.death&&ndata.death!=='') ? '5,3' : 'none'},g);
+    // accent bar
+    svgEl('rect',{x:nx,y:ny,width:CW,height:4,rx:5,fill:stroke,opacity:'.9'},g);
+
+    // role label
+  const ROLE_LABELS = {
+    focal: tr('focal'), spouse: tr('spouse'), sibling: tr('sibling')||'~',
+    parent: tr('parent'), grandparent: tr('grandparent'),
+    child: tr('child'), grandchild: tr('grandchild')
+  };
+    const rl = svgEl('text',{x:nx+CW/2,y:ny+14,'text-anchor':'middle',
+                             'font-size':'8','font-family':'Segoe UI,sans-serif',
+                             fill:'rgba(255,255,255,.5)','pointer-events':'none'},g);
+    rl.textContent = ROLE_LABELS[n.role] || n.role;
+
+    // name
+    const nameY0 = lines.length===2 ? ny+28 : ny+36;
+    for(let i=0;i<lines.length;i++){
+      const t = svgEl('text',{x:nx+CW/2,y:nameY0+i*14,'text-anchor':'middle',
+                              'font-size':'11','font-weight':'bold',
+                              'font-family':'Segoe UI,sans-serif',
+                              fill:'white','pointer-events':'none'},g);
+      t.textContent = lines[i];
+    }
+
+    // birth year + death year + Hebrew dates
+    const by = ndata.birth ? (ndata.birth.match(/\d{4}/)||[''])[0] : '';
+    const dy = ndata.death && ndata.death !== 'ум.' ? (ndata.death.match(/\d{4}/)||[''])[0] : '';
+    const bhe = ndata.birth_he || '';
+    const dhe = ndata.death_he || '';
+
+    // date line Y: starts at bottom area of card
+    let dateY = ny + CH - (dy ? 28 : 20) - (bhe||dhe ? 10 : 0);
+
+    if(by){
+      const dt = svgEl('text',{x:nx+CW/2, y:dateY,
+                               'text-anchor':'middle','font-size':'9',
+                               'font-family':'Segoe UI,sans-serif',
+                               fill:'rgba(255,255,255,.65)','pointer-events':'none'},g);
+      dt.textContent = t('born_abbr') + ' ' + by;
+      dateY += 12;
+    }
+    if(dy){
+      const dt = svgEl('text',{x:nx+CW/2, y:dateY,
+                               'text-anchor':'middle','font-size':'9',
+                               'font-family':'Segoe UI,sans-serif',
+                               fill:'rgba(255,255,255,.45)','pointer-events':'none'},g);
+      dt.textContent = '† ' + dy;
+      dateY += 12;
+    }
+    if(bhe || dhe){
+      const heText = [bhe ? bhe : null, dhe ? '† '+dhe : null].filter(Boolean).join('  ');
+      const ht = svgEl('text',{x:nx+CW/2, y:ny+CH-6,
+                               'text-anchor':'middle','font-size':'7.5',
+                               'font-family':'Segoe UI,Arial,sans-serif',
+                               'direction':'rtl',
+                               fill:'rgba(237,216,144,.55)','pointer-events':'none'},g);
+      ht.textContent = heText;
+    }
+  }
+
+  // centre viewport: return pan params for caller to apply
+  const fNodeR = layout.nodes.find(n => n.id === focalId);
+  const vW = window.innerWidth, vH = window.innerHeight - 44;
+  const sc = 1.2;
+  const panTx = vW/2 - (fNodeR.x + offX + CW/2)*sc;
+  const panTy = vH/2 - (fNodeR.y + offY + CH/2)*sc;
+  return { tx: panTx, ty: panTy, sc };
+
+  // info bar
+  const n = layout.nodes.length;
+  const roles = layout.nodes.map(x=>x.role).join(', ');
+  document.getElementById('info').textContent =
+    `Узлов: ${n} | ${focalId} | ${roles}`;
+
+  // console test
+  console.log('getCenteredLayout(' + focalId + ') →', layout.nodes.length, 'nodes');
+}
+
+// ════════════════════════════════════════════════════════
+//  NAVIGATION — history + navigateTo + click on cards
+// ════════════════════════════════════════════════════════
+
+const history  = [];   // stack of visited focalIds
+const MAX_HIST = 20;
+let   currentFocal = null;
+
+// ── navigateTo: animated fade + viewport pan ──────────────
+function navigateTo(focalId){
+  if(!IDX.nodes[focalId]) return;
+  if(focalId === currentFocal) return;
+
+  if(currentFocal){
+    history.push(currentFocal);
+    if(history.length > MAX_HIST) history.shift();
+  }
+  currentFocal = focalId;
+  updateBackBtn();
+
+  const svg = document.getElementById('svg');
+
+  // Phase 1: fade out current tree
+  svg.classList.add('fading');
+
+  setTimeout(() => {
+    // Phase 2: render new layout (while invisible) — get pan target back
+    const pan = render(focalId);
+
+    // Phase 3: animate viewport to new focal position
+    const world = document.getElementById('world');
+    if(pan){
+      // start from current position (no transition), then animate to target
+      world.style.transition = 'none';
+      world.style.transform  = world.style.transform; // keep current (forces repaint)
+      requestAnimationFrame(() => {
+        world.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1)';
+        world.style.transform  = `translate(${pan.tx}px,${pan.ty}px) scale(${pan.sc})`;
+        setTimeout(() => { world.style.transition = 'none'; }, 520);
+      });
+    }
+
+    // Phase 4: fade in
+    svg.classList.remove('fading');
+
+  }, 220);
+}
+
+// ── back: pop history and navigate ───────────────────────
+function goBack(){
+  if(!history.length) return;
+  const prev = history.pop();   // pop BEFORE navigateTo pushes it back
+  const tmp  = currentFocal;
+  currentFocal = null;          // allow navigateTo to proceed
+  navigateTo(prev);
+  // fix: navigateTo just pushed tmp again — remove it
+  if(history[history.length-1] === tmp) history.pop();
+  updateBackBtn();
+}
+
+function updateBackBtn(){
+  const btn = document.getElementById('btn-back');
+  btn.disabled = history.length === 0;
+  btn.textContent = history.length
+    ? t('back_n').replace('{n}', history.length)
+    : t('back');
+}
+
+// ── make navigateTo available before render is called ─────
+// (navigateTo is defined above and used in click handlers
+//  that are attached inline during card creation in render)
+
+// ════════════════════════════════════════════════════════
+//  SIDE PANEL — showPanel / closePanel
+// ════════════════════════════════════════════════════════
+
+function fmtDate(s){
+  const died = t('died') || 'ум.';
+  if(!s || s==='ум.' || s==='d.' || s==='נפ.') return s ? died : '';
+  let m = s.match(/^(\d+)\s+([A-Z]+)\s+(\d{4})$/);
+  if(m) return m[1]+' '+tm(m[2])+' '+m[3];
+  m = s.match(/^([A-Z]+)\s+(\d{4})$/);
+  if(m) return tm(m[0].split(' ')[0])+' '+m[2];
+  return s;
+}
+
+function pyear(s){ const m=s&&s.match(/\d{4}/); return m?+m[0]:0; }
+
+function pLink(id){
+  const n = IDX.nodes[id]; if(!n) return '';
+  const yr = pyear(n.birth);
+  return `<div class="p-lnk" onclick="panelNavigate('${id}')">
+    ${pname(id)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}
+  </div>`;
+}
+
+// navigate from panel link: update panel + navigate tree
+function panelNavigate(id){
+  showPanel(id);
+  navigateTo(id);
+}
+
+function showPanel(id){
+  const n = IDX.nodes[id]; if(!n) return;
+
+  const parents=[], spouses=[], children=[];
+  for(const [,f] of Object.entries(IDX.families)){
+    if((f.children||[]).includes(id)){
+      if(f.husband && IDX.nodes[f.husband]) parents.push(f.husband);
+      if(f.wife    && IDX.nodes[f.wife])    parents.push(f.wife);
+    }
+    if(f.husband===id || f.wife===id){
+      const sp = f.husband===id ? f.wife : f.husband;
+      if(sp && IDX.nodes[sp] && !spouses.includes(sp)) spouses.push(sp);
+      (f.children||[]).forEach(c=>{
+        if(IDX.nodes[c]&&!children.includes(c)) children.push(c);
+      });
+    }
+  }
+
+  const b = fmtDate(n.birth), d = fmtDate(n.death);
+  const isFocal = id === currentFocal;
+
+  // ── Column 1: name, rel, dates ──
+  let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+    <span>${pname(id)}</span>
+    <button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
+      border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#7A5828;
+      white-space:nowrap;flex-shrink:0">${t('btn_fix')}</button>
+  </h2>`;
+  if(n.rel) col1 += `<span class="p-rel">${trel(n.rel)}</span>`;
+  col1 += `<div class="p-block">`;
+  if(b) col1 += `<div><span class="p-lbl">${t('birth')}</span> <strong>${b}</strong>${n.birth_he?` <span class="p-hw" dir="rtl">${n.birth_he}</span>`:''}</div>`;
+  if(d) col1 += `<div style="margin-top:3px"><span class="p-lbl">${t('death')}</span> <strong>${d}</strong>${n.death_he?` <span class="p-hw" dir="rtl">${n.death_he}</span>`:''}</div>`;
+  if(n.bp) col1 += `<div><span class="p-lbl">${t('birth_place')}</span>${n.bp}</div>`;
+  if(n.dp) col1 += `<div><span class="p-lbl">${t('death_place')}</span>${n.dp}</div>`;
+  if(!b&&!d&&!n.bp&&!n.dp) col1 += `<em style="color:#7A5828;font-size:.72rem">${t('no_dates')}</em>`;
+  col1 += `</div>`;
+  if(n.missing&&n.missing.length) col1 += `<p class="p-warn">${t('missing')} ${n.missing.join(', ')}</p>`;
+  if(n.phone) col1 += `<div style="margin-top:6px"><span class="p-lbl">📞</span> <a href="tel:${n.phone}" style="color:#5A3C10;text-decoration:none">${n.phone}</a></div>`;
+  if(n.email) col1 += `<div style="margin-top:2px"><span class="p-lbl">✉</span> <a href="mailto:${n.email}" style="color:#5A3C10;text-decoration:none">${n.email}</a></div>`;
+  if(!isFocal) col1 += `<button class="p-nav-btn" onclick="navigateTo('${id}')">${t('show_tree')}</button>`;
+
+  // ── Column 2: relatives ──
+  let col2 = '';
+  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
+  if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
+  if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(pLink).join('')}</div>`;
+
+  document.getElementById('panel-col1').innerHTML = col1;
+  document.getElementById('panel-col2').innerHTML = col2;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('vp').classList.add('panel-open');
+}
+
+function closePanel(){
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('vp').classList.remove('panel-open');
+}
+
+document.getElementById('panel-close').addEventListener('click', closePanel);
+
+// ── hook showPanel into card clicks ───────────────────────
+// Patch: when a non-focal card is clicked, also show its panel
+// We override the click logic in render by wrapping navigateTo
+const _navigateTo = navigateTo;
+window.navigateTo = function(id){
+  _navigateTo(id);
+  // panel will update on next render cycle via focal card click
+};
+
+// focal card click → show panel about focal
+// We hook this in the render function after cards are built
+// by attaching a click listener to the focal card group
+const _render2 = render;
+window.render = function(focalId){
+  const pan = _render2(focalId);
+  // attach panel opener to focal card (cursor:default card)
+  const focalG = document.querySelector('#cards > g[data-nodeid="'+focalId+'"]');
+  if(focalG){
+    focalG.addEventListener('click', () => showPanel(focalId));
+    let ftx = 0, fty = 0;
+    focalG.addEventListener('touchstart', e => { ftx=e.touches[0].clientX; fty=e.touches[0].clientY; }, {passive:true});
+    focalG.addEventListener('touchend', e => {
+      if(Math.abs(e.changedTouches[0].clientX-ftx)<8 && Math.abs(e.changedTouches[0].clientY-fty)<8){
+        e.preventDefault(); showPanel(focalId);
+      }
+    }, {passive:false});
+  }
+  // show panel for the new focal automatically
+  showPanel(focalId);
+  return pan;
+};
+
+// ── buttons ───────────────────────────────────────────────
+document.getElementById('btn-back').addEventListener('click', goBack);
+document.getElementById('btn-p3') .addEventListener('click', () => navigateTo('P3'));
+document.getElementById('btn-p1') .addEventListener('click', () => navigateTo('P1'));
+document.getElementById('btn-p42').addEventListener('click', () => navigateTo('P42'));
+document.getElementById('btn-p11').addEventListener('click', () => navigateTo('P11'));
+
+// keyboard: Backspace / Alt+← = go back
+document.addEventListener('keydown', e => {
+  if((e.key === 'Backspace' || (e.key === 'ArrowLeft' && e.altKey)) && !e.target.matches('input')){
+    e.preventDefault();
+    goBack();
+  }
+});
+
+// ════════════════════════════════════════════════════════
+//  PAN & ZOOM — wheel + drag on main viewport
+// ════════════════════════════════════════════════════════
+(function initPanZoom(){
+  const vp    = document.getElementById('vp');
+  const world = document.getElementById('world');
+
+  // Read current transform from world (set by navigateTo)
+  function getXYS(){
+    const t = world.style.transform || '';
+    const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/);
+    return m ? { x: +m[1], y: +m[2], s: +m[3] } : { x: 0, y: 0, s: 1 };
+  }
+  function setXYS(x, y, s, animated){
+    world.style.transition = animated ? 'transform 0.15s ease-out' : 'none';
+    world.style.transform  = `translate(${x}px,${y}px) scale(${s})`;
+  }
+
+  // Wheel → zoom around cursor
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect  = vp.getBoundingClientRect();
+    const mx    = e.clientX - rect.left;
+    const my    = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.1 : 0.91;
+    const {x, y, s} = getXYS();
+    const ns = Math.max(0.08, Math.min(4, s * delta));
+    const nx = mx - (mx - x) * (ns / s);
+    const ny = my - (my - y) * (ns / s);
+    setXYS(nx, ny, ns, false);
+  }, { passive: false });
+
+  // Mouse drag → pan
+  let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
+  vp.addEventListener('mousedown', e => {
+    if(e.button !== 0) return;
+    // don't start drag on card clicks
+    if(e.target.closest('g[data-nodeid], .p-lnk, button')) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const {x, y} = getXYS(); origX = x; origY = y;
+    vp.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    const {s} = getXYS();
+    setXYS(origX + dx, origY + dy, s, false);
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    vp.style.cursor = '';
+  });
+
+  // Touch → pinch zoom + one-finger pan
+  let lastTouchDist = 0, touchDragging = false, tStartX = 0, tStartY = 0, tOrigX = 0, tOrigY = 0;
+  vp.addEventListener('touchstart', e => {
+    // Don't intercept touches that start on a card (SVG g with data-nodeid)
+    const onCard = e.target.closest('g[data-nodeid]');
+    if(e.touches.length === 1){
+      touchDragging = !onCard;  // don't pan if touching a card
+      tStartX = e.touches[0].clientX; tStartY = e.touches[0].clientY;
+      const {x, y} = getXYS(); tOrigX = x; tOrigY = y;
+    }
+    if(e.touches.length === 2){
+      touchDragging = false;
+      lastTouchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+    }
+    // Only preventDefault for pan/pinch, not for card taps
+    if(!onCard || e.touches.length === 2) e.preventDefault();
+  }, { passive: false });
+  vp.addEventListener('touchmove', e => {
+    if(e.touches.length === 1 && touchDragging){
+      const dx = e.touches[0].clientX - tStartX;
+      const dy = e.touches[0].clientY - tStartY;
+      const {s} = getXYS();
+      setXYS(tOrigX + dx, tOrigY + dy, s, false);
+    }
+    if(e.touches.length === 2){
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+      const {x, y, s} = getXYS();
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const vr = vp.getBoundingClientRect();
+      const mx = cx - vr.left, my = cy - vr.top;
+      const ns = Math.max(0.08, Math.min(4, s * d / lastTouchDist));
+      setXYS(mx - (mx - x) * (ns / s), my - (my - y) * (ns / s), ns, false);
+      lastTouchDist = d;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  vp.addEventListener('touchend', () => { touchDragging = false; });
+
+  // Double-click → reset to current focal (re-center)
+  vp.addEventListener('dblclick', e => {
+    if(e.target.closest('g[data-nodeid], .p-lnk, button')) return;
+    if(currentFocal) navigateTo(currentFocal);
+  });
+
+  // Cursor hint
+  vp.style.cursor = 'grab';
+})();
+
+// ════════════════════════════════════════════════════════
+//  LANGUAGE — detect browser lang, switcher buttons
+// ════════════════════════════════════════════════════════
+//  UI STRINGS — dictionary + t() helpers
+// ════════════════════════════════════════════════════════
+let currentLang = 'ru';  // set by detectLang on load
+const UI = {
+  ru: {
+    back:'◀ Назад', back_n:'◀ Назад ({n})',
+    nav_miroslaw:'★ Мирослав', nav_yakov:'Яков (P1)',
+    nav_levik:'Левик (P42)', nav_evgeny:'Евгений (P11)',
+    btn_edit:'✏️ Дополнить',
+    btn_fix:'🔧 Исправить',
+    tree_title:'🌳 Мостовые · Журахинские · Лейцис',
+    birth:'Рождение', death:'Смерть',
+    birth_place:'Место рождения', death_place:'Место смерти',
+    no_dates:'Даты неизвестны', missing:'⚠ Нет данных:',
+    parents:'Родители', spouse:'Супруг', spouses:'Супруги',
+    children:'Дети', show_tree:'→ Показать дерево вокруг этого человека',
+    died:'ум.',
+    months:{JAN:'янв',FEB:'фев',MAR:'мар',APR:'апр',MAY:'май',JUN:'июн',
+            JUL:'июл',AUG:'авг',SEP:'сен',OCT:'окт',NOV:'ноя',DEC:'дек'},
+    roles:{focal:'фокус',spouse:'супруг/а',parent:'родитель',
+           grandparent:'дед/баб',child:'ребёнок',grandchild:'внук/внучка',sibling:'брат/сестра'},
+    born_abbr:'р.',
+    no_data:'Нет данных',
+    // modal form
+    modal_title:'✏️ Дополнить дерево',
+    lbl_add_type:'Тип дополнения',
+    mtype_person:'👤 Новый человек', mtype_photo:'📷 Фото',
+    mtype_bio:'📝 Биография',        mtype_date:'📅 Дата / место',
+    mtype_fix:'🔧 Исправить',
+    lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
+    lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
+    lbl_birth:'Дата рождения',       ph_birth:'Например: 15 марта 1975',
+    lbl_death:'Дата смерти (если есть)', ph_death:'оставьте пустым если жив(а)',
+    lbl_rel_person:'Связь с кем',    ph_search:'Начните вводить имя...',
+    lbl_rel_type:'Тип связи',
+    rel_choose:'— выбрать —', rel_wife:'Жена', rel_husband:'Муж', rel_child:'Ребёнок', rel_parent:'Родитель',
+    lbl_phone:'Телефон',             ph_phone:'+972-50-000-0000',
+    lbl_email:'Email',               ph_email:'example@mail.com',
+    lbl_person:'Персона',
+    lbl_photo_url:'URL фотографии',  ph_url:'https://drive.google.com/...',
+    lbl_caption:'Подпись (год, место)', ph_caption:'Например: 1965, Одесса',
+    lbl_bio_text:'Текст биографии', ph_bio:'Краткое жизнеописание, воспоминания...',
+    lbl_bio_url:'Ссылка на документ (необязательно)', ph_gdoc:'https://docs.google.com/...',
+    lbl_note:'Уточнение (что именно)', ph_note:'Например: дата рождения — 3 апреля 1932',
+    lbl_fix_person:'Персона (кого исправить)',
+    lbl_fix_field:'Что исправить',
+    fix_name:'Имя', fix_birth:'Дата рождения', fix_death:'Дата смерти',
+    fix_birth_he:'Дата рождения (евр.)', fix_death_he:'Дата смерти (евр.)',
+    fix_rel:'Степень родства', fix_family:'Семейная связь', fix_other:'Другое',
+    lbl_fix_old:'Текущее значение (если знаете)', ph_fix_old:'Что сейчас написано (необязательно)',
+    lbl_fix_new:'Верное значение / исправление',  ph_fix_new:'Что должно быть вместо этого',
+    lbl_comment:'Комментарий (необязательно)',     ph_comment:'Источник, пояснение...',
+    btn_generate:'✉ Сформировать и отправить по email', btn_copy:'📋 Копировать', btn_copied:'✓ Скопировано', btn_email:'✉️ Отправить по email',
+    btn_cancel:'Отмена',
+    rel_labels:{'Отец':'Отец','Мать':'Мать','Сестра':'Сестра','Зять':'Зять','Составитель':'Составитель','Племянник':'Племянник','Племянница':'Племянница','Тётя':'Тётя','Прабабушка':'Прабабушка','Прадедушка':'Прадедушка','Бабушка (по отцу)':'Бабушка (по отцу)','Бабушка (по матери)':'Бабушка (по матери)','Дедушка (по отцу)':'Дедушка (по отцу)','Дедушка (по матери)':'Дедушка (по матери)'},
+    help_title:'Как дополнить дерево?',
+    help_steps:['Нажмите «✏️ Дополнить» и заполните форму','Скопируйте сформированный запрос','Откройте claude.ai','Загрузите этот HTML-файл','Вставьте скопированный текст и отправьте','Скачайте обновлённый файл'],
+    modal_title:'✏️ Дополнить дерево',
+    type_person:'👤 Новый человек',type_photo:'📷 Фото',type_bio:'📝 Биография',type_date:'📅 Дата / место',
+    lbl_name:'Имя (полное)',lbl_sex:'Пол',sex_f:'Женский',sex_m:'Мужской',
+    lbl_birth:'Дата рождения',lbl_death:'Дата смерти (если есть)',
+    lbl_rel_person:'Связь с кем',lbl_rel_type:'Тип связи',
+    rel_wife:'Жена',rel_husband:'Муж',rel_child:'Ребёнок',rel_parent:'Родитель',
+    lbl_person:'Персона',lbl_photo_url:'URL фотографии',lbl_caption:'Подпись (год, место)',
+    lbl_bio_text:'Текст биографии',lbl_bio_url:'Ссылка на подробный документ (необязательно)',
+    lbl_note:'Уточнение (что именно)',
+    btn_cancel:'Отмена',btn_generate:'✉ Сформировать и отправить по email',btn_copy:'📋 Копировать',btn_copied:'✓ Скопировано',btn_email:'✉️ Отправить по email',
+    ph_name:'Например: Анна Иванова',ph_birth:'Например: 15 марта 1975',
+    ph_death:'оставьте пустым если жив(а)',ph_search:'Начните вводить имя...',
+    ph_url:'https://drive.google.com/...',ph_caption:'Например: 1965, Одесса',
+    ph_bio:'Краткое жизнеописание, воспоминания...',ph_gdoc:'https://docs.google.com/...',
+    ph_note:'Например: дата рождения — 3 апреля 1932, место рождения — Харьков',
+    prompt_header:'Добавь в семейное дерево Мостовых:\n\n',
+    prompt_fix_header:'Исправь в семейном дереве Мостовых:\n\n',
+    prompt_footer:'\n— сгенерировано формой дерева',
+    alert_name:'Введите имя',alert_person_url:'Укажите персону и URL фото',
+    alert_person:'Укажите персону',alert_person_note:'Укажите персону и уточнение'
+  },
+  en: {
+    back:'◀ Back', back_n:'◀ Back ({n})',
+    nav_miroslaw:'★ Miroslav', nav_yakov:'Yakov (P1)',
+    nav_levik:'Levik (P42)', nav_evgeny:'Evgeny (P11)',
+    btn_edit:'✏️ Add info',
+    btn_fix:'🔧 Correct',
+    tree_title:'🌳 Mostovoy · Zhurakhinsky · Leytsis',
+    birth:'Birth', death:'Death',
+    birth_place:'Place of birth', death_place:'Place of death',
+    no_dates:'Dates unknown', missing:'⚠ Missing data:',
+    parents:'Parents', spouse:'Spouse', spouses:'Spouses',
+    children:'Children', show_tree:'→ Show tree around this person',
+    died:'d.',
+    months:{JAN:'Jan',FEB:'Feb',MAR:'Mar',APR:'Apr',MAY:'May',JUN:'Jun',
+            JUL:'Jul',AUG:'Aug',SEP:'Sep',OCT:'Oct',NOV:'Nov',DEC:'Dec'},
+    roles:{focal:'focal',spouse:'spouse',parent:'parent',
+           grandparent:'grandparent',child:'child',grandchild:'grandchild',sibling:'sibling'},
+    born_abbr:'b.',
+    no_data:'No data',
+    modal_title:'✏️ Add to tree',
+    lbl_add_type:'Type',
+    mtype_person:'👤 New person', mtype_photo:'📷 Photo',
+    mtype_bio:'📝 Biography',     mtype_date:'📅 Date / place',
+    mtype_fix:'🔧 Correct',
+    lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
+    lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
+    lbl_birth:'Date of birth',    ph_birth:'E.g.: 15 March 1975',
+    lbl_death:'Date of death (if applicable)', ph_death:'leave empty if alive',
+    lbl_rel_person:'Related to',  ph_search:'Start typing a name...',
+    lbl_rel_type:'Relationship',
+    rel_choose:'— select —', rel_wife:'Wife', rel_husband:'Husband', rel_child:'Child', rel_parent:'Parent',
+    lbl_phone:'Phone',            ph_phone:'+1-555-000-0000',
+    lbl_email:'Email',            ph_email:'example@mail.com',
+    lbl_person:'Person',
+    lbl_photo_url:'Photo URL',    ph_url:'https://drive.google.com/...',
+    lbl_caption:'Caption (year, place)', ph_caption:'E.g.: 1965, Odessa',
+    lbl_bio_text:'Biography text', ph_bio:'Brief life story, memories...',
+    lbl_bio_url:'Link to full document (optional)', ph_gdoc:'https://docs.google.com/...',
+    lbl_note:'Clarification (what exactly)', ph_note:'E.g.: date of birth — 3 April 1932',
+    lbl_fix_person:'Person to correct',
+    lbl_fix_field:'Field to correct',
+    fix_name:'Name', fix_birth:'Date of birth', fix_death:'Date of death',
+    fix_birth_he:'Date of birth (Hebrew)', fix_death_he:'Date of death (Hebrew)',
+    fix_rel:'Relationship', fix_family:'Family link', fix_other:'Other',
+    lbl_fix_old:'Current value (if known)', ph_fix_old:'What is written now (optional)',
+    lbl_fix_new:'Correct value',            ph_fix_new:'What it should be',
+    lbl_comment:'Comment (optional)',       ph_comment:'Source, explanation...',
+    btn_generate:'✉ Generate & send by email', btn_copy:'📋 Copy', btn_copied:'✓ Copied', btn_email:'✉️ Send by email',
+    btn_cancel:'Cancel',
+    rel_labels:{'Отец':'Father','Мать':'Mother','Сестра':'Sister','Зять':'Son-in-law','Составитель':'Compiler','Племянник':'Nephew','Племянница':'Niece','Тётя':'Aunt','Прабабушка':'Great-grandmother','Прадедушка':'Great-grandfather','Бабушка (по отцу)':'Grandmother (paternal)','Бабушка (по матери)':'Grandmother (maternal)','Дедушка (по отцу)':'Grandfather (paternal)','Дедушка (по матери)':'Grandfather (maternal)','Сестра деда':'Grandfather\'s sister','Брат деда':'Grandfather\'s brother','Двоюродная прабабушка':'2nd great-grandmother','Двоюродная родственница':'Distant relative','Троюродный дядя':'3rd cousin once removed','Троюродная тётя':'3rd cousin once removed','Дядя по матери':'Uncle (maternal)','Жена дяди':'Uncle\'s wife','Муж двоюродной прабабушки':'Husband of 2nd great-grandmother'},
+    help_title:'How to add information?',
+    help_steps:['Click "✏️ Add info" and fill the form','Copy the generated request','Open claude.ai','Upload this HTML file','Paste the copied text and send','Download the updated file'],
+    modal_title:'✏️ Add to tree',
+    type_person:'👤 New person',type_photo:'📷 Photo',type_bio:'📝 Biography',type_date:'📅 Date / place',
+    lbl_name:'Full name',lbl_sex:'Sex',sex_f:'Female',sex_m:'Male',
+    lbl_birth:'Date of birth',lbl_death:'Date of death (if applicable)',
+    lbl_rel_person:'Related to',lbl_rel_type:'Relationship type',
+    rel_wife:'Wife',rel_husband:'Husband',rel_child:'Child',rel_parent:'Parent',
+    lbl_person:'Person',lbl_photo_url:'Photo URL',lbl_caption:'Caption (year, place)',
+    lbl_bio_text:'Biography text',lbl_bio_url:'Link to full document (optional)',
+    lbl_note:'Clarification (what exactly)',
+    btn_cancel:'Cancel',btn_generate:'✉ Generate & send by email',btn_copy:'📋 Copy',btn_copied:'✓ Copied',btn_email:'✉️ Send by email',
+    ph_name:'e.g. Anna Ivanova',ph_birth:'e.g. March 15, 1975',
+    ph_death:'leave empty if alive',ph_search:'Start typing a name...',
+    ph_url:'https://drive.google.com/...',ph_caption:'e.g. 1965, Odessa',
+    ph_bio:'Brief life story, memories...',ph_gdoc:'https://docs.google.com/...',
+    ph_note:'e.g. date of birth — April 3, 1932, place of birth — Kharkov',
+    prompt_header:'Add to the Mostovoy family tree:\n\n',
+    prompt_fix_header:'Correct in the Mostovoy family tree:\n\n',
+    prompt_footer:'\n— generated by tree form',
+    alert_name:'Please enter a name',alert_person_url:'Please specify person and photo URL',
+    alert_person:'Please specify a person',alert_person_note:'Please specify person and note'
+  },
+  he: {
+    back:'◀ חזרה', back_n:'◀ חזרה ({n})',
+    nav_miroslaw:'★ מירוסלב', nav_yakov:'יעקב (P1)',
+    nav_levik:'לוויק (P42)', nav_evgeny:'יבגני (P11)',
+    btn_edit:'✏️ הוספה',
+    btn_fix:'🔧 תיקון',
+    tree_title:'🌳 מוסטובוי · ז׳ורחינסקי · לייצס',
+    birth:'לידה', death:'פטירה',
+    birth_place:'מקום לידה', death_place:'מקום פטירה',
+    no_dates:'תאריכים לא ידועים', missing:'⚠ חסרים נתונים:',
+    parents:'הורים', spouse:'בן/בת זוג', spouses:'בני זוג',
+    children:'ילדים', show_tree:'→ הצג עץ סביב אדם זה',
+    died:'נפ.',
+    months:{JAN:'ינו',FEB:'פבר',MAR:'מרץ',APR:'אפר',MAY:'מאי',JUN:'יוני',
+            JUL:'יולי',AUG:'אוג',SEP:'ספט',OCT:'אוק',NOV:'נוב',DEC:'דצמ'},
+    roles:{focal:'מוקד',spouse:'בן/בת זוג',parent:'הורה',
+           grandparent:'סבא/סבתא',child:'ילד/ה',grandchild:'נכד/ה',sibling:'אח/אחות'},
+    born_abbr:'נ.',
+    no_data:'אין נתונים',
+    modal_title:'✏️ הוספה לעץ',
+    lbl_add_type:'סוג',
+    mtype_person:'👤 אדם חדש', mtype_photo:'📷 תמונה',
+    mtype_bio:'📝 ביוגרפיה',   mtype_date:'📅 תאריך / מקום',
+    mtype_fix:'🔧 תיקון',
+    lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
+    lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
+    lbl_birth:'תאריך לידה',    ph_birth:'לדוגמה: 15 במרץ 1975',
+    lbl_death:'תאריך פטירה (אם רלוונטי)', ph_death:'השאר ריק אם בחיים',
+    lbl_rel_person:'קשור ל',   ph_search:'התחל להקליד שם...',
+    lbl_rel_type:'סוג קשר',
+    rel_choose:'— בחר —', rel_wife:'אישה', rel_husband:'בעל', rel_child:'ילד/ה', rel_parent:'הורה',
+    lbl_phone:'טלפון',         ph_phone:'+972-50-000-0000',
+    lbl_email:'אימייל',        ph_email:'example@mail.com',
+    lbl_person:'אדם',
+    lbl_photo_url:'קישור לתמונה', ph_url:'https://drive.google.com/...',
+    lbl_caption:'כיתוב (שנה, מקום)', ph_caption:'לדוגמה: 1965, אודסה',
+    lbl_bio_text:'טקסט ביוגרפי', ph_bio:'תיאור חיים קצר, זיכרונות...',
+    lbl_bio_url:'קישור למסמך מפורט (אופציונלי)', ph_gdoc:'https://docs.google.com/...',
+    lbl_note:'הבהרה (מה בדיוק)', ph_note:'לדוגמה: תאריך לידה — 3 באפריל 1932',
+    lbl_fix_person:'אדם לתיקון',
+    lbl_fix_field:'שדה לתיקון',
+    fix_name:'שם', fix_birth:'תאריך לידה', fix_death:'תאריך פטירה',
+    fix_birth_he:'תאריך לידה (עברי)', fix_death_he:'תאריך פטירה (עברי)',
+    fix_rel:'קרבה', fix_family:'קשר משפחתי', fix_other:'אחר',
+    lbl_fix_old:'ערך נוכחי (אם ידוע)', ph_fix_old:'מה כתוב עכשיו (אופציונלי)',
+    lbl_fix_new:'ערך נכון',            ph_fix_new:'מה צריך להיות',
+    lbl_comment:'הערה (אופציונלי)',    ph_comment:'מקור, הסבר...',
+    btn_generate:'✉ צור ושלח במייל', btn_copy:'📋 העתק', btn_copied:'✓ הועתק', btn_email:'✉️ שלח במייל',
+    btn_cancel:'ביטול',
+    rel_labels:{'Отец':'אבא','Мать':'אמא','Сестра':'אחות','Зять':'חתן','Составитель':'מחבר','Племянник':'אחיין','Племянница':'אחיינית','Тётя':'דודה','Прабабушка':'סבתא רבה','Прадедушка':'סבא רבה','Бабушка (по отцу)':'סבתא (מצד האב)','Бабушка (по матери)':'סבתא (מצד האם)','Дедушка (по отцу)':'סבא (מצד האב)','Дедушка (по матери)':'סבא (מצד האם)','Сестра деда':'אחות הסבא','Брат деда':'אח הסבא','Двоюродная прабабушка':'סבתא רבה שנייה','Двоюродная родственница':'קרובת משפחה רחוקה','Троюродный дядя':'דוד רחוק','Троюродная тётя':'דודה רחוקה','Дядя по матери':'דוד מצד האם','Жена дяди':'אשת הדוד','Муж двоюродной прабабушки':'בעל סבתא רבה שנייה'},
+    help_title:'כיצד להוסיף מידע?',
+    help_steps:['לחץ "✏️ הוספה" ומלא את הטופס','העתק את הבקשה שנוצרה','פתח את claude.ai','העלה את קובץ ה-HTML','הדבק את הטקסט ושלח','הורד את הקובץ המעודכן'],
+    modal_title:'✏️ הוספה לעץ',
+    type_person:'👤 אדם חדש',type_photo:'📷 תמונה',type_bio:'📝 ביוגרפיה',type_date:'📅 תאריך / מקום',
+    lbl_name:'שם מלא',lbl_sex:'מין',sex_f:'נקבה',sex_m:'זכר',
+    lbl_birth:'תאריך לידה',lbl_death:'תאריך פטירה (אם רלוונטי)',
+    lbl_rel_person:'קשור/ה ל',lbl_rel_type:'סוג קשר',
+    rel_wife:'אישה',rel_husband:'בעל',rel_child:'ילד/ה',rel_parent:'הורה',
+    lbl_person:'אדם',lbl_photo_url:'קישור לתמונה',lbl_caption:'כיתוב (שנה, מקום)',
+    lbl_bio_text:'טקסט ביוגרפי',lbl_bio_url:'קישור למסמך מלא (רשות)',
+    lbl_note:'הבהרה (מה בדיוק)',
+    btn_cancel:'ביטול',btn_generate:'✉ צור ושלח במייל',btn_copy:'📋 העתק',btn_copied:'✓ הועתק',btn_email:'✉️ שלח במייל',
+    ph_name:'לדוג אנה איבנובה',ph_birth:'לדוג 15 במרץ 1975',
+    ph_death:'השאר ריק אם בחיים',ph_search:'הקלד שם...',
+    ph_url:'https://drive.google.com/...',ph_caption:'לדוג 1965, אודסה',
+    ph_bio:'סיפור חיים קצר, זכרונות...',ph_gdoc:'https://docs.google.com/...',
+    ph_note:'לדוג תאריך לידה — 3 באפריל 1932, מקום לידה — חרקוב',
+    prompt_header:'הוסף לעץ המשפחה של מוסטובוי:\n\n',
+    prompt_fix_header:'תקן בעץ המשפחה של מוסטובוי:\n\n',
+    prompt_footer:'\n— נוצר על ידי טופס העץ',
+    alert_name:'נא להזין שם',alert_person_url:'נא לציין אדם וקישור לתמונה',
+    alert_person:'נא לציין אדם',alert_person_note:'נא לציין אדם והבהרה'
+  }
+};
+
+function t(key){ return (UI[currentLang]||UI.ru)[key] || UI.ru[key] || key; }
+function tm(mo){ return ((UI[currentLang]||UI.ru).months||UI.ru.months)[mo] || mo; }
+function tr(role){ return ((UI[currentLang]||UI.ru).roles||UI.ru.roles)[role] || role; }
+// Translate n.rel field (stored in Russian)
+function trel(s){
+  if(!s) return '';
+  const M = (UI[currentLang]||UI.ru).rel_labels||{};
+  // try exact match first
+  if(M[s]) return M[s];
+  // try prefix match for compound labels like "Прадедушка (Берман)"
+  for(const [k,v] of Object.entries(M)){
+    if(s.startsWith(k)) return v + s.slice(k.length);
+  }
+  return currentLang==='ru' ? s : s; // fallback: show as-is
+}
+
+// ════════════════════════════════════════════════════════
+//  NAMES DICTIONARY — RU→EN→HE for all 178 persons
+// ════════════════════════════════════════════════════════
+const NAMES = {"P1":{"en":"Yakov Mostovoy","he":"יעקב מוסטובוי"},"P2":{"en":"Sicilia Mostovaya","he":"סיציליה מוסטובאיה"},"P3":{"en":"Miroslav Mostovoy","he":"מירוסלב מוסטובוי"},"P4":{"en":"Moisey Mostovoy","he":"משה מוסטובוי"},"P5":{"en":"Alexander Leytsis","he":"אלכסנדר לייצס"},"P6":{"en":"Lyudmila Ginzburg","he":"לודמילה גינזבורג"},"P7":{"en":"Tatyana Zhurakhinska","he":"טטיאנה ז'ורחינסקאיה"},"P8":{"en":"Rozalia Mostovaya","he":"רוזליה מוסטובאיה"},"P9":{"en":"Mikhail Mostovoy","he":"מיכאיל מוסטובוי"},"P10":{"en":"Elena Mostovaya","he":"אלנה מוסטובאיה"},"P11":{"en":"Evgeny Ginzburg","he":"יבגני גינזבורג"},"P12":{"en":"Yosef Chaim Ginzburg","he":"יוסף חיים גינזבורג"},"P13":{"en":"Yuda Levi Ginzburg","he":"יהודה לוי גינזבורג"},"P14":{"en":"Rivka Haya Ginzburg","he":"רבקה חיה גינזבורג"},"P15":{"en":"Eliezer Yitzhak Ginzburg","he":"אליעזר יצחק גינזבורג"},"P16":{"en":"Adassa Rakhel Ginzburg","he":"עדסה רחל גינזבורג"},"P17":{"en":"Moshe David Ginzburg","he":"משה דוד גינזבורג"},"P18":{"en":"Leonid Ginzburg","he":"לאוניד גינזבורג"},"P19":{"en":"Malka Zhurakhinska","he":"מלכה ז'ורחינסקאיה"},"P20":{"en":"Gersh Zhurakhinsky","he":"הרש ז'ורחינסקי"},"P21":{"en":"Efim Khaim Zhurakhinsky","he":"אפים חיים ז'ורחינסקי"},"P22":{"en":"Misha Zhurakhinsky","he":"מישה ז'ורחינסקי"},"P23":{"en":"Anya Zhurakhinska","he":"אניה ז'ורחינסקאיה"},"P24":{"en":"Masha Peysakhovich","he":"מאשה פייסחוביץ"},"P25":{"en":"Ira Vitinbergska","he":"אירה ויטינברגסקאיה"},"P26":{"en":"Edik Vitinbergsky","he":"אדיק ויטינברגסקי"},"P27":{"en":"Vika Kravtsova","he":"ויקה קרבצובה"},"P28":{"en":"Boris Rabinovich","he":"בוריס רבינוביץ"},"P29":{"en":"Leva Leytsis","he":"לבה לייצס"},"P30":{"en":"Manya","he":"מאניה"},"P31":{"en":"Zhenya Itigina","he":"ז'ניה איטיגינה"},"P32":{"en":"Danya Leytsis","he":"דניה לייצס"},"P33":{"en":"Alexander Itigin","he":"אלכסנדר איטיגין"},"P34":{"en":"Lyuba Itigina","he":"ליובה איטיגינה"},"P35":{"en":"Borya","he":"בוריה"},"P36":{"en":"Nitsan Kravtsov","he":"ניצן קרבצוב"},"P37":{"en":"Karina Kravtsova","he":"קרינה קרבצובה"},"P38":{"en":"Yura","he":"יורה"},"P39":{"en":"Yustin","he":"יוסטין"},"P40":{"en":"Yuliya","he":"יוליה"},"P41":{"en":"Yakov Mostovoy (sr.)","he":"יעקב מוסטובוי (בכיר)"},"P42":{"en":"Levik Itsik Peysakhovich","he":"לוויק איציק פייסחוביץ"},"P43":{"en":"Itsik Peysakhovich","he":"איציק פייסחוביץ"},"P44":{"en":"Tsylya","he":"ציליה"},"P45":{"en":"Zina","he":"זינה"},"P46":{"en":"Ida Peysakhovich","he":"אידה פייסחוביץ"},"P47":{"en":"Lazar Khaskilevich Vaintrop","he":"לזר חסקילביץ ויינטרוב"},"P48":{"en":"Leonid Vaintrop","he":"לאוניד ויינטרוב"},"P49":{"en":"Olya Vaintrop","he":"אוליה ויינטרוב"},"P50":{"en":"Svetlana Ignatenko","he":"סבטלנה איגנטנקו"},"P51":{"en":"Denis Ignatenko","he":"דניס איגנטנקו"},"P52":{"en":"Mario Ignatenko","he":"מריו איגנטנקו"},"P53":{"en":"Manya (Miriam) Kogan","he":"מאניה (מרים) קוגן"},"P54":{"en":"Senya Zhurakhinsky","he":"סניה ז'ורחינסקי"},"P55":{"en":"Shaya Zhurakhinsky","he":"שאיה ז'ורחינסקי"},"P56":{"en":"Roza Gelis","he":"רוזה גליס"},"P57":{"en":"Tsylya Zhurakhinska","he":"ציליה ז'ורחינסקאיה"},"P58":{"en":"Sonya Zhurakhinska","he":"סוניה ז'ורחינסקאיה"},"P59":{"en":"Grigory (Grisha) Zhurakhinsky","he":"גריגורי (גריישה) ז'ורחינסקי"},"P60":{"en":"Milya","he":"מיליה"},"P61":{"en":"Fima Shchiglik","he":"פימה שצ'יגליק"},"P62":{"en":"Alik Shchiglik","he":"אליק שצ'יגליק"},"P63":{"en":"Sasha Shchiglik","he":"סשה שצ'יגליק"},"P64":{"en":"Sofa","he":"סופה"},"P65":{"en":"Lena","he":"לנה"},"P66":{"en":"Sveta Shchiglik","he":"סבטה שצ'יגליק"},"P67":{"en":"Yulya","he":"יוליה"},"P68":{"en":"Fima Shchiglik (jr.)","he":"פימה שצ'יגליק (בן)"},"P69":{"en":"Khanka (Lyalya) Elinovna Skorodinskaya","he":"חנקה (ליאליה) אלינובנה סקורודינסקאיה"},"P70":{"en":"Basya","he":"בסיה"},"P71":{"en":"Nataniel-Shlomo Ginzburg","he":"נתניאל שלמה גינזבורג"},"P73":{"en":"Menachem-Meir Ginzburg","he":"מנחם מאיר גינזבורג"},"P74":{"en":"Daniel-Simcha Ginzburg","he":"דניאל שמחה גינזבורג"},"P80":{"en":"Khana Mostovaya","he":"חנה מוסטובאיה"},"P81":{"en":"Masha Mostovaya","he":"מאשה מוסטובאיה"},"P82":{"en":"Polya Mostovaya","he":"פוליה מוסטובאיה"},"P83":{"en":"Surka (Sonya) Yakovlevna Mostovaya","he":"סורקה (סוניה) יעקבלבנה מוסטובאיה"},"P84":{"en":"Unknown Mostovoy","he":"לא ידוע מוסטובוי"},"P90":{"en":"Volodya Kandyba","he":"וולודיה קנדיבה"},"P91":{"en":"Beba Berman (née Kandyba)","he":"בבה ברמן (לבית קנדיבה)"},"P92":{"en":"Grisha Kandyba","he":"גריישה קנדיבה"},"P93":{"en":"Roza Kandyba","he":"רוזה קנדיבה"},"P94":{"en":"Evgeny (Zhenya) Kandyba","he":"יבגני (ז'ניה) קנדיבה"},"P95":{"en":"Slava Kandyba","he":"סלבה קנדיבה"},"P96":{"en":"Emily Kandyba","he":"אמילי קנדיבה"},"P100":{"en":"David Zitser (sr.)","he":"דוד ציצר (בכיר)"},"P101":{"en":"Boris Zitser","he":"בוריס ציצר"},"P102":{"en":"Klara Naula","he":"קלרה נאולה"},"P103":{"en":"Anya Zitser","he":"אניה ציצר"},"P104":{"en":"David Zitser","he":"דוד ציצר"},"P105":{"en":"Svetlana Zitser","he":"סבטלנה ציצר"},"P106":{"en":"Evgeny Zitser","he":"יבגני ציצר"},"P110":{"en":"Mitya Yanovsky","he":"מיטיה יאנובסקי"},"P111":{"en":"Dima Yanovsky","he":"דימה יאנובסקי"},"P112":{"en":"Gena Yanovsky","he":"גנה יאנובסקי"},"P113":{"en":"Ira Yanovska","he":"אירה יאנובסקאיה"},"P120":{"en":"Lenya Berdichevsky","he":"לניה ברדיצ'בסקי"},"P121":{"en":"Mitya Berman","he":"מיטיה ברמן"},"P122":{"en":"Yanek Berman","he":"יאנק ברמן"},"P123":{"en":"Igor Berman","he":"איגור ברמן"},"P124":{"en":"Vladik Berman","he":"ולאדיק ברמן"},"P125":{"en":"Arkady Abramovich","he":"ארקדי אברמוביץ"},"P126":{"en":"Alexander Abramovich","he":"אלכסנדר אברמוביץ"},"P127":{"en":"Irina Abramovich","he":"אירינה אברמוביץ"},"P130":{"en":"Alexander Anapolsky","he":"אלכסנדר אנפולסקי"},"P131":{"en":"Iliana Anapolska","he":"איליאנה אנפולסקאיה"},"P132":{"en":"Brandon Anapolsky","he":"ברנדון אנפולסקי"},"P140":{"en":"Lyuda Zhurakhinska (Igdal)","he":"ליודה ז'ורחינסקאיה (איגדל)"},"P141":{"en":"Eleonora (Ella) Zhurakhinska (Yampolska)","he":"אלאונורה (אלה) ז'ורחינסקאיה (יאמפולסקאיה)"},"P150":{"en":"Misha Kulnitsky","he":"מישה קולניצקי"},"P151":{"en":"Lenya Kulnitsky","he":"לניה קולניצקי"},"P152":{"en":"Unknown Kulnitsky","he":"לא ידוע קולניצקי"},"P153":{"en":"Masha Kulnitsky","he":"מאשה קולניצקי"},"P160":{"en":"Alla Berman","he":"אלה ברמן"},"P161":{"en":"Arik","he":"אריק"},"P162":{"en":"Vadim","he":"ודים"},"P163":{"en":"Dina Kandyba","he":"דינה קנדיבה"},"P164":{"en":"Zhenya","he":"ז'ניה"},"P165":{"en":"Lev","he":"לב"},"P166":{"en":"Maksim","he":"מקסים"},"P167":{"en":"Michelle","he":"מישל"},"P168":{"en":"Pavel","he":"פבל"},"P169":{"en":"Raya Berman","he":"ראיה ברמן"},"P170":{"en":"Sveta","he":"סבטה"},"P171":{"en":"Senya","he":"סניה"},"P172":{"en":"Sofa Baytman","he":"סופה ביטמן"},"P173":{"en":"Maryana Berdichevska","he":"מריאנה ברדיצ'בסקאיה"},"P174":{"en":"Khana (2)","he":"חנה (2)"},"P175":{"en":"Sheli","he":"שלי"},"P176":{"en":"Iva","he":"איבה"},"P200":{"en":"Fenya Moiseyevna Mininskaya","he":"פניה מויסייבנה מינינסקאיה"},"P201":{"en":"Roma Mostovoy","he":"רומה מוסטובוי"},"P203":{"en":"Adam Kandyba","he":"אדם קנדיבה"},"P204":{"en":"Elena Rudinska","he":"אלנה רודינסקאיה"},"P205":{"en":"Alexander Goldberg","he":"אלכסנדר גולדברג"},"P206":{"en":"Marina Kaplan Rudinski","he":"מרינה קפלן רודינסקי"},"P207":{"en":"Golda Kleinberg","he":"גולדה קליינברג"},"P208":{"en":"Ira Benjaminovich","he":"אירה בנג'מינוביץ"},"P209":{"en":"Stanley Goldberg","he":"סטנלי גולדברג"},"P210":{"en":"Stas Tubelski","he":"סטס טובלסקי"},"P211":{"en":"Gennadiy Goldberg","he":"גנאדי גולדברג"},"P212":{"en":"Tolik","he":"טוליק"},"P213":{"en":"Yulya Kandyba","he":"יוליה קנדיבה"},"P214":{"en":"Ida Lvovna Vaintrop","he":"אידה לבובנה ויינטרוב"},"P215":{"en":"Stanislav Semenovsky","he":"סטניסלב סמנובסקי"},"P216":{"en":"Zina Semenovska","he":"זינה סמנובסקאיה"},"P217":{"en":"Emily Roman","he":"אמילי רומן"},"P218":{"en":"Zinaida Isaakovna Rozenberg","he":"זינאידה יצחקובנה רוזנברג"},"P219":{"en":"Khaskil Vaintrop","he":"חסקיל ויינטרוב"},"P220":{"en":"Misha Moiseyevich Dmitvenko","he":"מישה מויסייביץ דמיטבנקו"},"P221":{"en":"Moisey Mininsky","he":"משה מינינסקי"},"P222":{"en":"Semyon Igdal","he":"סמיון איגדל"},"P223":{"en":"Evgenia Igdal","he":"יבגניה איגדל"},"P224":{"en":"Unknown Leytsis (father)","he":"לא ידוע לייצס (אב)"},"P225":{"en":"Vladislav Igdal","he":"ולאדיסלב איגדל"},"P226":{"en":"Sean Igdal","he":"שון איגדל"},"P227":{"en":"Liya Igdal","he":"ליה איגדל"},"P228":{"en":"Anatoly Yampolsky","he":"אנטולי יאמפולסקי"},"P229":{"en":"Mikhael Yampolsky","he":"מיכאל יאמפולסקי"},"P230":{"en":"Victoria Yampolska","he":"ויקטוריה יאמפולסקאיה"},"P231":{"en":"Vadim Yampolsky","he":"ודים יאמפולסקי"},"P232":{"en":"Boris (Borukh) Ruvimovich Firshter","he":"בוריס (ברוך) רובימוביץ פירשטר"},"P233":{"en":"Basya Firshter (Roginskaya)","he":"בסיה פירשטר (רוגינסקאיה)"},"P234":{"en":"Alik (Oleg/Tsudik) Mostovoy","he":"אליק (אולג/צודיק) מוסטובוי"},"P235":{"en":"Boris Roginsky","he":"בוריס רוגינסקי"},"P236":{"en":"Olya Roginskaya","he":"אוליה רוגינסקאיה"},"P237":{"en":"Anya Roginskaya","he":"אניה רוגינסקאיה"},"P238":{"en":"Yura Kretingen","he":"יורה קרטינגן"},"P239":{"en":"Izya (Israel) Kretingen","he":"איזיה (ישראל) קרטינגן"},"P240":{"en":"Lidor Avigad","he":"לידור אביגד"},"P241":{"en":"Lyuba Mostovaya","he":"ליובה מוסטובאיה"},"P242":{"en":"Semyon (Senya) Mostovoy","he":"סמיון (סניה) מוסטובוי"},"P243":{"en":"Maya Mostovaya","he":"מאיה מוסטובאיה"},"P244":{"en":"Polina Mostovaya","he":"פולינה מוסטובאיה"},"P245":{"en":"Liza Mostovaya","he":"ליזה מוסטובאיה"},"P246":{"en":"Lenya Mostovoy","he":"לניה מוסטובוי"},"P247":{"en":"Kristina Mostovaya-Papay","he":"קריסטינה מוסטובאיה-פאפאי"},"P248":{"en":"Svetlana Vinakovskaya","he":"סבטלנה ויניקובסקאיה"},"P249":{"en":"Inna Ginzburg","he":"אינה גינזבורג"},"P250":{"en":"Kalman Gaishtat","he":"קלמן גייסטט"},"P251":{"en":"Itsik Gaishtat","he":"איציק גייסטט"},"P252":{"en":"Yakov Gaishtat","he":"יעקב גייסטט"}};
+
+// Get person's display name in current language
+// Falls back to Russian name from IDX if not in dict
+function pname(id) {
+  const n = IDX.nodes[id]; if(!n) return id;
+  if(currentLang === 'ru') return n.name;
+  const d = NAMES[id];
+  if(!d) return n.name;  // fallback to Russian
+  return d[currentLang] || n.name;
+}
+
+
+// Apply language to all static UI elements and re-render
+window.applyLang = function(lang){
+  currentLang = lang;
+  const M = UI[lang] || UI.ru;
+
+  // 1. All [data-i] elements — toolbar, modal labels, buttons, options
+  document.querySelectorAll('[data-i]').forEach(el => {
+    const v = M[el.dataset.i];
+    if(v !== undefined && v !== '') el.textContent = v;
+  });
+
+  // 2. Back button (has {n} placeholder)
+  updateBackBtn();
+
+  // 3. mtype buttons by data-type (correct keys, all 5)
+  document.querySelectorAll('.mtype').forEach(b => {
+    const key = 'mtype_' + b.dataset.type;
+    if(M[key]) b.textContent = M[key];
+  });
+
+  // 4. Placeholders with data-ph
+  document.querySelectorAll('[data-ph]').forEach(el => {
+    if(M[el.dataset.ph]) el.placeholder = M[el.dataset.ph];
+  });
+
+  // 5. f-fix-field select options (data-i on each option)
+  document.querySelectorAll('#f-fix-field option[data-i]').forEach(opt => {
+    const v = M[opt.dataset.i]; if(v) opt.textContent = v;
+  });
+
+  // 6. All select options with data-i (covers sex, rel-type, fix-field)
+  document.querySelectorAll('select option[data-i]').forEach(opt => {
+    const v = M[opt.dataset.i]; if(v) opt.textContent = v;
+  });
+
+  // 8. Help bubble
+  const hb = document.getElementById('help-bubble');
+  if(hb){
+    const steps = M.help_steps || UI.ru.help_steps;
+    hb.innerHTML = '<b>'+(M.help_title||'')+'</b><ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
+  }
+
+  // 9. Rebuild names autocomplete in current language
+  if(typeof buildDatalist === 'function') buildDatalist();
+
+  // 10. Re-render tree and panel with new language
+  if(currentFocal){
+    const tmp = currentFocal; currentFocal = null;
+    navigateTo(tmp);
+    showPanel(tmp);
+  }
+};
+
+// ════════════════════════════════════════════════════════
+//  LANGUAGE — detect browser lang, switcher buttons
+// ════════════════════════════════════════════════════════
+
+(function detectLang(){
+  const nav = (navigator.language || navigator.userLanguage || 'ru').toLowerCase();
+  if(nav.startsWith('he') || nav.startsWith('iw')) currentLang = 'he';
+  else if(!nav.startsWith('ru') && !nav.startsWith('uk')) currentLang = 'en';
+  document.querySelectorAll('.lbtn').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === currentLang);
+  });
+  document.body.classList.toggle('rtl', currentLang === 'he');
+})();
+
+document.querySelectorAll('.lbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentLang = btn.dataset.lang;
+    document.querySelectorAll('.lbtn').forEach(b => b.classList.toggle('active', b.dataset.lang === currentLang));
+    document.body.classList.toggle('rtl', currentLang === 'he');
+    if(window.applyLang) window.applyLang(currentLang);
+    else navigateTo(currentFocal);
+    if(currentLang !== 'ru') enrichNamesOnline(currentLang);
+  });
+});
+
+// ── Online name enrichment via Claude API ──────────────
+async function enrichNamesOnline(lang) {
+  const cacheKey = 'names_' + lang;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if(cached) {
+      const extra = JSON.parse(cached);
+      Object.assign(NAMES, extra);  // merge into static dict
+      if(currentFocal){ const tmp=currentFocal; currentFocal=null; navigateTo(tmp); showPanel(tmp); }
+      return;
+    }
+  } catch(e) {}
+
+  // Find IDs missing translation in this language
+  const missing = Object.keys(IDX.nodes).filter(id => {
+    if(!NAMES[id]) return true;
+    return !NAMES[id][lang];
+  });
+  if(!missing.length) return;
+
+  // Limit to first 30 to stay within token budget
+  const batch = missing.slice(0, 30);
+  const namesRu = batch.map(id => `${id}: ${IDX.nodes[id].name}`).join('\n');
+  const langName = lang === 'en' ? 'English' : 'Hebrew';
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Transliterate these Russian names to ${langName}. Reply ONLY with a JSON object mapping each ID to the transliterated name. No extra text, no markdown.\n\n${namesRu}`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.text||'').join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    const result = JSON.parse(clean);
+    // Merge into NAMES
+    for(const [id, name] of Object.entries(result)) {
+      if(!NAMES[id]) NAMES[id] = {};
+      NAMES[id][lang] = name;
+    }
+    // Cache in sessionStorage
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+    // Re-render
+    if(currentFocal){ const tmp=currentFocal; currentFocal=null; navigateTo(tmp); showPanel(tmp); }
+  } catch(e) {
+    console.log('Online name enrichment failed (offline?):', e.message);
+  }
+}
+
+// ── init ──────────────────────────────────────────────────
+// updateBackBtn and navigateTo called after all declarations — see bottom of script
+
+// ════════════════════════════════════════════════════════
+//  MODAL — «Дополнить»
+// ════════════════════════════════════════════════════════
+
+// Populate datalist with all names from IDX
+function buildDatalist(){
+  const dl = document.getElementById('names-list');
+  dl.innerHTML = '';  // clear previous options
+  for(const [id, n] of Object.entries(IDX.nodes)){
+    const opt = document.createElement('option');
+    const by  = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+    // Use pname() so autocomplete shows names in current language
+    opt.value = pname(id) + (by ? ' (' + by + ')' : '') + ' [' + id + ']';
+    dl.appendChild(opt);
+  }
+}
+buildDatalist();
+
+// Open / close modal
+function openModal(prefillId){
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('prompt-out').style.display = 'none';
+  document.getElementById('copy-row').style.display = 'none';
+  document.getElementById('prompt-out').textContent = '';
+
+  // ── Reset all form fields to blank ──────────────────
+  ['f-name','f-birth','f-death','f-phone','f-email',
+   'f-photo-url','f-photo-cap',
+   'f-bio-text','f-bio-url',
+   'f-date-note',
+   'f-fix-old','f-fix-new','f-fix-comment'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if(el) el.value = '';
+  });
+  // Reset person fields
+  ['f-rel-person','f-photo-person','f-bio-person','f-date-person','f-fix-person'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if(el) el.value = '';
+  });
+  // Reset selects to empty default
+  const fSex     = document.getElementById('f-sex');
+  const fRelType = document.getElementById('f-rel-type');
+  const fFixField= document.getElementById('f-fix-field');
+  if(fSex)      fSex.selectedIndex = 0;
+  if(fRelType)  fRelType.selectedIndex = 0;
+  if(fFixField) fFixField.selectedIndex = 0;
+  // Hide current data card
+  const card0 = document.getElementById('fix-current-data');
+  if(card0) { card0.style.display = 'none'; card0.textContent = ''; }
+
+  // Re-apply current language
+  if(window.applyLang) window.applyLang(currentLang);
+
+  // ── Prefill ONLY if called from panel (explicit person) ──
+  if(prefillId && IDX.nodes[prefillId]){
+    const n  = IDX.nodes[prefillId];
+    const yr = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+    const label = pname(prefillId) + (yr ? ' (' + yr + ')' : '') + ' [' + prefillId + ']';
+
+    // Fill fix-person field
+    const fp = document.getElementById('f-fix-person');
+    if(fp) fp.value = label;
+
+    // Fill "current value" field with all existing data so user sees what's there
+    const ffo = document.getElementById('f-fix-old');
+    const ffn = document.getElementById('f-fix-new');
+    const ffc = document.getElementById('f-fix-comment');
+
+    const lines = [];
+    if(n.name)     lines.push(t('lbl_name')     + ': ' + pname(prefillId));
+    if(n.birth)    lines.push(t('birth')         + ': ' + n.birth);
+    if(n.birth_he) lines.push(t('fix_birth_he')  + ': ' + n.birth_he);
+    if(n.death)    lines.push(t('death')         + ': ' + n.death);
+    if(n.death_he) lines.push(t('fix_death_he')  + ': ' + n.death_he);
+    if(n.phone)    lines.push(t('lbl_phone')     + ': ' + n.phone);
+    if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
+    if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
+
+    if(ffo) ffo.value = lines.length ? lines.join('\n') : '';
+    if(ffn) ffn.value = '';
+    if(ffc) ffc.value = '';
+
+    // Show data card above fix form
+    const card0 = document.getElementById('fix-current-data');
+    if(card0 && lines.length){
+      card0.textContent = lines.join('\n');
+      card0.style.display = 'block';
+    }
+
+    // Switch to fix tab
+    document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mfields').forEach(f => f.classList.remove('active'));
+    const fixBtn = document.querySelector('.mtype[data-type="fix"]');
+    if(fixBtn) fixBtn.classList.add('active');
+    document.getElementById('mf-fix').classList.add('active');
+    currentType = 'fix';
+  }
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+document.getElementById('btn-edit').addEventListener('click', () => openModal());
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if(e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// Type switching
+let currentType = 'person';
+document.querySelectorAll('.mtype').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mfields').forEach(f => f.classList.remove('active'));
+    btn.classList.add('active');
+    currentType = btn.dataset.type;
+    document.getElementById('mf-' + currentType).classList.add('active');
+    document.getElementById('prompt-out').style.display = 'none';
+    document.getElementById('copy-row').style.display = 'none';
+  });
+});
+
+// Generate prompt
+document.getElementById('modal-generate').addEventListener('click', () => {
+  let text = '';
+
+  if(currentType === 'person'){
+    const name  = document.getElementById('f-name').value.trim();
+    const sex   = document.getElementById('f-sex').value === 'F' ? 'Женский' : 'Мужской';
+    const birth = document.getElementById('f-birth').value.trim();
+    const death = document.getElementById('f-death').value.trim();
+    const relP  = document.getElementById('f-rel-person').value.trim();
+    const relT  = document.getElementById('f-rel-type').value;
+    if(!name){ alert('Введите имя'); return; }
+    text  = t('prompt_header');
+    text += 'Тип: Новый человек\n';
+    text += 'Имя: ' + name + '\n';
+    text += 'Пол: ' + sex + '\n';
+    if(birth) text += 'Дата рождения: ' + birth + '\n';
+    if(death) text += 'Дата смерти: ' + death + '\n';
+    if(relP)  text += 'Связь: ' + relT + ' ' + relP + '\n';
+    const phone = document.getElementById('f-phone').value.trim();
+    const email = document.getElementById('f-email').value.trim();
+    if(phone) text += 'Телефон: ' + phone + '\n';
+    if(email) text += 'Email: ' + email + '\n';
+
+  } else if(currentType === 'photo'){
+    const person = document.getElementById('f-photo-person').value.trim();
+    const url    = document.getElementById('f-photo-url').value.trim();
+    const cap    = document.getElementById('f-photo-cap').value.trim();
+    if(!person || !url){ alert('Укажите персону и URL фото'); return; }
+    text  = t('prompt_header');
+    text += 'Тип: Добавить фото\n';
+    text += 'Персона: ' + person + '\n';
+    text += 'URL фото: ' + url + '\n';
+    if(cap) text += 'Подпись: ' + cap + '\n';
+
+  } else if(currentType === 'bio'){
+    const person = document.getElementById('f-bio-person').value.trim();
+    const bio    = document.getElementById('f-bio-text').value.trim();
+    const burl   = document.getElementById('f-bio-url').value.trim();
+    if(!person){ alert('Укажите персону'); return; }
+    text  = t('prompt_header');
+    text += 'Тип: Биография\n';
+    text += 'Персона: ' + person + '\n';
+    if(bio)  text += 'Текст: ' + bio + '\n';
+    if(burl) text += 'Ссылка: ' + burl + '\n';
+
+  } else if(currentType === 'date'){
+    const person = document.getElementById('f-date-person').value.trim();
+    const note   = document.getElementById('f-date-note').value.trim();
+    if(!person || !note){ alert('Укажите персону и уточнение'); return; }
+    text  = t('prompt_header');
+    text += 'Тип: Уточнение дат / места\n';
+    text += 'Персона: ' + person + '\n';
+    text += 'Уточнение: ' + note + '\n';
+
+  } else if(currentType === 'fix'){
+    const person  = document.getElementById('f-fix-person').value.trim();
+    const field   = document.getElementById('f-fix-field');
+    const fieldLbl = field.options[field.selectedIndex].text;
+    const oldVal  = document.getElementById('f-fix-old').value.trim();
+    const newVal  = document.getElementById('f-fix-new').value.trim();
+    const comment = document.getElementById('f-fix-comment').value.trim();
+    if(!person || !newVal){ alert('Укажите персону и верное значение'); return; }
+    text  = t('prompt_fix_header');
+    text += 'Тип: Исправление данных\n';
+    text += 'Персона: ' + person + '\n';
+    text += 'Поле: ' + fieldLbl + '\n';
+    if(oldVal) text += 'Текущее значение: ' + oldVal + '\n';
+    text += 'Верное значение: ' + newVal + '\n';
+    if(comment) text += 'Комментарий: ' + comment + '\n';
+  }
+
+  text += t('prompt_footer');
+
+  // Submit to Worker if configured (async, non-blocking)
+  submitProposal(text, currentType);
+
+  // I2: Auto-translate new person name to EN+HE via Claude API
+  if(currentType === 'person'){
+    const newName = document.getElementById('f-name').value.trim();
+    if(newName) translateNewPerson(newName);
+  }
+  const out = document.getElementById('prompt-out');
+  out.textContent = text;
+  out.style.display = 'block';
+  document.getElementById('copy-row').style.display = 'flex';
+});
+
+// Copy to clipboard
+document.getElementById('btn-copy').addEventListener('click', () => {
+  const text = document.getElementById('prompt-out').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btn-copy');
+    btn.textContent = t('btn_copied');
+    setTimeout(() => { btn.textContent = t('btn_copy'); }, 2000);
+  });
+});
+
+// Send by email
+document.getElementById('btn-email').addEventListener('click', () => {
+  const bodyText = document.getElementById('prompt-out').textContent;
+  if(!bodyText) return;
+
+  const toAddr = 'slvm972@gmail.com';
+
+  // Subject by language
+  const subjects = {
+    ru: 'Предложение изменений в семейном дереве',
+    en: 'Family tree update request',
+    he: 'בקשה לעדכון עץ המשפחה'
+  };
+  const intros = {
+    ru: `Шалом!\n\nЯ хочу добавить или изменить данные в семейном дереве.\nНиже — сформированный запрос. Пожалуйста, передай его в систему обновления.\n\n--- ЗАПРОС ---\n`,
+    en: `Shalom!\n\nI would like to add or update information in the family tree.\nPlease find the request below.\n\n--- REQUEST ---\n`,
+    he: `שלום!\n\nאני רוצה להוסיף או לעדכן מידע בעץ המשפחה.\n\nאיך זה עובד:\n1. מלאתי את הטופס בקובץ HTML של עץ המשפחה\n2. הטופס יצר בקשה מובנית (ראה למטה)\n3. שלח את המייל הזה לסלבה (מירוסלב)\n4. הוא יעדכן את עץ המשפחה ויישלח גרסה חדשה\n\n--- הבקשה ---\n`
+  };
+  const outros = {
+    ru: `\n--- КОНЕЦ ЗАПРОСА ---\n\nСпасибо!`,
+    en: `\n--- END OF REQUEST ---\n\nThank you!`,
+    he: `\n--- סוף הבקשה ---\n\nתודה רבה!`
+  };
+
+  const lang = (typeof currentLang !== 'undefined' ? currentLang : 'ru') || 'ru';
+  const subject = subjects[lang] || subjects['ru'];
+  const fullBody = (intros[lang] || intros['ru']) + bodyText + (outros[lang] || outros['ru']);
+
+  const mailtoLink = 'mailto:' + toAddr
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(fullBody);
+
+  window.location.href = mailtoLink;
+});
+
+// Help bubble toggle
+let helpOpen = false;
+document.getElementById('btn-help').addEventListener('click', (e) => {
+  e.stopPropagation();
+  helpOpen = !helpOpen;
+  document.getElementById('help-bubble').classList.toggle('open', helpOpen);
+});
+document.addEventListener('click', () => {
+  if(helpOpen){
+    helpOpen = false;
+    document.getElementById('help-bubble').classList.remove('open');
+  }
+});
+// ════════════════════════════════════════════════════════
+//  PRINT — full tree on A1/A0/A2
+// ════════════════════════════════════════════════════════
+
+// Paper sizes in mm (landscape)
+const PAPER = {
+  A0L: { w: 1189, h: 841, label: 'A0 альбом' },
+  A1L: { w: 841,  h: 594, label: 'A1 альбом' },
+  A2L: { w: 594,  h: 420, label: 'A2 альбом' },
+};
+let printFmt = 'A1L';
+
+// Format selector
+document.querySelectorAll('.print-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.print-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    printFmt = btn.dataset.fmt;
+  });
+});
+
+// Open print dialog
+document.getElementById('btn-print').addEventListener('click', () => {
+  const n = Object.keys(IDX.nodes).length;
+  const f = Object.keys(IDX.families).length;
+  const stats = document.getElementById('print-stats');
+  stats.style.color = '';
+  stats.style.fontWeight = '';
+  stats.textContent = `В дереве: ${n} персон, ${f} семей`;
+  document.getElementById('print-overlay').classList.add('open');
+});
+document.getElementById('print-cancel').addEventListener('click', () => {
+  document.getElementById('print-overlay').classList.remove('open');
+});
+
+// Build full tree SVG and print
+document.getElementById('print-go').addEventListener('click', () => {
+  document.getElementById('print-overlay').classList.remove('open');
+  setTimeout(buildAndPrint, 80);
+});
+
+function buildAndPrint() {
+  // ── Card and gap sizes for print ──────────────────────
+  const PCW = 170, PCH = 110, PGAPX = 24, PGAPY = 100;
+  const PCOUP = 14;  // gap between couple cards
+
+  // ── 1. Family-tree BFS layout ─────────────────────────
+  // Start from gen=0 roots, lay out families top-down
+  // preserving actual parent→child structure from IDX
+
+  const pos = {};      // id → {x, y}
+  const placed = new Set();
+
+  // Find all gen=0 nodes as roots
+  const minGen = Math.min(...Object.values(IDX.nodes).map(n => n.gen ?? 0));
+  const roots = Object.keys(IDX.nodes).filter(id => (IDX.nodes[id].gen ?? 0) === minGen);
+
+  // BFS: process families level by level
+  // positionFamily: given a family, place husband+wife at y, return their midX
+  function placeFamily(famId, anchorX, y) {
+    const fam = IDX.families[famId];
+    if (!fam) return anchorX;
+    const members = [fam.husband, fam.wife].filter(Boolean);
+    const w = members.length * PCW + (members.length - 1) * PCOUP;
+    let x = anchorX - w / 2;
+    for (const id of members) {
+      if (!placed.has(id)) {
+        pos[id] = { x, y };
+        placed.add(id);
+      }
+      x += PCW + PCOUP;
+    }
+    return anchorX; // return centre
+  }
+
+  // Level-by-level: collect families per generation level
+  const famsByLevel = {};  // level → [famId]
+  for (const [famId, fam] of Object.entries(IDX.families)) {
+    // Determine level from husband or wife gen
+    const refId = fam.husband || fam.wife;
+    if (!refId) continue;
+    const g = IDX.nodes[refId]?.gen ?? 0;
+    if (!famsByLevel[g]) famsByLevel[g] = [];
+    famsByLevel[g].push(famId);
+  }
+
+  const levels = Object.keys(famsByLevel).map(Number).sort((a,b)=>a-b);
+
+  // Pass 1: count children per family to allocate horizontal space
+  function subtreeWidth(famId, level) {
+    const fam = IDX.families[famId];
+    if (!fam || !fam.children.length) return PCW * 2 + PCOUP;
+    // sum child subtrees
+    let total = 0;
+    for (const cid of fam.children) {
+      const childFams = (IDX.parent_in[cid] || []);
+      if (childFams.length) {
+        for (const cf of childFams) total += subtreeWidth(cf, level + 1) + PGAPX;
+        total -= PGAPX;
+      } else {
+        total += PCW + PGAPX;
+      }
+    }
+    total -= PGAPX;
+    return Math.max(total, PCW * 2 + PCOUP);
+  }
+
+  // Pass 2: layout top-down
+  // Find root families (gen = minGen)
+  const rootFams = famsByLevel[minGen] || [];
+  let curX = 0;
+  const famPos = {};  // famId → centerX
+
+  function layoutFam(famId, centerX, level) {
+    const fam = IDX.families[famId];
+    if (!fam) return;
+    const y = (level - minGen) * (PCH + PGAPY);
+
+    // Place parents
+    const members = [fam.husband, fam.wife].filter(Boolean);
+    const pw = members.length * PCW + (members.length - 1) * PCOUP;
+    let px = centerX - pw / 2;
+    for (const id of members) {
+      if (!placed.has(id)) {
+        pos[id] = { x: px, y };
+        placed.add(id);
+      }
+      px += PCW + PCOUP;
+    }
+    famPos[famId] = centerX;
+
+    // Layout children
+    if (!fam.children.length) return;
+    const children = [...fam.children].sort((a,b) =>
+      (IDX.nodes[a]?.birth||'').localeCompare(IDX.nodes[b]?.birth||''));
+
+    // Compute total width needed for children
+    const childWidths = children.map(cid => {
+      const childFams = (IDX.parent_in[cid] || []);
+      if (childFams.length) {
+        return childFams.reduce((s, cf) => s + subtreeWidth(cf, level+1) + PGAPX, -PGAPX);
+      }
+      return PCW;
+    });
+    const totalChildW = childWidths.reduce((s,w) => s + w + PGAPX, -PGAPX);
+    let cx = centerX - totalChildW / 2;
+    const childLevel = level + 1;
+
+    for (let i = 0; i < children.length; i++) {
+      const cid = children[i];
+      const cw = childWidths[i];
+      const childCenter = cx + cw / 2;
+
+      if (!placed.has(cid)) {
+        pos[cid] = { x: childCenter - PCW/2, y: (childLevel - minGen) * (PCH + PGAPY) };
+        placed.add(cid);
+      }
+
+      // Recurse into child's own families
+      const childFams = (IDX.parent_in[cid] || []);
+      for (const cf of childFams) {
+        layoutFam(cf, childCenter, childLevel);
+      }
+
+      cx += cw + PGAPX;
+    }
+  }
+
+  // Layout root families side by side
+  for (const famId of rootFams) {
+    const w = subtreeWidth(famId, minGen);
+    layoutFam(famId, curX + w/2, minGen);
+    curX += w + PGAPX * 2;
+  }
+
+  // Place any remaining unplaced nodes (orphans, single roots)
+  for (const [id, n] of Object.entries(IDX.nodes)) {
+    if (!placed.has(id)) {
+      const y = ((n.gen ?? 0) - minGen) * (PCH + PGAPY);
+      pos[id] = { x: curX, y };
+      curX += PCW + PGAPX;
+    }
+  }
+
+  // ── 2. Compute bounding box ────────────────────────────
+  const allX = Object.values(pos).map(p => p.x);
+  const allY = Object.values(pos).map(p => p.y);
+  const minX = Math.min(...allX) - 30;
+  const minY = Math.min(...allY) - 60;
+  const maxX = Math.max(...allX) + PCW + 30;
+  const maxY = Math.max(...allY) + PCH + 30;
+  const treeW = maxX - minX;
+  const treeH = maxY - minY;
+
+  // ── 3. Scale to paper ─────────────────────────────────
+  const paper = PAPER[printFmt];
+  const pageSize = printFmt === 'A0L' ? 'A0' : printFmt === 'A2L' ? 'A2' : 'A1';
+  const MM2PX = 3.7795;
+  const printW = paper.w * MM2PX;
+  const printH = paper.h * MM2PX;
+  const MARGIN = 40;
+  const titleH = 55;
+  const scale = Math.min(
+    (printW - MARGIN*2) / treeW,
+    (printH - MARGIN*2 - titleH) / treeH
+  );
+  const offX = MARGIN + (printW - MARGIN*2 - treeW * scale) / 2 - minX * scale;
+  const offY = titleH + MARGIN - minY * scale;
+
+  // ── 4. Build SVG ───────────────────────────────────────
+  const SEX_FILL = { M:'#1E4870', F:'#701838' };
+  const today = new Date().toLocaleDateString('ru-RU');
+  const title = '🌳 Мостовые · Журахинские · Лейцис';
+
+  let edges = '';
+  let cards = '';
+
+  // Draw edges
+  for (const [, fam] of Object.entries(IDX.families)) {
+    const pars = [fam.husband, fam.wife].filter(id => id && pos[id]);
+    if (!pars.length || !fam.children.length) continue;
+
+    const parMidX = pars.reduce((s,id) => s + pos[id].x + PCW/2, 0) / pars.length;
+    const parY    = pos[pars[0]].y + PCH;
+    const visCh   = fam.children.filter(id => pos[id]);
+    if (!visCh.length) continue;
+
+    const cxs  = visCh.map(id => pos[id].x + PCW/2);
+    const minCX = Math.min(...cxs), maxCX = Math.max(...cxs);
+    const midY  = pos[visCh[0]].y - PGAPY/2;
+
+    const stroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
+    edges += `<line x1="${parMidX}" y1="${parY}" x2="${parMidX}" y2="${midY}" ${stroke}/>`;
+    if (visCh.length > 1) edges += `<line x1="${minCX}" y1="${midY}" x2="${maxCX}" y2="${midY}" ${stroke}/>`;
+    if (parMidX < minCX) edges += `<line x1="${parMidX}" y1="${midY}" x2="${minCX}" y2="${midY}" ${stroke}/>`;
+    if (parMidX > maxCX) edges += `<line x1="${maxCX}" y1="${midY}" x2="${parMidX}" y2="${midY}" ${stroke}/>`;
+    for (const cid of visCh) {
+      edges += `<line x1="${pos[cid].x+PCW/2}" y1="${midY}" x2="${pos[cid].x+PCW/2}" y2="${pos[cid].y}" ${stroke}/>`;
+    }
+
+    // Couple connector (♥)
+    if (pars.length === 2) {
+      const lx = Math.min(pos[pars[0]].x, pos[pars[1]].x) + PCW;
+      const rx = Math.max(pos[pars[0]].x, pos[pars[1]].x);
+      const cy = pos[pars[0]].y + PCH/2;
+      if (rx > lx) edges += `<line x1="${lx}" y1="${cy}" x2="${rx}" y2="${cy}" ${stroke}/>`;
+    }
+  }
+
+  // Draw cards
+  for (const [id, n] of Object.entries(IDX.nodes)) {
+    if (!pos[id]) continue;
+    const {x, y} = pos[id];
+    const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
+    const fill = dead ? '#3A4A55' : (SEX_FILL[n.sex] || '#444');
+    const name = pname(id);
+    const parts = name.split(' ');
+    const mid = Math.ceil(parts.length / 2);
+    const l1 = parts.slice(0, mid).join(' ');
+    const l2 = parts.slice(mid).join(' ');
+    const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+    const dy = dead ? (n.death.match(/\d{4}/)||[''])[0] : '';
+    const bhe = n.birth_he || '';
+    const dhe = n.death_he || '';
+
+    cards += `<rect x="${x}" y="${y}" width="${PCW}" height="${PCH}" rx="6"
+      fill="${fill}" stroke="rgba(237,216,144,.35)" stroke-width="1.2"
+      stroke-dasharray="${dead ? '5,3' : 'none'}"/>
+    <rect x="${x}" y="${y}" width="${PCW}" height="5" rx="6" fill="rgba(237,216,144,.4)"/>
+    <text font-family="Segoe UI,Arial,sans-serif" fill="#EDD890" font-size="10" font-weight="700" text-anchor="middle">
+      <tspan x="${x+PCW/2}" y="${y+32}">${l1}</tspan>
+      ${l2 ? `<tspan x="${x+PCW/2}" dy="14">${l2}</tspan>` : ''}
+    </text>`;
+    let dateY = y + (l2 ? 68 : 58);
+    if (by) { cards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.7)" font-size="8.5" text-anchor="middle">р. ${by}${dy ? '  † '+dy : ''}</text>`; dateY += 13; }
+    else if (dy) { cards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="8.5" text-anchor="middle">† ${dy}</text>`; dateY += 13; }
+    if (bhe || dhe) {
+      const heStr = [bhe, dhe ? '† '+dhe : ''].filter(Boolean).join('  ');
+      cards += `<text x="${x+PCW/2}" y="${y+PCH-7}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="7.5" text-anchor="middle" direction="rtl">${heStr}</text>`;
+    }
+  }
+
+  const svgBody = `
+  <text x="${printW/2}" y="30" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#28180A" text-anchor="middle">${title}</text>
+  <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} персон</text>
+  <g transform="translate(${offX},${offY}) scale(${scale})">
+    ${edges}
+    ${cards}
+  </g>`;
+
+  // ── 5. Build full HTML and download ───────────────────
+  const fullHTML = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Семейное дерево — ${pageSize}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#FAF7F0;font-family:Segoe UI,Arial,sans-serif}
+#toolbar{position:fixed;top:0;left:0;right:0;height:36px;background:#1C1208;display:flex;
+  align-items:center;gap:8px;padding:0 12px;z-index:10;color:#EDD890;font-size:13px}
+#toolbar button{background:rgba(237,216,144,.15);border:1px solid rgba(237,216,144,.35);
+  color:#EDD890;padding:3px 10px;border-radius:3px;cursor:pointer;font-size:12px}
+#toolbar button:hover{background:rgba(237,216,144,.3)}
+#hint{margin-left:auto;font-size:11px;opacity:.55}
+#canvas{position:fixed;top:36px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab}
+#canvas.grabbing{cursor:grabbing}
+#svg-wrap{transform-origin:0 0;will-change:transform}
+@media print{
+  #toolbar{display:none!important}
+  #canvas{position:static;overflow:visible}
+  #svg-wrap{transform:none!important}
+  svg{width:100vw;height:100vh}
+  @page{size:${pageSize} landscape;margin:4mm}
+}
+</style></head>
+<body>
+<div id="toolbar">
+  🌳 Семейное дерево — ${pageSize}
+  <button onclick="resetZoom()">⊡ Вписать</button>
+  <button onclick="zoomIn()">＋</button>
+  <button onclick="zoomOut()">－</button>
+  <button onclick="window.print()" style="background:rgba(237,216,144,.3);font-weight:600">🖨 Печать / PDF</button>
+  <span id="hint">Колесо мыши — масштаб · Тяни — перемещение</span>
+</div>
+<div id="canvas">
+  <div id="svg-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${printW} ${printH}"
+         width="${printW}" height="${printH}">
+      <rect width="${printW}" height="${printH}" fill="#FAF7F0"/>
+      ${svgBody}
+    </svg>
+  </div>
+</div>
+<script>
+var wrap = document.getElementById('svg-wrap');
+var canvas = document.getElementById('canvas');
+var scale = 1, tx = 0, ty = 0;
+var dragging = false, lastX = 0, lastY = 0;
+
+function applyTransform(){
+  wrap.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')';
+}
+
+function resetZoom(){
+  var cw = canvas.clientWidth, ch = canvas.clientHeight;
+  var sw = ${printW}, sh = ${printH};
+  scale = Math.min(cw/sw, ch/sh) * 0.96;
+  tx = (cw - sw*scale)/2;
+  ty = (ch - sh*scale)/2;
+  applyTransform();
+}
+
+function zoomIn(){ scale=Math.min(scale*1.25,8); applyTransform(); }
+function zoomOut(){ scale=Math.max(scale*0.8,0.05); applyTransform(); }
+
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var delta = e.deltaY < 0 ? 1.12 : 0.89;
+  tx = mx - (mx-tx)*delta;
+  ty = my - (my-ty)*delta;
+  scale *= delta;
+  applyTransform();
+}, {passive:false});
+
+canvas.addEventListener('mousedown', function(e){
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('grabbing');
+});
+window.addEventListener('mousemove', function(e){
+  if(!dragging) return;
+  tx+=e.clientX-lastX; ty+=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  applyTransform();
+});
+window.addEventListener('mouseup', function(){
+  dragging=false; canvas.classList.remove('grabbing');
+});
+
+// Touch support
+var lastDist=0, lastTx=0, lastTy=0;
+canvas.addEventListener('touchstart', function(e){
+  if(e.touches.length===1){dragging=true;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;}
+  if(e.touches.length===2){dragging=false;lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+  e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchmove', function(e){
+  if(e.touches.length===1&&dragging){tx+=e.touches[0].clientX-lastX;ty+=e.touches[0].clientY-lastY;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;applyTransform();}
+  if(e.touches.length===2){var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);scale*=d/lastDist;lastDist=d;applyTransform();}
+  e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchend',function(){dragging=false;});
+
+window.onload = resetZoom;
+<\/script>
+</body></html>`;
+
+  // ── 6. Download via data URI ───────────────────────────
+  const encoded = btoa(unescape(encodeURIComponent(fullHTML)));
+  const a = document.createElement('a');
+  a.href = 'data:text/html;base64,' + encoded;
+  a.download = 'family-tree-' + pageSize + '-print.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  const info = document.getElementById('print-stats');
+  info.style.color = '#C09828';
+  info.style.fontWeight = '600';
+  info.textContent = '✓ Файл скачан. Откройте его в браузере → Ctrl+P → Печать / PDF';
+  document.getElementById('print-overlay').classList.add('open');
+}
+
+// ════════════════════════════════════════════════════════
+//  DIAGNOSTIC SYSTEM
+// ════════════════════════════════════════════════════════
+function runDiagnostics(){
+  const results = [];
+  function ok(label, val)   { results.push({s:'ok',   label, val: val !== undefined ? String(val) : ''}); }
+  function fail(label, val) { results.push({s:'fail', label, val: val !== undefined ? String(val) : ''}); }
+  function warn(label, val) { results.push({s:'warn', label, val: val !== undefined ? String(val) : ''}); }
+
+  // ── 1. DATA INTEGRITY ───────────────────────────────
+  const nodeCount = Object.keys(IDX.nodes).length;
+  nodeCount > 0 ? ok('Персоны загружены', nodeCount + ' чел.') : fail('IDX.nodes пустой');
+
+  const famCount = Object.keys(IDX.families).length;
+  famCount > 0 ? ok('Семьи загружены', famCount + ' семей') : fail('IDX.families пустой');
+
+  // Broken family references
+  let brokenRefs = 0;
+  for(const [fid,f] of Object.entries(IDX.families)){
+    if(f.husband && !IDX.nodes[f.husband]) brokenRefs++;
+    if(f.wife    && !IDX.nodes[f.wife])    brokenRefs++;
+    for(const cid of f.children) if(!IDX.nodes[cid]) brokenRefs++;
+  }
+  brokenRefs === 0 ? ok('Ссылки семей корректны') : fail('Битых ссылок в семьях', brokenRefs);
+
+  // Orphan nodes
+  const orphans = Object.keys(IDX.nodes).filter(id =>
+    !IDX.child_of[id] && (!IDX.parent_in[id] || !IDX.parent_in[id].length)
+  ).length;
+  orphans === 0 ? ok('Нет изолированных персон')
+                : warn('Изолированные персоны (без связей)', orphans);
+
+  // Death before birth
+  let deadBeforeBorn = 0;
+  for(const n of Object.values(IDX.nodes)){
+    const b = n.birth ? (n.birth.match(/\d{4}/)||[])[0] : null;
+    const d = n.death ? (n.death.match(/\d{4}/)||[])[0] : null;
+    if(b && d && +d < +b) deadBeforeBorn++;
+  }
+  deadBeforeBorn === 0 ? ok('Хронология дат корректна')
+                       : fail('Смерть раньше рождения', deadBeforeBorn + ' случаев');
+
+  // Mixed-language names
+  const mixedNames = Object.values(IDX.nodes).filter(n =>
+    /[a-zA-Z]/.test(n.name) && /[а-яА-Я]/.test(n.name)
+  ).length;
+  mixedNames === 0 ? ok('Имена без смешения языков')
+                   : warn('Имена со смешением языков', mixedNames);
+
+  // ── 2. UI FUNCTIONS ─────────────────────────────────
+  typeof navigateTo === 'function' ? ok('navigateTo()') : fail('navigateTo() не найдена');
+  typeof showPanel  === 'function' ? ok('showPanel()')  : fail('showPanel() не найдена');
+  typeof render     === 'function' ? ok('render()')     : fail('render() не найдена');
+  typeof goBack     === 'function' ? ok('goBack()')     : fail('goBack() не найдена');
+  typeof openModal  === 'function' ? ok('openModal()')  : fail('openModal() не найдена');
+  typeof buildAndPrint === 'function' ? ok('buildAndPrint()') : fail('buildAndPrint() не найдена');
+
+  // ── 3. TRANSLATION ──────────────────────────────────
+  typeof t  === 'function' ? ok('t() — перевод UI')    : fail('t() не найдена');
+  typeof tr === 'function' ? ok('tr() — перевод ролей') : fail('tr() не найдена');
+  typeof trel === 'function' ? ok('trel() — перевод rel') : fail('trel() не найдена');
+  typeof pname === 'function' ? ok('pname() — имена')   : fail('pname() не найдена');
+
+  const langs = ['ru','en','he'];
+  const testKeys = ['birth','death','back','btn_edit','btn_fix','tree_title'];
+  let missingKeys = 0;
+  for(const lang of langs){
+    for(const key of testKeys){
+      if(!(UI[lang]||{})[key]) missingKeys++;
+    }
+  }
+  missingKeys === 0 ? ok('Словари RU/EN/HE полные')
+                    : warn('Отсутствующих ключей в словарях', missingKeys);
+
+  // NAMES dict coverage
+  const namesCount = Object.keys(NAMES).length;
+  const nodeMissing = Object.keys(IDX.nodes).filter(id => !NAMES[id]).length;
+  nodeMissing === 0 ? ok('NAMES покрывает все персоны', namesCount + ' записей')
+                    : warn('Персон без EN/HE перевода', nodeMissing);
+
+  // ── 4. DOM ELEMENTS ─────────────────────────────────
+  const requiredEls = ['tb','vp','world','svg','panel','bbar','modal-overlay',
+                       'print-overlay','diag-overlay','help-bubble','btn-edit',
+                       'btn-print','btn-back','info','names-list'];
+  let missingEls = 0;
+  for(const id of requiredEls){
+    if(!document.getElementById(id)) missingEls++;
+  }
+  missingEls === 0 ? ok('Все DOM-элементы на месте', requiredEls.length + ' эл.')
+                   : fail('Отсутствующих DOM-элементов', missingEls);
+
+  // ── 5. STATE ────────────────────────────────────────
+  currentFocal ? ok('currentFocal установлен', currentFocal)
+               : warn('currentFocal не установлен');
+  ok('Текущий язык', currentLang);
+  ok('История навигации', (history||[]).length + ' шагов');
+
+  // ── 6. RENDER TEST ──────────────────────────────────
+  try {
+    const svgEl = document.getElementById('svg');
+    const childCount = svgEl ? svgEl.childElementCount : 0;
+    childCount > 0 ? ok('SVG отрендерен', childCount + ' элементов')
+                   : warn('SVG пустой');
+  } catch(e) { fail('Ошибка SVG', e.message); }
+
+  return results;
+}
+
+function showDiagnostics(){
+  const results = runDiagnostics();
+  const passed = results.filter(r=>r.s==='ok').length;
+  const failed = results.filter(r=>r.s==='fail').length;
+  const warned = results.filter(r=>r.s==='warn').length;
+
+  const summary = `<div style="margin-bottom:10px;font-family:Segoe UI,sans-serif;font-size:.8rem">
+    <span class="dt-ok">✓ ${passed}</span> &nbsp;
+    <span class="dt-fail">✗ ${failed}</span> &nbsp;
+    <span class="dt-warn">⚠ ${warned}</span>
+    <span style="opacity:.4;margin-left:8px">${new Date().toLocaleTimeString('ru-RU')}</span>
+  </div>`;
+
+  const rows = results.map(r =>
+    `<div class="dt">
+      <span class="dt-${r.s}">${r.s==='ok'?'✓':r.s==='fail'?'✗':'⚠'}</span>
+      <span class="dt-label">${r.label}</span>
+      ${r.val ? `<span class="dt-val">${r.val}</span>` : ''}
+    </div>`
+  ).join('');
+
+  document.getElementById('diag-results').innerHTML = summary + rows;
+  document.getElementById('diag-overlay').classList.add('open');
+}
+
+document.getElementById('btn-diag').addEventListener('click', showDiagnostics);
+document.getElementById('diag-close').addEventListener('click', () => {
+  document.getElementById('diag-overlay').classList.remove('open');
+});
+document.getElementById('diag-run').addEventListener('click', showDiagnostics);
+document.getElementById('diag-overlay').addEventListener('click', e => {
+  if(e.target === document.getElementById('diag-overlay'))
+    document.getElementById('diag-overlay').classList.remove('open');
+});
+
+// Auto-translate newly added person name to EN and HE
+function translateNewPerson(nameRu) {
+  // Local transliteration table (no API needed)
+  const MAP = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh',
+    'з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o',
+    'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts',
+    'ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
+    'А':'A','Б':'B','В':'V','Г':'G','Д':'D','Е':'E','Ё':'Yo','Ж':'Zh',
+    'З':'Z','И':'I','Й':'Y','К':'K','Л':'L','М':'M','Н':'N','О':'O',
+    'П':'P','Р':'R','С':'S','Т':'T','У':'U','Ф':'F','Х':'Kh','Ц':'Ts',
+    'Ч':'Ch','Ш':'Sh','Щ':'Shch','Ъ':'','Ы':'Y','Ь':'','Э':'E','Ю':'Yu','Я':'Ya'
+  };
+  try {
+    const en = nameRu.split('').map(c => MAP[c] !== undefined ? MAP[c] : c).join('');
+    if(en && en !== nameRu){
+      const info = document.getElementById('info');
+      if(info) info.textContent = `EN: ${en}`;
+      if(!window._pendingNames) window._pendingNames = {};
+      window._pendingNames[nameRu] = {en};
+    }
+  } catch(e) {
+    console.log('Transliteration error:', e.message);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════
+//  CLOUDFLARE WORKER INTEGRATION
+// ════════════════════════════════════════════════════════
+
+// После деплоя Worker замените на ваш URL:
+// https://mostovoy-tree.АККАУНТ.workers.dev
+const WORKER_URL = 'https://mostovoy-tree.slvm972.workers.dev';
+
+// Session auth token (set after login)
+let _sessionPassword = '';
+
+// Submit proposal to Worker (called after prompt generation if WORKER_URL set)
+async function submitProposal(promptText, type) {
+  if(!WORKER_URL || !_sessionPassword) return;  // offline mode — skip silently
+  try {
+    const r = await fetch(WORKER_URL + '/api/proposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({
+        prompt: promptText,
+        type:   type || currentType,
+        lang:   currentLang,
+        author: window._userName || 'anonymous',
+      })
+    });
+    const data = await r.json();
+    if(data.ok) {
+      const info = document.getElementById('info');
+      if(info) { info.textContent = '✓ Предложение отправлено администратору'; }
+    }
+  } catch(e) {
+    // Offline or server error — silent fail, user still has email/copy
+    console.log('Worker submit failed (offline?):', e.message);
+  }
+}
+
+// ── final init: now UI/NAMES/pname are all defined ────────
+updateBackBtn();
+navigateTo('P3');
+// Apply language AFTER tree is rendered (currentFocal is now set)
+if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
+</script>
+</body>
+</html>

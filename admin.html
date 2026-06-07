@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🌳 Мостовые — Администратор</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Segoe UI,Arial,sans-serif;background:#F5F0E8;color:#28180A;min-height:100vh}
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1C1208}
+.login-box{background:#FAF7F0;border-radius:8px;padding:32px 36px;width:340px;
+  box-shadow:0 8px 40px rgba(0,0,0,.4)}
+.login-box h1{font-size:1.1rem;margin-bottom:6px;color:#28180A}
+.login-box p{font-size:.78rem;color:#888;margin-bottom:20px}
+.login-box input{width:100%;padding:9px 12px;border:1px solid rgba(184,144,48,.4);
+  border-radius:4px;font-size:.85rem;margin-bottom:12px;font-family:inherit}
+.login-box button{width:100%;padding:9px;background:#C09828;color:#fff;border:none;
+  border-radius:4px;font-size:.85rem;cursor:pointer;font-family:inherit}
+.login-box button:hover{background:#A07820}
+.login-err{color:#C03030;font-size:.75rem;margin-top:6px;display:none}
+#app{display:none}
+header{background:#1C1208;color:#EDD890;padding:12px 24px;display:flex;align-items:center;gap:16px}
+header h1{font-size:.95rem;flex:1}
+header .hbtn{background:rgba(237,216,144,.15);border:1px solid rgba(237,216,144,.3);
+  color:#EDD890;padding:5px 14px;border-radius:3px;cursor:pointer;font-size:.78rem}
+header .hbtn:hover{background:rgba(237,216,144,.25)}
+.tabs{display:flex;gap:0;border-bottom:2px solid #C09828;background:#fff;padding:0 24px}
+.tab{padding:10px 20px;cursor:pointer;font-size:.82rem;color:#888;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tab.active{color:#C09828;border-bottom-color:#C09828;font-weight:600}
+.content{padding:24px;max-width:900px;margin:0 auto}
+.card{background:#fff;border-radius:6px;padding:16px 20px;margin-bottom:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #ddd}
+.card.pending{border-left-color:#C09828}
+.card.accepted{border-left-color:#4CAF50}
+.card.rejected{border-left-color:#F44336;opacity:.65}
+.card-meta{font-size:.7rem;color:#999;margin-bottom:8px}
+.card-prompt{font-family:monospace;font-size:.75rem;background:#F5F0E8;padding:10px 12px;
+  border-radius:4px;white-space:pre-wrap;max-height:180px;overflow-y:auto;margin-bottom:10px}
+.card-actions{display:flex;gap:8px}
+.btn-accept{background:#4CAF50;color:#fff;border:none;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:.78rem}
+.btn-reject{background:#F44336;color:#fff;border:none;padding:5px 16px;border-radius:3px;cursor:pointer;font-size:.78rem}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600}
+.badge-pending{background:#FFF3CD;color:#856404}
+.badge-accepted{background:#D4EDDA;color:#155724}
+.badge-rejected{background:#F8D7DA;color:#721C24}
+.empty{text-align:center;color:#aaa;padding:40px;font-size:.85rem}
+.upload-area{border:2px dashed rgba(192,152,40,.4);border-radius:6px;padding:24px;
+  text-align:center;cursor:pointer;transition:.2s;margin-bottom:16px}
+.upload-area:hover{border-color:#C09828;background:rgba(192,152,40,.05)}
+.upload-area p{font-size:.8rem;color:#888;margin-top:6px}
+.stat-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.stat{background:#fff;border-radius:6px;padding:14px 20px;flex:1;min-width:120px;
+  box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center}
+.stat-n{font-size:1.6rem;font-weight:700;color:#C09828}
+.stat-l{font-size:.7rem;color:#888;margin-top:2px}
+.info{background:#EBF5FB;border-radius:6px;padding:12px 16px;font-size:.78rem;
+  color:#1A5276;margin-bottom:16px;line-height:1.6}
+#toast{position:fixed;bottom:24px;right:24px;background:#1C1208;color:#EDD890;
+  padding:10px 20px;border-radius:4px;font-size:.8rem;display:none;z-index:999}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="login-box">
+    <h1>🌳 Мостовые · Журахинские · Лейцис</h1>
+    <p>Панель администратора</p>
+    <input type="password" id="pwd" placeholder="Пароль администратора" autocomplete="current-password">
+    <button onclick="doLogin()">Войти</button>
+    <div class="login-err" id="login-err">Неверный пароль</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <h1>🌳 Семейное дерево — Администратор</h1>
+    <button class="hbtn" onclick="showTab('proposals')">📋 Предложения</button>
+    <button class="hbtn" onclick="showTab('upload')">⬆ Загрузить дерево</button>
+    <button class="hbtn" onclick="showTab('backups')">💾 Резервные копии</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </header>
+
+  <div class="content">
+
+    <!-- PROPOSALS TAB -->
+    <div id="tab-proposals">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-n" id="cnt-pending">—</div><div class="stat-l">Ожидают</div></div>
+        <div class="stat"><div class="stat-n" id="cnt-accepted">—</div><div class="stat-l">Принято</div></div>
+        <div class="stat"><div class="stat-n" id="cnt-rejected">—</div><div class="stat-l">Отклонено</div></div>
+      </div>
+      <div class="info">
+        💡 <b>Как применить изменение:</b> скопируйте текст предложения → откройте claude.ai →
+        загрузите актуальный HTML-файл дерева → вставьте текст → скачайте обновлённый файл →
+        загрузите его через вкладку «Загрузить дерево».
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="hbtn" onclick="loadProposals('pending')" style="background:#C09828;color:#fff">⏳ Ожидающие</button>
+        <button class="hbtn" onclick="loadProposals('accepted')">✅ Принятые</button>
+        <button class="hbtn" onclick="loadProposals('rejected')">❌ Отклонённые</button>
+        <button class="hbtn" onclick="loadProposals('all')">Все</button>
+      </div>
+      <div id="proposals-list"></div>
+    </div>
+
+    <!-- UPLOAD TAB -->
+    <div id="tab-upload" style="display:none">
+      <div class="info">
+        Загрузите обновлённый HTML-файл дерева. Данные IDX будут извлечены и сохранены в облако.
+        Предыдущая версия автоматически сохранится как резервная копия.
+      </div>
+      <div class="upload-area" onclick="document.getElementById('file-input').click()">
+        <div style="font-size:2rem">📂</div>
+        <div style="font-weight:600;margin-top:8px">Выберите tree_a4a.html</div>
+        <p>или перетащите файл сюда</p>
+      </div>
+      <input type="file" id="file-input" accept=".html" style="display:none" onchange="uploadTree(event)">
+      <div id="upload-status"></div>
+    </div>
+
+    <!-- BACKUPS TAB -->
+    <div id="tab-backups" style="display:none">
+      <div id="backups-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+// ВАЖНО: замените на URL вашего Worker после деплоя
+const WORKER_URL = 'https://mostovoy-tree.slvm972.workers.dev';
+
+let adminPassword = '';
+let currentTab = 'proposals';
+
+// ── Auth ────────────────────────────────────────────────
+async function doLogin() {
+  const pwd = document.getElementById('pwd').value;
+  try {
+    const r = await api('POST', '/api/login', { password: pwd });
+    if(r.role !== 'admin'){
+      document.getElementById('login-err').style.display = 'block';
+      document.getElementById('login-err').textContent = 'Доступ только для администратора';
+      return;
+    }
+    adminPassword = pwd;
+    document.getElementById('login').style.display  = 'none';
+    document.getElementById('app').style.display    = 'block';
+    loadProposals('pending');
+  } catch(e) {
+    document.getElementById('login-err').style.display = 'block';
+    document.getElementById('login-err').textContent   = e.message || 'Ошибка входа';
+  }
+}
+
+document.getElementById('pwd').addEventListener('keydown', e => {
+  if(e.key === 'Enter') doLogin();
+});
+
+function logout() {
+  adminPassword = '';
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  document.getElementById('pwd').value = '';
+}
+
+// ── API ─────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Password': adminPassword }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(WORKER_URL + path, opts);
+  const data = await r.json();
+  if(!data.ok) throw new Error(data.error || 'Ошибка сервера');
+  return data;
+}
+
+// ── Tabs ─────────────────────────────────────────────────
+function showTab(tab) {
+  ['proposals','upload','backups'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+  });
+  currentTab = tab;
+  if(tab === 'backups') loadBackups();
+}
+
+// ── Proposals ────────────────────────────────────────────
+async function loadProposals(status = 'pending') {
+  const list = document.getElementById('proposals-list');
+  list.innerHTML = '<div class="empty">Загрузка...</div>';
+  try {
+    const data = await api('GET', '/api/proposals?status=' + status);
+    const ps   = data.proposals;
+
+    // Update counts
+    if(status === 'pending') document.getElementById('cnt-pending').textContent = ps.length;
+
+    if(!ps.length){ list.innerHTML = '<div class="empty">Нет предложений</div>'; return; }
+
+    list.innerHTML = ps.map(p => `
+      <div class="card ${p.status}" id="card-${p.id}">
+        <div class="card-meta">
+          <span class="badge badge-${p.status}">${
+            p.status === 'pending'  ? '⏳ Ожидает'  :
+            p.status === 'accepted' ? '✅ Принято'  : '❌ Отклонено'
+          }</span>
+          &nbsp; ${new Date(p.createdAt).toLocaleString('ru-RU')}
+          &nbsp;·&nbsp; ${p.type}
+          &nbsp;·&nbsp; lang: ${p.lang}
+        </div>
+        <div class="card-prompt">${escHtml(p.prompt)}</div>
+        ${p.status === 'pending' ? `
+        <div class="card-actions">
+          <button class="btn-accept" onclick="copyAndAccept('${p.id}', this)">📋 Скопировать и принять</button>
+          <button class="btn-reject" onclick="rejectProposal('${p.id}')">Отклонить</button>
+        </div>` : ''}
+      </div>
+    `).join('');
+
+    // Update stat counters
+    const all = await api('GET', '/api/proposals?status=all');
+    document.getElementById('cnt-pending').textContent  = all.proposals.filter(p=>p.status==='pending').length;
+    document.getElementById('cnt-accepted').textContent = all.proposals.filter(p=>p.status==='accepted').length;
+    document.getElementById('cnt-rejected').textContent = all.proposals.filter(p=>p.status==='rejected').length;
+
+  } catch(e) { list.innerHTML = `<div class="empty">Ошибка: ${e.message}</div>`; }
+}
+
+async function copyAndAccept(id, btn) {
+  const card   = document.getElementById('card-' + id);
+  const prompt = card.querySelector('.card-prompt').textContent;
+  await navigator.clipboard.writeText(prompt).catch(() => {});
+  toast('📋 Скопировано в буфер. Вставьте в Claude.');
+
+  try {
+    await api('POST', `/api/proposal/${id}/accept`);
+    card.className = 'card accepted';
+    card.querySelector('.card-actions').remove();
+    card.querySelector('.badge').className   = 'badge badge-accepted';
+    card.querySelector('.badge').textContent = '✅ Принято';
+    document.getElementById('cnt-pending').textContent =
+      Math.max(0, parseInt(document.getElementById('cnt-pending').textContent) - 1);
+  } catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+async function rejectProposal(id) {
+  if(!confirm('Отклонить это предложение?')) return;
+  try {
+    await api('POST', `/api/proposal/${id}/reject`);
+    const card = document.getElementById('card-' + id);
+    card.className = 'card rejected';
+    card.querySelector('.card-actions').remove();
+    card.querySelector('.badge').className   = 'badge badge-rejected';
+    card.querySelector('.badge').textContent = '❌ Отклонено';
+    toast('Предложение отклонено');
+  } catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+// ── Upload tree ──────────────────────────────────────────
+async function uploadTree(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const st = document.getElementById('upload-status');
+  st.innerHTML = '<div class="info">⏳ Читаю файл...</div>';
+
+  const html = await file.text();
+
+  // Extract IDX from HTML
+  const m = html.match(/const IDX = ({[\s\S]*?});\n/);
+  if(!m){ st.innerHTML = '<div class="info" style="color:red">❌ IDX не найден в файле</div>'; return; }
+
+  try {
+    JSON.parse(m[1]); // validate
+    st.innerHTML = '<div class="info">⏳ Загружаю на сервер...</div>';
+
+    const r = await fetch(WORKER_URL + '/api/tree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Password': adminPassword },
+      body: m[1],
+    });
+    const data = await r.json();
+    if(data.ok){
+      st.innerHTML = '<div class="info" style="background:#D4EDDA;color:#155724">✅ Дерево успешно загружено</div>';
+      toast('✅ Дерево обновлено');
+    } else {
+      st.innerHTML = `<div class="info" style="color:red">❌ ${data.error}</div>`;
+    }
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+  }
+}
+
+// ── Backups ──────────────────────────────────────────────
+async function loadBackups() {
+  const list = document.getElementById('backups-list');
+  list.innerHTML = '<div class="empty">Загрузка...</div>';
+  try {
+    const data = await api('GET', '/api/backups');
+    if(!data.backups.length){ list.innerHTML = '<div class="empty">Нет резервных копий</div>'; return; }
+    list.innerHTML = data.backups.map(b => `
+      <div class="card" style="border-left-color:#2196F3;display:flex;align-items:center;gap:16px">
+        <div style="flex:1"><b>${b.date}</b></div>
+        <button class="hbtn" onclick="downloadBackup('${b.key}','${b.date}')">⬇ Скачать</button>
+      </div>
+    `).join('');
+  } catch(e) { list.innerHTML = `<div class="empty">Ошибка: ${e.message}</div>`; }
+}
+
+async function downloadBackup(key, date) {
+  try {
+    const r = await fetch(WORKER_URL + '/api/backup/' + encodeURIComponent(key), {
+      headers: { 'X-Password': adminPassword }
+    });
+    const text = await r.text();
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(text);
+    a.download = 'backup-' + date.replace(/[/:, ]/g,'-') + '.json';
+    a.click();
+  } catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+// ── Utils ─────────────────────────────────────────────────
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Drag & drop
+document.addEventListener('DOMContentLoaded', () => {
+  const ua = document.querySelector('.upload-area');
+  if(!ua) return;
+  ua.addEventListener('dragover', e => { e.preventDefault(); ua.style.borderColor='#C09828'; });
+  ua.addEventListener('dragleave', () => { ua.style.borderColor=''; });
+  ua.addEventListener('drop', e => {
+    e.preventDefault(); ua.style.borderColor='';
+    const file = e.dataTransfer.files[0];
+    if(file){ document.getElementById('file-input').files = e.dataTransfer.files; uploadTree({target:{files:[file]}}); }
+  });
+});
+</script>
+</body>
+</html>
