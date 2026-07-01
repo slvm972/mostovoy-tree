@@ -272,8 +272,11 @@ async function uploadTree(event) {
 
   const html = await file.text();
 
-  // Extract IDX from HTML
-  const m = html.match(/const IDX = ({[\s\S]*?});\n/);
+  // Extract IDX from HTML — supports both formats:
+  // Old: const IDX = {...};
+  // New: FALLBACK_DATA = {...};  (API-driven architecture)
+  const m = html.match(/const IDX = ({[\s\S]*?});\n/)
+           || html.match(/FALLBACK_DATA = ({[\s\S]*?});\n/);
   if(!m){ st.innerHTML = '<div class="info" style="color:red">❌ IDX не найден в файле</div>'; return; }
 
   try {

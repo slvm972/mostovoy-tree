@@ -1,0 +1,14 @@
+{
+  "name": "mostovoy-tree-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "setup": "node setup.js",
+    "admin": "node -e \"const h=require('http'),fs=require('fs'),p=require('path');h.createServer((req,res)=>{const f=p.join('.',req.url==='/'?'/admin.html':req.url);fs.readFile(f,(e,d)=>{if(e){res.writeHead(404);res.end();}else{res.writeHead(200);res.end(d);}});}).listen(3000,()=>console.log('Admin panel: http://localhost:3000'));\""
+  },
+  "devDependencies": {
+    "wrangler": "^4.100.0"
+  }
+}
