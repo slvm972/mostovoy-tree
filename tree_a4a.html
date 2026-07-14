@@ -2,7 +2,7 @@
 <!-- saved from url=(0046)https://mostovoy-tree-pages.pages.dev/tree_a4a -->
 <html lang="ru"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
-<title data-i="page_title">🌳 Мостовые · Семейное дерево</title>
+<title>🌳 Мостовые · Семейное дерево</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -298,6 +298,8 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <option value="муж" data-i="rel_husband">Муж</option>
       <option value="ребёнок" data-i="rel_child">Ребёнок</option>
       <option value="родитель" data-i="rel_parent">Родитель</option>
+      <option value="брат" data-i="rel_brother">Брат</option>
+      <option value="сестра" data-i="rel_sister">Сестра</option>
     </select>
     <label data-i="lbl_phone">Телефон</label>
     <input id="f-phone" type="tel" data-ph="ph_phone" placeholder="+972-50-000-0000">
@@ -1137,6 +1139,9 @@ function showPanel(id){
     <button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
       border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#7A5828;
       white-space:nowrap;flex-shrink:0">${t('btn_fix')}</button>
+    <button onclick="openAddRelativeModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
+      border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#7A5828;
+      white-space:nowrap;flex-shrink:0">${t('btn_add_relative')}</button>
     ${canDelete ? `<button onclick="confirmDeletePerson('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(192,48,48,.1);
       border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;
       white-space:nowrap;flex-shrink:0">🗑 ${currentLang==='he'?'מחק':currentLang==='en'?'Delete':'Удалить'}</button>` : ''}
@@ -1385,6 +1390,7 @@ const UI = {
     nav_levik:'Левик (P42)', nav_evgeny:'Евгений (P11)',
     btn_edit:'✏️ Дополнить',
     btn_fix:'🔧 Исправить',
+    btn_add_relative:'➕ Добавить',
     tree_title:'🌳 Мостовые · Журахинские · Лейцис',
     birth:'Рождение', death:'Смерть',
     birth_place:'Место рождения', death_place:'Место смерти',
@@ -1410,7 +1416,7 @@ const UI = {
     lbl_death:'Дата смерти (если есть)', ph_death:'оставьте пустым если жив(а)',
     lbl_rel_person:'Связь с кем',    ph_search:'Начните вводить имя...',
     lbl_rel_type:'Тип связи',
-    rel_choose:'— выбрать —', rel_wife:'Жена', rel_husband:'Муж', rel_child:'Ребёнок', rel_parent:'Родитель',
+    rel_choose:'— выбрать —', rel_wife:'Жена', rel_husband:'Муж', rel_child:'Ребёнок', rel_parent:'Родитель', rel_brother:'Брат', rel_sister:'Сестра',
     lbl_phone:'Телефон',             ph_phone:'+972-50-000-0000',
     lbl_email:'Email',               ph_email:'example@mail.com',
     lbl_social:'Соц. сети',           ph_social:'https://facebook.com/...',
@@ -1427,7 +1433,6 @@ const UI = {
     fix_rel:'Степень родства', fix_family:'Семейная связь', fix_other:'Другое',
     ph_family:'например: добавить мужа / убрать связь / изменить родителя', ph_other:'всё что не вошло в поля выше',
     ph_birth_he:'например: יג ניסן תשל״א', ph_death_he:'например: יב שבט תשפ״א', ph_rel:'например: Зять',
-    page_title:'🌳 Мостовые · Семейное дерево',
     lbl_fix_old:'Текущее значение (если знаете)', ph_fix_old:'Что сейчас написано (необязательно)',
     lbl_fix_new:'Верное значение / исправление',  ph_fix_new:'Что должно быть вместо этого',
     lbl_comment:'Комментарий (необязательно)',     ph_comment:'Источник, пояснение...',
@@ -1441,7 +1446,7 @@ const UI = {
     lbl_name:'Имя (полное)',lbl_sex:'Пол',sex_f:'Женский',sex_m:'Мужской',
     lbl_birth:'Дата рождения',lbl_death:'Дата смерти (если есть)',
     lbl_rel_person:'Связь с кем',lbl_rel_type:'Тип связи',
-    rel_wife:'Жена',rel_husband:'Муж',rel_child:'Ребёнок',rel_parent:'Родитель',
+    rel_wife:'Жена',rel_husband:'Муж',rel_child:'Ребёнок',rel_parent:'Родитель',rel_brother:'Брат',rel_sister:'Сестра',
     lbl_person:'Персона',lbl_photo_url:'URL фотографии',lbl_caption:'Подпись (год, место)',
     lbl_bio_text:'Текст биографии',lbl_bio_url:'Ссылка на подробный документ (необязательно)',
     lbl_note:'Уточнение (что именно)',
@@ -1463,6 +1468,7 @@ const UI = {
     nav_levik:'Levik (P42)', nav_evgeny:'Evgeny (P11)',
     btn_edit:'✏️ Add info',
     btn_fix:'🔧 Correct',
+    btn_add_relative:'➕ Add',
     tree_title:'🌳 Mostovoy · Zhurakhinsky · Leytsis',
     birth:'Birth', death:'Death',
     birth_place:'Place of birth', death_place:'Place of death',
@@ -1487,7 +1493,7 @@ const UI = {
     lbl_death:'Date of death (if applicable)', ph_death:'leave empty if alive',
     lbl_rel_person:'Related to',  ph_search:'Start typing a name...',
     lbl_rel_type:'Relationship',
-    rel_choose:'— select —', rel_wife:'Wife', rel_husband:'Husband', rel_child:'Child', rel_parent:'Parent',
+    rel_choose:'— select —', rel_wife:'Wife', rel_husband:'Husband', rel_child:'Child', rel_parent:'Parent', rel_brother:'Brother', rel_sister:'Sister',
     lbl_phone:'Phone',            ph_phone:'+1-555-000-0000',
     lbl_email:'Email',            ph_email:'example@mail.com',
     lbl_social:'Social media',     ph_social:'https://facebook.com/...',
@@ -1504,7 +1510,6 @@ const UI = {
     fix_rel:'Relationship', fix_family:'Family link', fix_other:'Other',
     ph_family:'e.g.: add husband / remove link / change parent', ph_other:'anything not covered by the fields above',
     ph_birth_he:'e.g.: יג ניסן תשל״א', ph_death_he:'e.g.: יב שבט תשפ״א', ph_rel:'e.g.: Son-in-law',
-    page_title:'🌳 Mostovoy · Family Tree',
     lbl_fix_old:'Current value (if known)', ph_fix_old:'What is written now (optional)',
     lbl_fix_new:'Correct value',            ph_fix_new:'What it should be',
     lbl_comment:'Comment (optional)',       ph_comment:'Source, explanation...',
@@ -1518,7 +1523,7 @@ const UI = {
     lbl_name:'Full name',lbl_sex:'Sex',sex_f:'Female',sex_m:'Male',
     lbl_birth:'Date of birth',lbl_death:'Date of death (if applicable)',
     lbl_rel_person:'Related to',lbl_rel_type:'Relationship type',
-    rel_wife:'Wife',rel_husband:'Husband',rel_child:'Child',rel_parent:'Parent',
+    rel_wife:'Wife',rel_husband:'Husband',rel_child:'Child',rel_parent:'Parent',rel_brother:'Brother',rel_sister:'Sister',
     lbl_person:'Person',lbl_photo_url:'Photo URL',lbl_caption:'Caption (year, place)',
     lbl_bio_text:'Biography text',lbl_bio_url:'Link to full document (optional)',
     lbl_note:'Clarification (what exactly)',
@@ -1540,6 +1545,7 @@ const UI = {
     nav_levik:'לוויק (P42)', nav_evgeny:'יבגני (P11)',
     btn_edit:'✏️ הוספה',
     btn_fix:'🔧 תיקון',
+    btn_add_relative:'➕ הוספה',
     tree_title:'🌳 מוסטובוי · ז׳ורחינסקי · לייצס',
     birth:'לידה', death:'פטירה',
     birth_place:'מקום לידה', death_place:'מקום פטירה',
@@ -1564,7 +1570,7 @@ const UI = {
     lbl_death:'תאריך פטירה (אם רלוונטי)', ph_death:'השאר ריק אם בחיים',
     lbl_rel_person:'קשור ל',   ph_search:'התחל להקליד שם...',
     lbl_rel_type:'סוג קשר',
-    rel_choose:'— בחר —', rel_wife:'אישה', rel_husband:'בעל', rel_child:'ילד/ה', rel_parent:'הורה',
+    rel_choose:'— בחר —', rel_wife:'אישה', rel_husband:'בעל', rel_child:'ילד/ה', rel_parent:'הורה', rel_brother:'אח', rel_sister:'אחות',
     lbl_phone:'טלפון',         ph_phone:'+972-50-000-0000',
     lbl_email:'אימייל',        ph_email:'example@mail.com',
     lbl_social:'רשתות חברתיות', ph_social:'https://facebook.com/...',
@@ -1581,7 +1587,6 @@ const UI = {
     fix_rel:'קרבה', fix_family:'קשר משפחתי', fix_other:'אחר',
     ph_family:'לדוגמה: הוספת בעל / הסרת קשר / שינוי הורה', ph_other:'כל מה שלא נכלל בשדות למעלה',
     ph_birth_he:'לדוגמה: יג ניסן תשל״א', ph_death_he:'לדוגמה: יב שבט תשפ״א', ph_rel:'לדוגמה: חתן',
-    page_title:'🌳 מוסטובוי · עץ משפחה',
     lbl_fix_old:'ערך נוכחי (אם ידוע)', ph_fix_old:'מה כתוב עכשיו (אופציונלי)',
     lbl_fix_new:'ערך נכון',            ph_fix_new:'מה צריך להיות',
     lbl_comment:'הערה (אופציונלי)',    ph_comment:'מקור, הסבר...',
@@ -1595,7 +1600,7 @@ const UI = {
     lbl_name:'שם מלא',lbl_sex:'מין',sex_f:'נקבה',sex_m:'זכר',
     lbl_birth:'תאריך לידה',lbl_death:'תאריך פטירה (אם רלוונטי)',
     lbl_rel_person:'קשור/ה ל',lbl_rel_type:'סוג קשר',
-    rel_wife:'אישה',rel_husband:'בעל',rel_child:'ילד/ה',rel_parent:'הורה',
+    rel_wife:'אישה',rel_husband:'בעל',rel_child:'ילד/ה',rel_parent:'הורה',rel_brother:'אח',rel_sister:'אחות',
     lbl_person:'אדם',lbl_photo_url:'קישור לתמונה',lbl_caption:'כיתוב (שנה, מקום)',
     lbl_bio_text:'טקסט ביוגרפי',lbl_bio_url:'קישור למסמך מלא (רשות)',
     lbl_note:'הבהרה (מה בדיוק)',
@@ -1797,7 +1802,8 @@ function buildDatalist(){
 // buildDatalist() called after IDX loads in initTree()
 
 // Open / close modal
-function openModal(prefillId){
+function openModal(prefillId, mode){
+  mode = mode || 'fix'; // preserve existing behavior for all pre-existing openModal(id) calls
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('prompt-out').style.display = 'none';
   document.getElementById('copy-row').style.display = 'none';
@@ -1834,7 +1840,7 @@ function openModal(prefillId){
   if(window.applyLang) window.applyLang(currentLang);
 
   // ── Prefill ONLY if called from panel (explicit person) ──
-  if(prefillId && IDX.nodes[prefillId]){
+  if(prefillId && IDX.nodes[prefillId] && mode === 'fix'){
     const n  = IDX.nodes[prefillId];
     const yr = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
     const label = pname(prefillId) + (yr ? ' (' + yr + ')' : '') + ' [' + prefillId + ']';
@@ -1879,12 +1885,38 @@ function openModal(prefillId){
     if(fixBtn) fixBtn.classList.add('active');
     document.getElementById('mf-fix').classList.add('active');
     currentType = 'fix';
+  } else if(prefillId && IDX.nodes[prefillId] && mode === 'add'){
+    // ── "➕ Добавить родственника": prefill only the "связь с кем" field
+    // on the New Person tab, so the user doesn't need to search by name.
+    // f-rel-type is left blank on purpose — the user picks who the new
+    // person is (wife/husband/child/parent/brother/sister) to prefillId.
+    const n  = IDX.nodes[prefillId];
+    const yr = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+    const label = pname(prefillId) + (yr ? ' (' + yr + ')' : '') + ' [' + prefillId + ']';
+
+    const relPersonEl = document.getElementById('f-rel-person');
+    if(relPersonEl) relPersonEl.value = label;
+
+    // Switch to "New person" tab
+    document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mfields').forEach(f => f.classList.remove('active'));
+    const personBtn = document.querySelector('.mtype[data-type="person"]');
+    if(personBtn) personBtn.classList.add('active');
+    document.getElementById('mf-person').classList.add('active');
+    currentType = 'person';
   }
   // P6.1e: update button label AFTER currentType is finalized (may be 'fix' from above)
   if(typeof updateGenerateButtonLabel === 'function') updateGenerateButtonLabel();
 }
 function closeModal(){
   document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// "➕ Добавить" в панели персоны — быстрое добавление близкого родственника
+// уже открытой персоне: открывает модалку сразу на вкладке "Новый человек"
+// с предзаполненным полем "Связь с кем", без ручного поиска по автокомплиту.
+function openAddRelativeModal(id){
+  openModal(id, 'add');
 }
 
 document.getElementById('btn-edit').addEventListener('click', () => openModal());
