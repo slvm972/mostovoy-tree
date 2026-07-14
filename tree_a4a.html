@@ -1852,7 +1852,7 @@ function openModal(prefillId){
 
     // Prefill the editable fields with CURRENT values so user only changes what's wrong
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
-    setVal('ff-name',      n.name);
+    setVal('ff-name',      pname(prefillId));
     setVal('ff-birth',     n.birth);
     setVal('ff-death',     n.death);
     setVal('ff-birth-he',  n.birth_he);
@@ -1860,7 +1860,7 @@ function openModal(prefillId){
     setVal('ff-phone',     n.phone);
     setVal('ff-email',     n.email);
     setVal('ff-social',    n.social);
-    setVal('ff-rel',       n.rel);
+    setVal('ff-rel',       trel(n.rel));
 
     // Switch to fix tab
     document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
