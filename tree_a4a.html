@@ -2530,12 +2530,10 @@ function buildAndPrint() {
   const printH = paper.h * MM2PX;
   const MARGIN = 40;
   const titleH = 55;
-  const scale = Math.min(
-    (printW - MARGIN*2) / treeW,
-    (printH - MARGIN*2 - titleH) / treeH
-  );
-  const offX = MARGIN + (printW - MARGIN*2 - treeW * scale) / 2 - minX * scale;
-  const offY = titleH + MARGIN - minY * scale;
+  const scaleX = (printW - MARGIN*2) / treeW;
+  const scaleY = (printH - MARGIN*2 - titleH) / treeH;
+  const offX = MARGIN + (printW - MARGIN*2 - treeW * scaleX) / 2 - minX * scaleX;
+  const offY = titleH + MARGIN - minY * scaleY;
 
   // ── 4. Build SVG ───────────────────────────────────────
   const SEX_FILL = { M:'#1E4870', F:'#701838' };
@@ -2627,7 +2625,7 @@ function buildAndPrint() {
   const svgBody = `
   <text x="${printW/2}" y="30" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#28180A" text-anchor="middle">${title}</text>
   <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} персон</text>
-  <g transform="translate(${offX},${offY}) scale(${scale})">
+  <g transform="translate(${offX},${offY}) scale(${scaleX},${scaleY})">
     ${edges}
     ${cards}
   </g>`;
