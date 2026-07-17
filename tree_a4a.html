@@ -3372,6 +3372,23 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось добавить родителя');
     }
+  } else if(relType === 'брат' || relType === 'сестра'){
+    const famId = IDX.child_of[targetId];
+    if(!famId){
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify({parent1:null, parent2:null, children:[targetId, newId]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    } else {
+      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({addChild: newId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
+    }
   }
   // else: relType empty or unrecognized — silently skip linking
 }
