@@ -2403,7 +2403,8 @@ function buildAndPrint() {
   const famsByLevel = {};  // level → [famId]
   for (const [famId, fam] of Object.entries(IDX.families)) {
     // Determine level from husband or wife gen
-    const refId = fam.husband || fam.wife;
+    let refId = fam.husband || fam.wife;
+    if (!refId && fam.children.length > 0) refId = fam.children[0];
     if (!refId) continue;
     const g = IDX.nodes[refId]?.gen ?? 0;
     if (!famsByLevel[g]) famsByLevel[g] = [];
@@ -2494,8 +2495,11 @@ function buildAndPrint() {
 
   // Layout root families side by side
   for (const famId of rootFams) {
-    const w = subtreeWidth(famId, minGen);
-    layoutFam(famId, curX + w/2, minGen);
+    const fam = IDX.families[famId];
+    const isParentless = !fam.husband && !fam.wife;
+    const layoutLevel = isParentless ? minGen - 1 : minGen;
+    const w = subtreeWidth(famId, layoutLevel);
+    layoutFam(famId, curX + w/2, layoutLevel);
     curX += w + PGAPX * 2;
   }
 
@@ -2543,6 +2547,20 @@ function buildAndPrint() {
 
   // Draw edges
   for (const [, fam] of Object.entries(IDX.families)) {
+    if (!fam.husband && !fam.wife && fam.children.length > 0) {
+      const visCh = fam.children.filter(id => pos[id]);
+      if (visCh.length > 1) {
+        const cxs    = visCh.map(id => pos[id].x + PCW/2);
+        const minCX  = Math.min(...cxs), maxCX = Math.max(...cxs);
+        const bracketY = pos[visCh[0]].y - PGAPY / 2;
+        const stroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
+        edges += `<line x1="${minCX}" y1="${bracketY}" x2="${maxCX}" y2="${bracketY}" ${stroke}/>`;
+        for (const cid of visCh) {
+          edges += `<line x1="${pos[cid].x+PCW/2}" y1="${bracketY}" x2="${pos[cid].x+PCW/2}" y2="${pos[cid].y}" ${stroke}/>`;
+        }
+      }
+      continue;
+    }
     const pars = [fam.husband, fam.wife].filter(id => id && pos[id]);
     if (!pars.length || !fam.children.length) continue;
 
