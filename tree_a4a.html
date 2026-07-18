@@ -439,6 +439,12 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <div class="print-opt" data-fmt="A0L">A0 альбом</div>
       <div class="print-opt" data-fmt="A2L">A2 альбом</div>
     </div>
+    <p style="font-size:.72rem;color:#888;margin-top:6px">
+      A0/A1/A2 — это физический размер бумаги (A0 крупнее, A2 компактнее), а не качество картинки.
+      Нужен широкоформатный принтер или плоттер (типография/копицентр).
+      На обычном A4-принтере можно распечатать постер «плиткой» на несколько листов и склеить —
+      в диалоге печати или в Adobe Acrobat это называется «Poster» / «Tile» / «Плакат».
+    </p>
     <p id="print-stats" style="font-size:.72rem;color:#888"></p>
     <div class="print-btns">
       <button class="pbtn pbtn-cancel" id="print-cancel">Отмена</button>
@@ -2535,13 +2541,67 @@ function buildAndPrint() {
   const offX = MARGIN + (printW - MARGIN*2 - treeW * scaleX) / 2 - minX * scaleX;
   const offY = titleH + MARGIN - minY * scaleY;
 
+  // ══════════════════════════════════════════════════════
+  //  Построчное (по gen) масштабирование КАРТОЧЕК: плотная
+  //  упаковка внутри ряда вместо унаследованной мировой
+  //  ширины поддерева. Линии (edges) ниже по-прежнему
+  //  используют старые pos[id] / scaleX,scaleY / offX,offY.
+  // ══════════════════════════════════════════════════════
+  const BASE_GAP = 40;
+  const baseScale = Math.min(scaleX, scaleY);
+
+  const rowsMap = {};
+  for (const id of Object.keys(pos)) {
+    const g = IDX.nodes[id]?.gen ?? 0;
+    if (!rowsMap[g]) rowsMap[g] = [];
+    rowsMap[g].push(id);
+  }
+  const rowGens = Object.keys(rowsMap).map(Number).sort((a,b)=>a-b);
+
+  const rows = rowGens.map(g => {
+    const ids = rowsMap[g].slice().sort((a,b) => pos[a].x - pos[b].x);
+    const count = ids.length;
+    const requiredWidth = count * PCW + Math.max(0, count - 1) * PGAPX;
+    let rowScale = (printW - MARGIN*2) / requiredWidth;
+    rowScale = Math.min(rowScale, baseScale * 4); // защита от раздутых карточек в мелких рядах
+
+    const localX = {};
+    let cursorX = 0;
+    for (const id of ids) { localX[id] = cursorX; cursorX += PCW + PGAPX; }
+
+    return { gen: g, ids, requiredWidth, localX, rowScale };
+  });
+
+  for (const r of rows) r.rowHeight = PCH * r.rowScale;
+
+  let totalStackHeight = rows.reduce((s,r) => s + r.rowHeight, 0) + (rows.length - 1) * BASE_GAP;
+  const availableHeight = printH - MARGIN*2 - titleH;
+
+  let gapUsed;
+  if (totalStackHeight > availableHeight) {
+    const shrinkFactor = availableHeight / totalStackHeight;
+    for (const r of rows) { r.rowScale *= shrinkFactor; r.rowHeight *= shrinkFactor; }
+    gapUsed = BASE_GAP;
+  } else {
+    const leftover = availableHeight - totalStackHeight;
+    const extraGapPerGap = rows.length > 1 ? leftover / (rows.length - 1) : 0;
+    gapUsed = BASE_GAP + extraGapPerGap;
+  }
+
+  let curY = titleH + MARGIN;
+  for (const r of rows) {
+    r.pageY = curY;
+    r.rowTranslateX = MARGIN + (printW - MARGIN*2 - r.requiredWidth * r.rowScale) / 2;
+    r.rowTranslateY = r.pageY;
+    curY += r.rowHeight + gapUsed;
+  }
+
   // ── 4. Build SVG ───────────────────────────────────────
   const SEX_FILL = { M:'#1E4870', F:'#701838' };
   const today = new Date().toLocaleDateString('ru-RU');
   const title = '🌳 Мостовые · Журахинские · Лейцис';
 
   let edges = '';
-  let cards = '';
 
   // Draw edges
   for (const [, fam] of Object.entries(IDX.families)) {
@@ -2589,37 +2649,45 @@ function buildAndPrint() {
     }
   }
 
-  // Draw cards
-  for (const [id, n] of Object.entries(IDX.nodes)) {
-    if (!pos[id]) continue;
-    const {x, y} = pos[id];
-    const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
-    const fill = dead ? '#3A4A55' : (SEX_FILL[n.sex] || '#444');
-    const name = pname(id);
-    const parts = name.split(' ');
-    const mid = Math.ceil(parts.length / 2);
-    const l1 = parts.slice(0, mid).join(' ');
-    const l2 = parts.slice(mid).join(' ');
-    const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
-    const dy = dead ? (n.death.match(/\d{4}/)||[''])[0] : '';
-    const bhe = n.birth_he || '';
-    const dhe = n.death_he || '';
+  // Draw cards — по рядам (каждый ряд в своей <g> со своим
+  // translate+scale, плотно упакован по PCW/PGAPX)
+  let cardsHTML = '';
+  for (const r of rows) {
+    let rowCards = '';
+    for (const id of r.ids) {
+      const n = IDX.nodes[id];
+      const x = r.localX[id];
+      const y = 0;
+      const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
+      const fill = dead ? '#3A4A55' : (SEX_FILL[n.sex] || '#444');
+      const name = pname(id);
+      const parts = name.split(' ');
+      const mid = Math.ceil(parts.length / 2);
+      const l1 = parts.slice(0, mid).join(' ');
+      const l2 = parts.slice(mid).join(' ');
+      const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+      const dy = dead ? (n.death.match(/\d{4}/)||[''])[0] : '';
+      const bhe = n.birth_he || '';
+      const dhe = n.death_he || '';
 
-    cards += `<rect x="${x}" y="${y}" width="${PCW}" height="${PCH}" rx="6"
-      fill="${fill}" stroke="rgba(237,216,144,.35)" stroke-width="1.2"
-      stroke-dasharray="${dead ? '5,3' : 'none'}"/>
-    <rect x="${x}" y="${y}" width="${PCW}" height="5" rx="6" fill="rgba(237,216,144,.4)"/>
-    <text font-family="Segoe UI,Arial,sans-serif" fill="#EDD890" font-size="10" font-weight="700" text-anchor="middle">
-      <tspan x="${x+PCW/2}" y="${y+32}">${l1}</tspan>
-      ${l2 ? `<tspan x="${x+PCW/2}" dy="14">${l2}</tspan>` : ''}
-    </text>`;
-    let dateY = y + (l2 ? 68 : 58);
-    if (by) { cards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.7)" font-size="8.5" text-anchor="middle">р. ${by}${dy ? '  † '+dy : ''}</text>`; dateY += 13; }
-    else if (dy) { cards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="8.5" text-anchor="middle">† ${dy}</text>`; dateY += 13; }
-    if (bhe || dhe) {
-      const heStr = [bhe, dhe ? '† '+dhe : ''].filter(Boolean).join('  ');
-      cards += `<text x="${x+PCW/2}" y="${y+PCH-7}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="7.5" text-anchor="middle" direction="rtl">${heStr}</text>`;
+      rowCards += `<rect x="${x}" y="${y}" width="${PCW}" height="${PCH}" rx="6"
+        fill="${fill}" stroke="rgba(237,216,144,.35)" stroke-width="1.2"
+        stroke-dasharray="${dead ? '5,3' : 'none'}"/>
+      <rect x="${x}" y="${y}" width="${PCW}" height="5" rx="6" fill="rgba(237,216,144,.4)"/>
+      ${n.sex === 'M' ? `<text x="${x+PCW-12}" y="${y+16}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.85)" font-size="11" font-weight="700" text-anchor="middle">♂</text>` : n.sex === 'F' ? `<text x="${x+PCW-12}" y="${y+16}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.85)" font-size="11" font-weight="700" text-anchor="middle">♀</text>` : ''}
+      <text font-family="Segoe UI,Arial,sans-serif" fill="#EDD890" font-size="10" font-weight="700" text-anchor="middle">
+        <tspan x="${x+PCW/2}" y="${y+32}">${l1}</tspan>
+        ${l2 ? `<tspan x="${x+PCW/2}" dy="14">${l2}</tspan>` : ''}
+      </text>`;
+      let dateY = y + (l2 ? 68 : 58);
+      if (by) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.7)" font-size="8.5" text-anchor="middle">р. ${by}${dy ? '  † '+dy : ''}</text>`; dateY += 13; }
+      else if (dy) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="8.5" text-anchor="middle">† ${dy}</text>`; dateY += 13; }
+      if (bhe || dhe) {
+        const heStr = [bhe, dhe ? '† '+dhe : ''].filter(Boolean).join('  ');
+        rowCards += `<text x="${x+PCW/2}" y="${y+PCH-7}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="7.5" text-anchor="middle" direction="rtl">${heStr}</text>`;
+      }
     }
+    cardsHTML += `<g transform="translate(${r.rowTranslateX},${r.rowTranslateY}) scale(${r.rowScale})">${rowCards}</g>`;
   }
 
   const svgBody = `
@@ -2627,8 +2695,8 @@ function buildAndPrint() {
   <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} персон</text>
   <g transform="translate(${offX},${offY}) scale(${scaleX},${scaleY})">
     ${edges}
-    ${cards}
-  </g>`;
+  </g>
+  ${cardsHTML}`;
 
   // ── 5. Build full HTML and download ───────────────────
   const fullHTML = `<!DOCTYPE html>
