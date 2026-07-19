@@ -2596,6 +2596,22 @@ function buildAndPrint() {
     curY += r.rowHeight + gapUsed;
   }
 
+  // ── Финальная абсолютная карта позиций (для C2, edges пока не трогаем) ──
+  const finalPos = {};
+  for (const r of rows) {
+    for (const id of r.ids) {
+      const cardTop = r.rowTranslateY;
+      const cardLeft = r.rowTranslateX + r.localX[id] * r.rowScale;
+      finalPos[id] = {
+        x: cardLeft + (PCW * r.rowScale) / 2,      // горизонтальный центр карточки
+        top: cardTop,                                // верхний край
+        bottom: cardTop + PCH * r.rowScale,           // нижний край
+        cy: cardTop + (PCH * r.rowScale) / 2,         // вертикальный центр
+        scale: r.rowScale                             // масштаб этого ряда (пригодится в C2)
+      };
+    }
+  }
+
   // ── 4. Build SVG ───────────────────────────────────────
   const SEX_FILL = { M:'#1E4870', F:'#701838' };
   const today = new Date().toLocaleDateString('ru-RU');
