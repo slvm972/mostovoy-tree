@@ -2618,50 +2618,58 @@ function buildAndPrint() {
   const title = '🌳 Мостовые · Журахинские · Лейцис';
 
   let edges = '';
+  const parentStroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
+  const spouseStroke = 'stroke="#C09828" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"';
 
   // Draw edges
   for (const [, fam] of Object.entries(IDX.families)) {
     if (!fam.husband && !fam.wife && fam.children.length > 0) {
-      const visCh = fam.children.filter(id => pos[id]);
+      const visCh = fam.children.filter(id => finalPos[id]);
       if (visCh.length > 1) {
-        const cxs    = visCh.map(id => pos[id].x + PCW/2);
-        const minCX  = Math.min(...cxs), maxCX = Math.max(...cxs);
-        const bracketY = pos[visCh[0]].y - PGAPY / 2;
-        const stroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
-        edges += `<line x1="${minCX}" y1="${bracketY}" x2="${maxCX}" y2="${bracketY}" ${stroke}/>`;
+        const cxs = visCh.map(id => finalPos[id].x);
+        const minCX = Math.min(...cxs), maxCX = Math.max(...cxs);
+        const childTop = finalPos[visCh[0]].top;
+        const bracketY = childTop - gapUsed / 2;
+        edges += `<line x1="${minCX}" y1="${bracketY}" x2="${maxCX}" y2="${bracketY}" ${parentStroke}/>`;
         for (const cid of visCh) {
-          edges += `<line x1="${pos[cid].x+PCW/2}" y1="${bracketY}" x2="${pos[cid].x+PCW/2}" y2="${pos[cid].y}" ${stroke}/>`;
+          edges += `<line x1="${finalPos[cid].x}" y1="${bracketY}" x2="${finalPos[cid].x}" y2="${finalPos[cid].top}" ${parentStroke}/>`;
         }
       }
       continue;
     }
-    const pars = [fam.husband, fam.wife].filter(id => id && pos[id]);
+    const pars = [fam.husband, fam.wife].filter(id => id && finalPos[id]);
     if (!pars.length || !fam.children.length) continue;
 
-    const parMidX = pars.reduce((s,id) => s + pos[id].x + PCW/2, 0) / pars.length;
-    const parY    = pos[pars[0]].y + PCH;
-    const visCh   = fam.children.filter(id => pos[id]);
+    const parMidX = pars.reduce((s,id) => s + finalPos[id].x, 0) / pars.length;
+    const parY    = finalPos[pars[0]].bottom;
+    const visCh   = fam.children.filter(id => finalPos[id]);
     if (!visCh.length) continue;
 
-    const cxs  = visCh.map(id => pos[id].x + PCW/2);
+    const cxs   = visCh.map(id => finalPos[id].x);
     const minCX = Math.min(...cxs), maxCX = Math.max(...cxs);
-    const midY  = pos[visCh[0]].y - PGAPY/2;
+    const childTop = finalPos[visCh[0]].top;
+    const midY = (parY + childTop) / 2;
 
-    const stroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
-    edges += `<line x1="${parMidX}" y1="${parY}" x2="${parMidX}" y2="${midY}" ${stroke}/>`;
-    if (visCh.length > 1) edges += `<line x1="${minCX}" y1="${midY}" x2="${maxCX}" y2="${midY}" ${stroke}/>`;
-    if (parMidX < minCX) edges += `<line x1="${parMidX}" y1="${midY}" x2="${minCX}" y2="${midY}" ${stroke}/>`;
-    if (parMidX > maxCX) edges += `<line x1="${maxCX}" y1="${midY}" x2="${parMidX}" y2="${midY}" ${stroke}/>`;
+    edges += `<line x1="${parMidX}" y1="${parY}" x2="${parMidX}" y2="${midY}" ${parentStroke}/>`;
+    if (visCh.length > 1) edges += `<line x1="${minCX}" y1="${midY}" x2="${maxCX}" y2="${midY}" ${parentStroke}/>`;
+    if (parMidX < minCX) edges += `<line x1="${parMidX}" y1="${midY}" x2="${minCX}" y2="${midY}" ${parentStroke}/>`;
+    if (parMidX > maxCX) edges += `<line x1="${maxCX}" y1="${midY}" x2="${parMidX}" y2="${midY}" ${parentStroke}/>`;
     for (const cid of visCh) {
-      edges += `<line x1="${pos[cid].x+PCW/2}" y1="${midY}" x2="${pos[cid].x+PCW/2}" y2="${pos[cid].y}" ${stroke}/>`;
+      edges += `<line x1="${finalPos[cid].x}" y1="${midY}" x2="${finalPos[cid].x}" y2="${finalPos[cid].top}" ${parentStroke}/>`;
     }
 
-    // Couple connector (♥)
+    // Couple connector — пунктир + ♥, визуально отличается от сплошной
+    // линии родитель→ребёнок
     if (pars.length === 2) {
-      const lx = Math.min(pos[pars[0]].x, pos[pars[1]].x) + PCW;
-      const rx = Math.max(pos[pars[0]].x, pos[pars[1]].x);
-      const cy = pos[pars[0]].y + PCH/2;
-      if (rx > lx) edges += `<line x1="${lx}" y1="${cy}" x2="${rx}" y2="${cy}" ${stroke}/>`;
+      const p0 = finalPos[pars[0]], p1 = finalPos[pars[1]];
+      const halfW = (PCW * p0.scale) / 2;
+      const lx = Math.min(p0.x, p1.x) + halfW;
+      const rx = Math.max(p0.x, p1.x) - halfW;
+      const cy = p0.cy;
+      if (rx > lx) {
+        edges += `<line x1="${lx}" y1="${cy}" x2="${rx}" y2="${cy}" ${spouseStroke}/>`;
+        edges += `<text x="${(lx+rx)/2}" y="${cy+4}" font-family="Segoe UI,Arial,sans-serif" font-size="10" fill="#C09828" text-anchor="middle">♥</text>`;
+      }
     }
   }
 
@@ -2709,9 +2717,7 @@ function buildAndPrint() {
   const svgBody = `
   <text x="${printW/2}" y="30" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#28180A" text-anchor="middle">${title}</text>
   <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} персон</text>
-  <g transform="translate(${offX},${offY}) scale(${scaleX},${scaleY})">
-    ${edges}
-  </g>
+  ${edges}
   ${cardsHTML}`;
 
   // ── 5. Build full HTML and download ───────────────────
