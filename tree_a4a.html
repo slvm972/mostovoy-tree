@@ -2538,14 +2538,12 @@ function buildAndPrint() {
   const titleH = 55;
   const scaleX = (printW - MARGIN*2) / treeW;
   const scaleY = (printH - MARGIN*2 - titleH) / treeH;
-  const offX = MARGIN + (printW - MARGIN*2 - treeW * scaleX) / 2 - minX * scaleX;
-  const offY = titleH + MARGIN - minY * scaleY;
 
   // ══════════════════════════════════════════════════════
   //  Построчное (по gen) масштабирование КАРТОЧЕК: плотная
   //  упаковка внутри ряда вместо унаследованной мировой
   //  ширины поддерева. Линии (edges) ниже по-прежнему
-  //  используют старые pos[id] / scaleX,scaleY / offX,offY.
+  //  используют старые pos[id] / scaleX,scaleY.
   // ══════════════════════════════════════════════════════
   const BASE_GAP = 40;
   const baseScale = Math.min(scaleX, scaleY);
