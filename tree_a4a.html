@@ -2558,16 +2558,29 @@ function buildAndPrint() {
   }
   const rowGens = Object.keys(rowsMap).map(Number).sort((a,b)=>a-b);
 
+  const GAP_COMPRESSION = 0.2; // доля исходного мирового зазора, которая сохраняется
   const rows = rowGens.map(g => {
     const ids = rowsMap[g].slice().sort((a,b) => pos[a].x - pos[b].x);
     const count = ids.length;
-    const requiredWidth = count * PCW + Math.max(0, count - 1) * PGAPX;
+
+    const gaps = [];
+    for (let i = 1; i < ids.length; i++) {
+      const prevRight = pos[ids[i-1]].x + PCW;
+      const worldGap = Math.max(0, pos[ids[i]].x - prevRight);
+      gaps.push(PGAPX + worldGap * GAP_COMPRESSION);
+    }
+
+    const requiredWidth = count * PCW + gaps.reduce((s,g) => s+g, 0);
     let rowScale = (printW - MARGIN*2) / requiredWidth;
     rowScale = Math.min(rowScale, baseScale * 4); // защита от раздутых карточек в мелких рядах
 
     const localX = {};
     let cursorX = 0;
-    for (const id of ids) { localX[id] = cursorX; cursorX += PCW + PGAPX; }
+    ids.forEach((id, i) => {
+      if (i > 0) cursorX += gaps[i-1];
+      localX[id] = cursorX;
+      cursorX += PCW;
+    });
 
     return { gen: g, ids, requiredWidth, localX, rowScale };
   });
