@@ -2663,6 +2663,7 @@ function buildAndPrint() {
     const footprintMin = Math.min(parMidX, minCX);
     const footprintMax = Math.max(parMidX, maxCX);
 
+    if (parY >= childTop) continue; // повреждённые данные (gen ребёнка <= gen родителя) — пропускаем линию, не рисуем сломанную
     normalFams.push({ pars, parMidX, parY, visCh, minCX, maxCX, childTop, footprintMin, footprintMax });
   }
 
