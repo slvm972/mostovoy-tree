@@ -2633,6 +2633,7 @@ function buildAndPrint() {
   const spouseStroke = 'stroke="#C09828" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"';
 
   // Draw edges
+  const normalFams = [];
   for (const [, fam] of Object.entries(IDX.families)) {
     if (!fam.husband && !fam.wife && fam.children.length > 0) {
       const visCh = fam.children.filter(id => finalPos[id]);
@@ -2650,17 +2651,53 @@ function buildAndPrint() {
     }
     const pars = [fam.husband, fam.wife].filter(id => id && finalPos[id]);
     if (!pars.length || !fam.children.length) continue;
+    const visCh = fam.children.filter(id => finalPos[id]);
+    if (!visCh.length) continue;
 
     const parMidX = pars.reduce((s,id) => s + finalPos[id].x, 0) / pars.length;
     const parY    = finalPos[pars[0]].bottom;
-    const visCh   = fam.children.filter(id => finalPos[id]);
-    if (!visCh.length) continue;
-
     const cxs   = visCh.map(id => finalPos[id].x);
     const minCX = Math.min(...cxs), maxCX = Math.max(...cxs);
     const childTop = finalPos[visCh[0]].top;
-    const midY = (parY + childTop) / 2;
 
+    const footprintMin = Math.min(parMidX, minCX);
+    const footprintMax = Math.max(parMidX, maxCX);
+
+    normalFams.push({ pars, parMidX, parY, visCh, minCX, maxCX, childTop, footprintMin, footprintMax });
+  }
+
+  const byGap = {};
+  for (const f of normalFams) {
+    const key = f.parY + '|' + f.childTop;
+    if (!byGap[key]) byGap[key] = [];
+    byGap[key].push(f);
+  }
+
+  const LANE_MARGIN = 0.15;
+  const LANE_GAP_PX = 6;
+  for (const key of Object.keys(byGap)) {
+    const group = byGap[key].slice().sort((a,b) => a.footprintMin - b.footprintMin);
+    const laneEnds = [];
+    for (const f of group) {
+      let laneIdx = laneEnds.findIndex(end => end + LANE_GAP_PX < f.footprintMin);
+      if (laneIdx === -1) { laneIdx = laneEnds.length; laneEnds.push(f.footprintMax); }
+      else { laneEnds[laneIdx] = f.footprintMax; }
+      f.lane = laneIdx;
+    }
+    const numLanes = laneEnds.length;
+    const { parY, childTop } = group[0];
+    const gapSpan = childTop - parY;
+    for (const f of group) {
+      const t = numLanes > 1
+        ? LANE_MARGIN + (f.lane / (numLanes - 1)) * (1 - 2*LANE_MARGIN)
+        : 0.5;
+      f.midY = parY + gapSpan * t;
+    }
+    console.log('[E1] gap ' + key + ' → ' + group.length + ' families, ' + numLanes + ' lanes');
+  }
+
+  for (const f of normalFams) {
+    const { pars, parMidX, parY, visCh, minCX, maxCX, midY } = f;
     edges += `<line x1="${parMidX}" y1="${parY}" x2="${parMidX}" y2="${midY}" ${parentStroke}/>`;
     if (visCh.length > 1) edges += `<line x1="${minCX}" y1="${midY}" x2="${maxCX}" y2="${midY}" ${parentStroke}/>`;
     if (parMidX < minCX) edges += `<line x1="${parMidX}" y1="${midY}" x2="${minCX}" y2="${midY}" ${parentStroke}/>`;
