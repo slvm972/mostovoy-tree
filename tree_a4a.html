@@ -534,6 +534,7 @@ function getCenteredLayout(focalId){
 
   const placed = new Set();  // avoid placing same person twice
   const nodes  = [];
+  const MAX_GC = 5; // raised from 3 — show more grandchildren
 
   function add(n){
     if(placed.has(n.id)) return;
@@ -640,6 +641,26 @@ function getCenteredLayout(focalId){
   // Add all GP nodes (skip duplicates)
   for(const family of gpRaw) family.nodes.forEach(n => add(n));
 
+  // ── Пре-расчёт "footprint": сколько горизонтального места
+  //    понадобится каждому ребёнку под его собственных детей (внуков
+  //    фокальной персоны), чтобы на LEVEL +1 их можно было расставить
+  //    заранее с нужным запасом, не толкая друг друга постфактум.
+  const childFootprint = {}; // childId -> requiredWidth (px)
+  for(const cId of rel.children){
+    const cRel = IDX.relatives[cId];
+    if(!cRel || !cRel.children.length){ childFootprint[cId] = CW; continue; }
+    const cFamChildren = Object.values(fams)
+      .filter(f => f.husband === cId || f.wife === cId)
+      .flatMap(f => f.children || []);
+    const gcSource = cFamChildren.length > 0 ? cFamChildren : cRel.children;
+    const gcCount = [...new Set(gcSource)]
+      .filter(gc => IDX.nodes[gc])
+      .slice(0, MAX_GC).length;
+    childFootprint[cId] = gcCount > 0
+      ? Math.max(CW, gcCount * CW + (gcCount - 1) * SIBLING_GAP)
+      : CW;
+  }
+
   // ── LEVEL +1: children ────────────────────────────────
   // Group children by which marriage/family they belong to,
   // so each spouse's children are positioned under THAT couple,
@@ -675,13 +696,20 @@ function getCenteredLayout(focalId){
     let prevRight = -Infinity;
 
     for(const group of familyGroups){
-      const totalW = group.kids.length * CW + (group.kids.length - 1) * SIBLING_GAP;
+      // ширина слота под каждого ребёнка теперь учитывает его собственный
+      // footprint (место под будущих внуков), а не фиксированную CW —
+      // это резервирует место заранее и убирает необходимость толкать
+      // соседей после факта
+      const widths = group.kids.map(cId => Math.max(CW, childFootprint[cId] || CW));
+      const totalW = widths.reduce((s,w) => s+w, 0) + (group.kids.length - 1) * SIBLING_GAP;
       let cx = group.anchorX - totalW / 2;
       if(cx < prevRight + GROUP_GAP) cx = prevRight + GROUP_GAP;
-      for(const cId of group.kids){
-        add({id: cId, x: cx, y: LEVEL_H, role: 'child'});
-        cx += CW + SIBLING_GAP;
-      }
+      group.kids.forEach((cId, i) => {
+        const w = widths[i];
+        // сама карточка ребёнка остаётся по центру выделенного ему слота
+        add({id: cId, x: cx + (w - CW) / 2, y: LEVEL_H, role: 'child'});
+        cx += w + SIBLING_GAP;
+      });
       prevRight = cx - SIBLING_GAP;
     }
 
@@ -720,8 +748,6 @@ function getCenteredLayout(focalId){
     .filter(n => n.y === LEVEL_H && n.id !== focalId)
     .sort((a,b) => a.x - b.x);  // left to right order
 
-  const MAX_GC = 5; // raised from 3 — show more grandchildren
-  let prevRightGC = -Infinity; // track right edge of last grandchild group
   for(const cNode of placedChildren){
     const cId  = cNode.id;
     const cRel = IDX.relatives[cId];
@@ -746,14 +772,10 @@ function getCenteredLayout(focalId){
     const gcW     = gcList.length * CW + (gcList.length - 1) * SIBLING_GAP;
     const childCX = cNode.x + CW / 2;
     let gx = childCX - gcW / 2;
-    // Avoid overlap with previously placed grandchildren
-    if(gx < prevRightGC + SIBLING_GAP) gx = prevRightGC + SIBLING_GAP;
-
     for(const gcId of gcList){
       add({id: gcId, x: gx, y: 2 * LEVEL_H, role: 'grandchild'});
       gx += CW + SIBLING_GAP;
     }
-    prevRightGC = gx - SIBLING_GAP;
   }
 
   return { nodes, focalId, coupleAnchorX };
