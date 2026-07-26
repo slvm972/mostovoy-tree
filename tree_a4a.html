@@ -3189,7 +3189,7 @@ document.getElementById('btn-login').addEventListener('click', e => {
     )){
       _sessionPassword = '';
       window._userRole = null;
-      sessionStorage.removeItem('tree_pwd');
+      localStorage.removeItem('tree_pwd');
       document.getElementById('btn-login').textContent = '🔑';
       showToast(currentLang==='he' ? 'יצאת' : currentLang==='en' ? 'Logged out' : 'Вы вышли', false);
     }
@@ -3375,7 +3375,7 @@ function showLoginForm(errorMsg) {
         // Step 3: set session state — role, password, button icon
         _sessionPassword  = pwd;
         window._userRole  = loginData.role;
-        sessionStorage.setItem('tree_pwd', pwd);
+        localStorage.setItem('tree_pwd', pwd);
         sessionStorage.setItem('tree_role', loginData.role);
         const loginBtn = document.getElementById('btn-login');
         if(loginBtn) loginBtn.textContent = loginData.role === 'admin' ? '🔓' : '👤';
@@ -3584,7 +3584,7 @@ function initTree(data, pwd) {
 // Главная функция загрузки
 async function loadTree() {
   // Проверим сохранённый пароль в sessionStorage
-  const savedPwd = sessionStorage.getItem('tree_pwd');
+  const savedPwd = localStorage.getItem('tree_pwd');
   if (savedPwd) {
     showLoader('Загрузка дерева…');
     try {
@@ -3597,7 +3597,7 @@ async function loadTree() {
         return;
       }
       // Пароль устарел — очищаем
-      sessionStorage.removeItem('tree_pwd');
+      localStorage.removeItem('tree_pwd');
     } catch(e) {
       console.warn('API недоступен, используем встроенные данные', e);
       hideLoader();
