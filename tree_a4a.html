@@ -696,20 +696,13 @@ function getCenteredLayout(focalId){
     let prevRight = -Infinity;
 
     for(const group of familyGroups){
-      // ширина слота под каждого ребёнка теперь учитывает его собственный
-      // footprint (место под будущих внуков), а не фиксированную CW —
-      // это резервирует место заранее и убирает необходимость толкать
-      // соседей после факта
-      const widths = group.kids.map(cId => Math.max(CW, childFootprint[cId] || CW));
-      const totalW = widths.reduce((s,w) => s+w, 0) + (group.kids.length - 1) * SIBLING_GAP;
+      const totalW = group.kids.length * CW + (group.kids.length - 1) * SIBLING_GAP;
       let cx = group.anchorX - totalW / 2;
       if(cx < prevRight + GROUP_GAP) cx = prevRight + GROUP_GAP;
-      group.kids.forEach((cId, i) => {
-        const w = widths[i];
-        // сама карточка ребёнка остаётся по центру выделенного ему слота
-        add({id: cId, x: cx + (w - CW) / 2, y: LEVEL_H, role: 'child'});
-        cx += w + SIBLING_GAP;
-      });
+      for(const cId of group.kids){
+        add({id: cId, x: cx, y: LEVEL_H, role: 'child'});
+        cx += CW + SIBLING_GAP;
+      }
       prevRight = cx - SIBLING_GAP;
     }
 
@@ -748,6 +741,7 @@ function getCenteredLayout(focalId){
     .filter(n => n.y === LEVEL_H && n.id !== focalId)
     .sort((a,b) => a.x - b.x);  // left to right order
 
+  let prevRightGC = -Infinity; // track right edge of last grandchild group
   for(const cNode of placedChildren){
     const cId  = cNode.id;
     const cRel = IDX.relatives[cId];
@@ -772,10 +766,14 @@ function getCenteredLayout(focalId){
     const gcW     = gcList.length * CW + (gcList.length - 1) * SIBLING_GAP;
     const childCX = cNode.x + CW / 2;
     let gx = childCX - gcW / 2;
+    // Avoid overlap with previously placed grandchildren
+    if(gx < prevRightGC + SIBLING_GAP) gx = prevRightGC + SIBLING_GAP;
+
     for(const gcId of gcList){
       add({id: gcId, x: gx, y: 2 * LEVEL_H, role: 'grandchild'});
       gx += CW + SIBLING_GAP;
     }
+    prevRightGC = gx - SIBLING_GAP;
   }
 
   return { nodes, focalId, coupleAnchorX };
@@ -3189,7 +3187,7 @@ document.getElementById('btn-login').addEventListener('click', e => {
     )){
       _sessionPassword = '';
       window._userRole = null;
-      localStorage.removeItem('tree_pwd');
+      sessionStorage.removeItem('tree_pwd');
       document.getElementById('btn-login').textContent = '🔑';
       showToast(currentLang==='he' ? 'יצאת' : currentLang==='en' ? 'Logged out' : 'Вы вышли', false);
     }
@@ -3375,7 +3373,7 @@ function showLoginForm(errorMsg) {
         // Step 3: set session state — role, password, button icon
         _sessionPassword  = pwd;
         window._userRole  = loginData.role;
-        localStorage.setItem('tree_pwd', pwd);
+        sessionStorage.setItem('tree_pwd', pwd);
         sessionStorage.setItem('tree_role', loginData.role);
         const loginBtn = document.getElementById('btn-login');
         if(loginBtn) loginBtn.textContent = loginData.role === 'admin' ? '🔓' : '👤';
@@ -3584,7 +3582,7 @@ function initTree(data, pwd) {
 // Главная функция загрузки
 async function loadTree() {
   // Проверим сохранённый пароль в sessionStorage
-  const savedPwd = localStorage.getItem('tree_pwd');
+  const savedPwd = sessionStorage.getItem('tree_pwd');
   if (savedPwd) {
     showLoader('Загрузка дерева…');
     try {
@@ -3597,7 +3595,7 @@ async function loadTree() {
         return;
       }
       // Пароль устарел — очищаем
-      localStorage.removeItem('tree_pwd');
+      sessionStorage.removeItem('tree_pwd');
     } catch(e) {
       console.warn('API недоступен, используем встроенные данные', e);
       hideLoader();
