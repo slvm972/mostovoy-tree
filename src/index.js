@@ -57,6 +57,30 @@ export default {
       return err('Неверный пароль', 401);
     }
 
+    // ── GET /api/tree/public ─────────────────────────
+    // No auth required — public read-only view of the live tree with
+    // sensitive contact fields (phone/email/social) stripped server-side.
+    // This lets anonymous visitors (who never logged in) see current
+    // data instead of the frozen FALLBACK_DATA snapshot baked into the
+    // deployed HTML file at last build time.
+    if(path === '/api/tree/public' && method === 'GET') {
+      const data = await env.TREE_KV.get('tree_data');
+      if(!data) return err('Данные дерева не найдены. Загрузите начальный файл.', 404);
+
+      const IDX = JSON.parse(data);
+      const sanitizedNodes = {};
+      for(const [id, n] of Object.entries(IDX.nodes || {})){
+        const { phone, email, social, ...safe } = n;
+        sanitizedNodes[id] = safe;
+      }
+
+      const sanitized = { ...IDX, nodes: sanitizedNodes };
+
+      return new Response(JSON.stringify(sanitized), {
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ── GET /api/tree ────────────────────────────────
     // Returns current IDX JSON (the family tree data)
     if(path === '/api/tree' && method === 'GET') {

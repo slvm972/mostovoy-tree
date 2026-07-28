@@ -696,13 +696,20 @@ function getCenteredLayout(focalId){
     let prevRight = -Infinity;
 
     for(const group of familyGroups){
-      const totalW = group.kids.length * CW + (group.kids.length - 1) * SIBLING_GAP;
+      // ширина слота под каждого ребёнка теперь учитывает его собственный
+      // footprint (место под будущих внуков), а не фиксированную CW —
+      // это резервирует место заранее и убирает необходимость толкать
+      // соседей после факта
+      const widths = group.kids.map(cId => Math.max(CW, childFootprint[cId] || CW));
+      const totalW = widths.reduce((s,w) => s+w, 0) + (group.kids.length - 1) * SIBLING_GAP;
       let cx = group.anchorX - totalW / 2;
       if(cx < prevRight + GROUP_GAP) cx = prevRight + GROUP_GAP;
-      for(const cId of group.kids){
-        add({id: cId, x: cx, y: LEVEL_H, role: 'child'});
-        cx += CW + SIBLING_GAP;
-      }
+      group.kids.forEach((cId, i) => {
+        const w = widths[i];
+        // сама карточка ребёнка остаётся по центру выделенного ему слота
+        add({id: cId, x: cx + (w - CW) / 2, y: LEVEL_H, role: 'child'});
+        cx += w + SIBLING_GAP;
+      });
       prevRight = cx - SIBLING_GAP;
     }
 
@@ -741,7 +748,6 @@ function getCenteredLayout(focalId){
     .filter(n => n.y === LEVEL_H && n.id !== focalId)
     .sort((a,b) => a.x - b.x);  // left to right order
 
-  let prevRightGC = -Infinity; // track right edge of last grandchild group
   for(const cNode of placedChildren){
     const cId  = cNode.id;
     const cRel = IDX.relatives[cId];
@@ -766,14 +772,11 @@ function getCenteredLayout(focalId){
     const gcW     = gcList.length * CW + (gcList.length - 1) * SIBLING_GAP;
     const childCX = cNode.x + CW / 2;
     let gx = childCX - gcW / 2;
-    // Avoid overlap with previously placed grandchildren
-    if(gx < prevRightGC + SIBLING_GAP) gx = prevRightGC + SIBLING_GAP;
 
     for(const gcId of gcList){
       add({id: gcId, x: gx, y: 2 * LEVEL_H, role: 'grandchild'});
       gx += CW + SIBLING_GAP;
     }
-    prevRightGC = gx - SIBLING_GAP;
   }
 
   return { nodes, focalId, coupleAnchorX };
@@ -1040,6 +1043,7 @@ function render(focalId){
 const history  = [];   // stack of visited focalIds
 const MAX_HIST = 20;
 let   currentFocal = null;
+let   _navGen = 0;     // generation token — guards against overlapping deferred renders
 
 // ── navigateTo: animated fade + viewport pan ──────────────
 function navigateTo(focalId){
@@ -1058,7 +1062,14 @@ function navigateTo(focalId){
   // Phase 1: fade out current tree
   svg.classList.add('fading');
 
+  const myGen = ++_navGen;
+
   setTimeout(() => {
+    // A newer navigateTo() call has started since this one was scheduled —
+    // skip rendering/panning for this stale call so it doesn't overwrite
+    // the panel/tree with data for a focal person the user already left.
+    if(myGen !== _navGen) return;
+
     // Phase 2: render new layout (while invisible) — get pan target back
     const pan = render(focalId);
 
@@ -1069,6 +1080,7 @@ function navigateTo(focalId){
       world.style.transition = 'none';
       world.style.transform  = world.style.transform; // keep current (forces repaint)
       requestAnimationFrame(() => {
+        if(myGen !== _navGen) return; // superseded again during the rAF wait
         world.style.transition = 'transform 0.5s cubic-bezier(0.4,0,0.2,1)';
         world.style.transform  = `translate(${pan.tx}px,${pan.ty}px) scale(${pan.sc})`;
         setTimeout(() => { world.style.transition = 'none'; }, 520);
@@ -1759,9 +1771,21 @@ async function enrichNamesOnline(lang) {
     const cached = sessionStorage.getItem(cacheKey);
     if(cached) {
       const extra = JSON.parse(cached);
-      Object.assign(NAMES, extra);  // merge into static dict
-      if(currentFocal){ const tmp=currentFocal; currentFocal=null; navigateTo(tmp); showPanel(tmp); }
-      return;
+      if(extra && typeof extra === 'object' && !Array.isArray(extra)) {
+        const validCached = {};
+        for(const [id, name] of Object.entries(extra)) {
+          if(IDX.nodes[id] && typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 100) {
+            validCached[id] = name.trim();
+          }
+        }
+        if(Object.keys(validCached).length > 0) {
+          Object.assign(NAMES, validCached);  // merge into static dict
+          if(currentFocal){ const tmp=currentFocal; currentFocal=null; navigateTo(tmp); showPanel(tmp); }
+          return;
+        }
+      }
+      // Cached data failed validation — discard it and fall through to a fresh API call
+      sessionStorage.removeItem(cacheKey);
     }
   } catch(e) {}
 
@@ -1793,18 +1817,59 @@ async function enrichNamesOnline(lang) {
     const data = await resp.json();
     const text = (data.content||[]).map(b=>b.text||'').join('');
     const clean = text.replace(/```json|```/g,'').trim();
-    const result = JSON.parse(clean);
-    // Merge into NAMES
+
+    let result;
+    try {
+      result = JSON.parse(clean);
+    } catch(parseErr) {
+      throw new Error('Ответ API не является валидным JSON');
+    }
+
+    if(!result || typeof result !== 'object' || Array.isArray(result)) {
+      throw new Error('Ответ API имеет неожиданный формат (не объект)');
+    }
+
+    // Validate each entry before merging: only accept IDs we actually
+    // requested, with non-empty string values of plausible length.
+    // This guards against hallucinated IDs, wrong keys, or malformed
+    // values silently corrupting the NAMES dictionary.
+    const requestedIds = new Set(batch);
+    const validated = {};
+    let rejectedCount = 0;
+
     for(const [id, name] of Object.entries(result)) {
+      const isKnownId    = requestedIds.has(id);
+      const isValidValue = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 100;
+      if(isKnownId && isValidValue) {
+        validated[id] = name.trim();
+      } else {
+        rejectedCount++;
+      }
+    }
+
+    if(Object.keys(validated).length === 0) {
+      throw new Error('Ни одна запись в ответе API не прошла валидацию');
+    }
+
+    if(rejectedCount > 0) {
+      console.log(`enrichNamesOnline: отклонено ${rejectedCount} невалидных записей из ответа API`);
+    }
+
+    // Merge only validated entries into NAMES
+    for(const [id, name] of Object.entries(validated)) {
       if(!NAMES[id]) NAMES[id] = {};
       NAMES[id][lang] = name;
     }
-    // Cache in sessionStorage
-    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+    // Cache only the validated subset in sessionStorage
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(validated)); } catch(e) {}
     // Re-render
     if(currentFocal){ const tmp=currentFocal; currentFocal=null; navigateTo(tmp); showPanel(tmp); }
   } catch(e) {
     console.log('Online name enrichment failed (offline?):', e.message);
+    const msg = lang==='he' ? '⚠ תרגום השמות נכשל — מוצגים שמות ברוסית'
+              : lang==='en' ? '⚠ Name translation failed — showing Russian names instead'
+              : '⚠ Перевод имён не удался — показаны русские имена';
+    if(typeof showToast === 'function') showToast(msg, true);
   }
 }
 
@@ -2182,10 +2247,36 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const person  = document.getElementById('f-fix-person').value.trim();
     if(!person){ alert(t('alert_person')); return; }
 
-    // Find the person ID from the label, if present, to compare against original data
     const idMatch = person.match(/\[(P\d+)\]\s*$/);
     const origId  = idMatch ? idMatch[1] : null;
-    const orig    = origId && IDX.nodes[origId] ? IDX.nodes[origId] : {};
+
+    const isAdminFix = !!(_sessionPassword && window._userRole === 'admin' && origId && WORKER_URL);
+    let orig = origId && IDX.nodes[origId] ? IDX.nodes[origId] : {};
+
+    if(isAdminFix){
+      const btnPre = document.getElementById('modal-generate');
+      const origTextPre = btnPre.textContent;
+      btnPre.textContent = '⏳ ' + (currentLang==='he' ? 'בודק נתונים...' : currentLang==='en' ? 'Refreshing data...' : 'Проверяю актуальные данные...');
+      btnPre.disabled = true;
+      try {
+        const freshRes = await fetch(WORKER_URL + '/api/tree', {
+          headers: { 'X-Password': _sessionPassword }
+        });
+        if(freshRes.ok){
+          const freshData = await freshRes.json();
+          if(freshData && freshData.nodes){
+            IDX = freshData;
+            if(window.FALLBACK_DATA) window.FALLBACK_DATA = freshData;
+            if(IDX.nodes[origId]) orig = IDX.nodes[origId];
+          }
+        }
+      } catch(e) {
+        showToast('⚠ Не удалось получить актуальные данные, используются локальные: ' + e.message, true);
+      } finally {
+        btnPre.textContent = origTextPre;
+        btnPre.disabled = false;
+      }
+    }
 
     const getV = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
 
@@ -2217,12 +2308,17 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       return;
     }
 
-    // ── ADMIN PATH: direct PATCH to API ──────────────────
-    // If admin logged in AND specific person ID known AND
-    // no structural changes (family/other) → save directly, skip email
-    if(_sessionPassword && window._userRole === 'admin' && origId && !familyNote && !otherNote && WORKER_URL){
+    if(isAdminFix && !familyNote && !otherNote){
       const patch = {};
       for(const f of changed) patch[f.key] = f.val;
+
+      if(Object.keys(patch).length === 0){
+        showToast(currentLang==='he' ? '✓ אין שינויים לשמירה — הנתונים כבר עודכנו'
+                : currentLang==='en' ? '✓ Nothing to save — data was already up to date'
+                : '✓ Нечего сохранять — данные уже актуальны', false);
+        document.getElementById('modal-overlay').classList.remove('open');
+        return;
+      }
 
       const btn = document.getElementById('modal-generate');
       const origText = btn.textContent;
@@ -3107,14 +3203,22 @@ async function submitProposal(promptText, type) {
         author: window._userName || 'anonymous',
       })
     });
-    const data = await r.json();
-    if(data.ok) {
+    const data = await r.json().catch(() => null);
+    if(data && data.ok) {
       const info = document.getElementById('info');
       if(info) { info.textContent = '✓ Предложение отправлено администратору'; }
+    } else {
+      const msg = currentLang==='he' ? '⚠ הבקשה לא נשלחה לשרת — השתמש בהעתקה או במייל כדי לא לאבד את הבקשה'
+                : currentLang==='en' ? '⚠ Request was not saved to server — please use Copy or Email so it is not lost'
+                : '⚠ Запрос не сохранился на сервере — используйте «Копировать» или «Email», чтобы не потерять его';
+      if(typeof showToast === 'function') showToast(msg, true);
     }
   } catch(e) {
-    // Offline or server error — silent fail, user still has email/copy
     console.log('Worker submit failed (offline?):', e.message);
+    const msg = currentLang==='he' ? '⚠ הבקשה לא נשלחה לשרת (בעיית רשת) — השתמש בהעתקה או במייל'
+              : currentLang==='en' ? '⚠ Request failed to reach the server (network issue) — please use Copy or Email'
+              : '⚠ Запрос не дошёл до сервера (проблема сети) — используйте «Копировать» или «Email»';
+    if(typeof showToast === 'function') showToast(msg, true);
   }
 }
 
@@ -3604,8 +3708,21 @@ async function loadTree() {
     }
     hideLoader();
   }
-  // Нет сохранённого пароля — используем FALLBACK_DATA для публичного просмотра
-  // (форма входа показывается только при попытке редактировать)
+
+  // Нет сохранённого пароля (гость ещё не логинился) — пробуем получить
+  // актуальные данные с публичного санитизированного эндпоинта, чтобы
+  // не показывать замороженный на момент сборки FALLBACK_DATA.
+  showLoader('Загрузка дерева…');
+  try {
+    const res = await fetch(WORKER_URL + '/api/tree/public');
+    if (res.ok) {
+      const data = await res.json();
+      initTree(data, '');
+      return;
+    }
+  } catch(e) {
+    console.warn('Публичный API недоступен, используем встроенные данные', e);
+  }
   hideLoader();
   initTree(FALLBACK_DATA, '');
 }
