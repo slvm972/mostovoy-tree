@@ -530,7 +530,12 @@ function getCenteredLayout(focalId){
   const rel  = IDX.relatives[focalId];
   const gps  = IDX.grandparents[focalId] || [];
   const fams = IDX.families;
-  if(!rel) return {nodes:[], focalId, coupleAnchorX: 0};
+  if(!rel) {
+    console.warn('[getCenteredLayout] IDX.relatives[' + focalId + '] отсутствует — '
+      + 'дерево для этого узла построить нельзя. Обычно это значит, что кэш '
+      + 'relatives не был пересоздан при ручной правке JSON соседних персон.');
+    return {nodes:[], focalId, coupleAnchorX: 0, _missingRel: true};
+  }
 
   const placed = new Set();  // avoid placing same person twice
   const nodes  = [];
@@ -877,7 +882,19 @@ function render(focalId){
 
   // size the SVG around ALL nodes (including negative y)
   if(!layout.nodes.length){
-    document.getElementById('info').textContent = t('no_data')||'—';
+    if(layout._missingRel){
+      console.warn('[render] Пустой canvas для focalId=' + focalId
+        + ': отсутствует IDX.relatives[' + focalId + ']. Нужно починить данные '
+        + '(см. предупреждение выше от getCenteredLayout).');
+      const msg = currentLang==='he'
+        ? '⚠ נתונים פגומים עבור ' + focalId + ' — לא ניתן לבנות עץ. פנה למנהל.'
+        : currentLang==='en'
+        ? '⚠ Corrupted data for ' + focalId + ' — tree cannot be built. Contact the admin.'
+        : '⚠ Повреждены данные для ' + focalId + ' — дерево не может быть построено. Сообщите администратору.';
+      document.getElementById('info').textContent = msg;
+    } else {
+      document.getElementById('info').textContent = t('no_data')||'—';
+    }
     return;
   }
   const xs   = layout.nodes.map(n => n.x);
