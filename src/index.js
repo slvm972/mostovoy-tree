@@ -103,11 +103,15 @@ export default {
       const body = await request.text();
       try { JSON.parse(body); } catch(e) { return err('Невалидный JSON'); }
 
-      await env.TREE_KV.put('tree_data', body);
+      // Back up the PREVIOUS tree_data before overwriting — backups exist
+      // to allow rollback, so they must capture what was there before this
+      // upload, not a duplicate of what's being uploaded now.
+      const oldData = await env.TREE_KV.get('tree_data');
+      if(oldData) {
+        await env.TREE_KV.put('backup_' + Date.now(), oldData);
+      }
 
-      // Save timestamped backup (keep last 10)
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, body);
+      await env.TREE_KV.put('tree_data', body);
 
       // Trim old backups (keep last 10)
       const list = await env.TREE_KV.list({ prefix: 'backup_' });
