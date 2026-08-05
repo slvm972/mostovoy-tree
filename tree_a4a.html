@@ -1255,6 +1255,7 @@ function showPanel(id){
 
   const parents=[], spouses=[], children=[], marriages=[];
   const childFamOf = {}; // childId -> famId (which of this person's families it came from)
+  const orphanChildren = {}; // famId -> [orphanIds...] (children refs without corresponding nodes)
   for(const [famId, f] of Object.entries(IDX.families)){
     if((f.children||[]).includes(id)){
       if(f.husband && IDX.nodes[f.husband]) parents.push(f.husband);
@@ -1263,9 +1264,13 @@ function showPanel(id){
     if(f.husband===id || f.wife===id){
       const sp = f.husband===id ? f.wife : f.husband;
       if(sp && IDX.nodes[sp] && !spouses.includes(sp)) spouses.push(sp);
+      // D1: collect both real children (those with nodes) and orphan refs
       (f.children||[]).forEach(c=>{
-        if(IDX.nodes[c]&&!children.includes(c)) children.push(c);
-        childFamOf[c] = famId;
+        if(IDX.nodes[c]&&!children.includes(c)) { children.push(c); childFamOf[c] = famId; }
+        else if(!IDX.nodes[c]) {
+          if(!orphanChildren[famId]) orphanChildren[famId] = [];
+          orphanChildren[famId].push(c);
+        }
       });
       marriages.push({ famId, spouseId: (sp && IDX.nodes[sp]) ? sp : null, childCount: (f.children||[]).length });
     }
@@ -1328,6 +1333,31 @@ function showPanel(id){
   if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
   if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
+
+  // D1: битые ссылки — family.children указывает на id, которого больше
+  // нет в IDX.nodes (узел удалён/переименован без очистки ссылки). Раньше
+  // такое было видно только серой карточкой в дереве и никак не убиралось
+  // из UI — showPanel(orphanId) сразу выходит по !n, а pLinkChild тихо
+  // пропускает узел без ноды. confirmRemoveChild устойчив к отсутствующей
+  // ноде (работает только с families/child_of/relatives), поэтому его
+  // достаточно просто сделать достижимым для таких id.
+  if(isAdminForFamilies){
+    const orphanRows = [];
+    for(const [famId, ids] of Object.entries(orphanChildren)){
+      for(const oid of ids) orphanRows.push({ famId, oid });
+    }
+    if(orphanRows.length){
+      col2 += `<div class="p-sec"><h3 style="color:#A02020">⚠ ${currentLang==='he'?'קישורים שבורים':currentLang==='en'?'Broken child links':'Битые ссылки на детей'}</h3>`;
+      for(const r of orphanRows){
+        col2 += `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;font-size:.72rem;color:#A02020">
+          <span style="flex:1">${r.oid} (${currentLang==='he'?'האדם לא נמצא':currentLang==='en'?'person not found':'персона не найдена в базе'})</span>
+          <button onclick="confirmRemoveChild('${r.famId}','${r.oid}')" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);
+            border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020">🗑</button>
+        </div>`;
+      }
+      col2 += `</div>`;
+    }
+  }
 
   // A2.2: admin-only marriage management — DELETE /api/family had no UI
   // trigger before this; an erroneously created marriage could only be
