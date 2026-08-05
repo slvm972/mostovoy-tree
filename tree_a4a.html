@@ -1136,6 +1136,22 @@ function navigateTo(focalId){
   }, 220);
 }
 
+// Force a full SVG redraw of the current layout (cards + edges), even
+// though navigateTo() no-ops when focalId === currentFocal. This matters
+// because most admin edits (Fix form, photo/bio clear, delete family,
+// unlink child) target either the currently-focused person or a visible
+// card in the current layout (parent/child/sibling/spouse) — without
+// this, the canvas silently keeps showing the pre-edit name/data until
+// the user navigates away and back, even though the panel below (which
+// has no such guard) already shows the update. Same trick already
+// established in applyLang() for the language-switch case.
+function refreshCanvas(){
+  if(!currentFocal) return;
+  const tmp = currentFocal;
+  currentFocal = null;
+  navigateTo(tmp);
+}
+
 // ── back: pop history and navigate ───────────────────────
 function goBack(){
   if(!history.length) return;
@@ -1576,7 +1592,7 @@ document.addEventListener('keydown', e => {
   // Double-click → reset to current focal (re-center)
   vp.addEventListener('dblclick', e => {
     if(e.target.closest('g[data-nodeid], .p-lnk, button')) return;
-    if(currentFocal) navigateTo(currentFocal);
+    if(currentFocal) refreshCanvas();
   });
 
   // Cursor hint
@@ -1964,7 +1980,7 @@ document.querySelectorAll('.lbtn').forEach(btn => {
     document.querySelectorAll('.lbtn').forEach(b => b.classList.toggle('active', b.dataset.lang === currentLang));
     document.body.classList.toggle('rtl', currentLang === 'he');
     if(window.applyLang) window.applyLang(currentLang);
-    else navigateTo(currentFocal);
+    else refreshCanvas();
     if(currentLang !== 'ru') enrichNamesOnline(currentLang);
   });
 });
@@ -2374,7 +2390,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
           if(IDX && IDX.nodes[photoTargetId]) applyLocalPatch(IDX.nodes[photoTargetId], patchBody);
           if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[photoTargetId]) applyLocalPatch(window.FALLBACK_DATA.nodes[photoTargetId], patchBody);
           document.getElementById('modal-overlay').classList.remove('open');
-          if(typeof navigateTo === 'function') navigateTo(currentFocal);
+          if(typeof refreshCanvas === 'function') refreshCanvas();
           if(typeof showPanel === 'function') showPanel(photoTargetId);
           showToast(url ? '✓ Фото сохранено' : '✓ Фото удалено', false);
         } else {
@@ -2428,7 +2444,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
           if(IDX && IDX.nodes[bioTargetId]) applyLocalPatch(IDX.nodes[bioTargetId], patchBody);
           if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[bioTargetId]) applyLocalPatch(window.FALLBACK_DATA.nodes[bioTargetId], patchBody);
           document.getElementById('modal-overlay').classList.remove('open');
-          if(typeof navigateTo === 'function') navigateTo(currentFocal);
+          if(typeof refreshCanvas === 'function') refreshCanvas();
           if(typeof showPanel === 'function') showPanel(bioTargetId);
           showToast(bioValue ? '✓ Биография сохранена' : '✓ Биография удалена', false);
         } else {
@@ -2566,7 +2582,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
             applyLocalPatch(window.FALLBACK_DATA.nodes[origId], patch);
           // Close modal and refresh display
           document.getElementById('modal-overlay').classList.remove('open');
-          if(typeof navigateTo === 'function') navigateTo(currentFocal);
+          if(typeof refreshCanvas === 'function') refreshCanvas();
           if(typeof showPanel === 'function') showPanel(origId);
           showToast(currentLang==='he' ? '✓ נשמר בשרת'
                   : currentLang==='en' ? '✓ Saved to server'
@@ -3854,7 +3870,7 @@ async function confirmDeleteFamily(famId){
           IDX.relatives[p2].spouses = (IDX.relatives[p2].spouses || []).filter(s => s !== p1);
         }
       }
-      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof refreshCanvas === 'function') refreshCanvas();
       if(typeof showPanel === 'function') showPanel(currentFocal);
       showToast(
         currentLang==='he' ? '✓ הקשר נמחק'
@@ -3924,7 +3940,7 @@ async function quickClearField(inputId, apiKey, labelKey){
           card0.textContent = card0.textContent.split('\n').filter(line => !line.startsWith(fieldLabel + ':')).join('\n');
         }
       }
-      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof refreshCanvas === 'function') refreshCanvas();
       if(typeof showPanel === 'function') showPanel(origId);
       showToast(currentLang==='he' ? '✓ נמחק' : currentLang==='en' ? '✓ Cleared' : '✓ Очищено', false);
     } else {
@@ -3972,7 +3988,7 @@ async function confirmRemoveChild(famId, childId){
       for(const pid of parents){
         if(IDX.relatives[pid]) IDX.relatives[pid].children = (IDX.relatives[pid].children || []).filter(c => c !== childId);
       }
-      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof refreshCanvas === 'function') refreshCanvas();
       if(typeof showPanel === 'function') showPanel(currentFocal);
       showToast(
         currentLang==='he' ? '✓ הוסר מהמשפחה'
