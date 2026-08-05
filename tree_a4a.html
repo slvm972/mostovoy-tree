@@ -283,6 +283,8 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <div class="mfields active" id="mf-person">
     <label data-i="lbl_name">Имя (полное)</label>
     <input id="f-name" type="text" data-ph="ph_name" placeholder="Например: Анна Иванова">
+    <label data-i="lbl_genitive">Имя в родительном падеже (необязательно)</label>
+    <input id="f-name-genitive" type="text" data-ph="ph_genitive" placeholder="Например: Анны Ивановой">
     <label data-i="lbl_sex">Пол</label>
     <select id="f-sex"><option value="" data-i="sex_choose">— выбрать —</option><option value="F" data-i="sex_f">Женский</option><option value="M" data-i="sex_m">Мужской</option></select>
     <label data-i="lbl_birth">Дата рождения</label>
@@ -348,6 +350,9 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 
     <label data-i="fix_name">Имя</label>
     <input id="ff-name" type="text" data-ph="ph_name" placeholder="Например: Анна Иванова">
+
+    <label data-i="fix_genitive">Имя в родительном падеже (для фраз родства)</label>
+    <input id="ff-genitive" type="text" data-ph="ph_genitive" placeholder="Например: Анны Ивановой">
 
     <label data-i="fix_birth">Дата рождения</label>
     <input id="ff-birth" type="text" data-ph="ph_birth" placeholder="Например: 15 марта 1975">
@@ -1158,6 +1163,66 @@ function pLink(id){
   </div>`;
 }
 
+// A2.3: like pLink, but for the "Дети" list specifically — adds an
+// admin-only ✕ to unlink this child from THIS family (PATCH removeChild),
+// for cases where a child was linked to the wrong parent/family by mistake.
+function pLinkChild(id, famId, isAdmin){
+  const n = IDX.nodes[id]; if(!n) return '';
+  const yr = pyear(n.birth);
+  const removeBtn = (isAdmin && famId)
+    ? `<button onclick="event.stopPropagation(); confirmRemoveChild('${famId}','${id}')"
+         title="${currentLang==='he'?'הסר מהמשפחה הזו':currentLang==='en'?'Unlink from this family':'Отвязать от этой семьи'}"
+         style="font-size:.62rem;padding:0 5px;background:none;border:none;cursor:pointer;color:#A02020;opacity:.55">✕</button>`
+    : '';
+  return `<div class="p-lnk" style="display:flex;align-items:center;gap:2px" onclick="panelNavigate('${id}')">
+    <span style="flex:1">${pname(id)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}</span>${removeBtn}
+  </div>`;
+}
+
+// B1: auto-generated structural relationship line — "Сын — Яков Мостовой"
+// / "Отец — X, Y" / "Брат — X, Y" — derived purely from IDX.relatives
+// (parents/children/siblings), no manual curation needed. Deliberately
+// phrased with a dash instead of a genitive construction ("Сын Якова и
+// Сицилии") to sidestep Russian noun declension, which can't be done
+// reliably without a hand-built per-person case dictionary — that's a
+// separate, optional follow-up (plan item B2), not implemented here.
+function computeRelLabel(id){
+  const rel = IDX.relatives[id];
+  const n = IDX.nodes[id];
+  if(!rel || !n) return [];
+  const isMale = n.sex === 'M';
+  // RU uses genitive() for proper grammar ("Сын Якова Мостового"); EN/HE
+  // use pname() as-is — "of"/"של" don't need a case change.
+  const names = ids => ids.map(pid => currentLang==='ru' ? genitive(pid) : pname(pid)).join(', ');
+  const lines = [];
+
+  if(rel.parents && rel.parents.length){
+    const role = currentLang==='he' ? (isMale ? 'בן' : 'בת')
+               : currentLang==='en' ? (isMale ? 'Son' : 'Daughter')
+               : (isMale ? 'Сын' : 'Дочь');
+    lines.push(currentLang==='he' ? `${role} של ${names(rel.parents)}`
+             : currentLang==='en' ? `${role} of ${names(rel.parents)}`
+             : `${role} ${names(rel.parents)}`);
+  }
+  if(rel.children && rel.children.length){
+    const role = currentLang==='he' ? (isMale ? 'אב' : 'אם')
+               : currentLang==='en' ? (isMale ? 'Father' : 'Mother')
+               : (isMale ? 'Отец' : 'Мать');
+    lines.push(currentLang==='he' ? `${role} של ${names(rel.children)}`
+             : currentLang==='en' ? `${role} of ${names(rel.children)}`
+             : `${role} ${names(rel.children)}`);
+  }
+  if(rel.siblings && rel.siblings.length){
+    const role = currentLang==='he' ? (isMale ? 'אח' : 'אחות')
+               : currentLang==='en' ? (isMale ? 'Brother' : 'Sister')
+               : (isMale ? 'Брат' : 'Сестра');
+    lines.push(currentLang==='he' ? `${role} של ${names(rel.siblings)}`
+             : currentLang==='en' ? `${role} of ${names(rel.siblings)}`
+             : `${role} ${names(rel.siblings)}`);
+  }
+  return lines;
+}
+
 // navigate from panel link: update panel + navigate tree
 function panelNavigate(id){
   showPanel(id);
@@ -1167,8 +1232,9 @@ function panelNavigate(id){
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
-  const parents=[], spouses=[], children=[];
-  for(const [,f] of Object.entries(IDX.families)){
+  const parents=[], spouses=[], children=[], marriages=[];
+  const childFamOf = {}; // childId -> famId (which of this person's families it came from)
+  for(const [famId, f] of Object.entries(IDX.families)){
     if((f.children||[]).includes(id)){
       if(f.husband && IDX.nodes[f.husband]) parents.push(f.husband);
       if(f.wife    && IDX.nodes[f.wife])    parents.push(f.wife);
@@ -1178,7 +1244,9 @@ function showPanel(id){
       if(sp && IDX.nodes[sp] && !spouses.includes(sp)) spouses.push(sp);
       (f.children||[]).forEach(c=>{
         if(IDX.nodes[c]&&!children.includes(c)) children.push(c);
+        childFamOf[c] = famId;
       });
+      marriages.push({ famId, spouseId: (sp && IDX.nodes[sp]) ? sp : null, childCount: (f.children||[]).length });
     }
   }
 
@@ -1202,6 +1270,12 @@ function showPanel(id){
       white-space:nowrap;flex-shrink:0">🗑 ${currentLang==='he'?'מחק':currentLang==='en'?'Delete':'Удалить'}</button>` : ''}
   </h2>`;
   if(n.rel) col1 += `<span class="p-rel">${trel(n.rel)}</span>`;
+  const relLabelLines = computeRelLabel(id);
+  if(relLabelLines.length){
+    col1 += `<div style="font-size:.68rem;color:#5A3C10;line-height:1.6;margin:2px 0 6px">
+      ${relLabelLines.map(l => `<div>${l}</div>`).join('')}
+    </div>`;
+  }
   col1 += `<div class="p-block">`;
   if(b) col1 += `<div><span class="p-lbl">${t('birth')}</span> <strong>${b}</strong>${n.birth_he?` <span class="p-hw" dir="rtl">${n.birth_he}</span>`:''}</div>`;
   if(d) col1 += `<div style="margin-top:3px"><span class="p-lbl">${t('death')}</span> <strong>${d}</strong>${n.death_he?` <span class="p-hw" dir="rtl">${n.death_he}</span>`:''}</div>`;
@@ -1229,9 +1303,35 @@ function showPanel(id){
 
   // ── Column 2: relatives ──
   let col2 = '';
+  const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
   if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
-  if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(pLink).join('')}</div>`;
+  if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
+
+  // A2.2: admin-only marriage management — DELETE /api/family had no UI
+  // trigger before this; an erroneously created marriage could only be
+  // removed by hand-editing KV. Only offer 🗑 when childCount===0, same
+  // guard the server itself enforces (409 otherwise).
+  if(marriages.length && isAdminForFamilies){
+    col2 += `<div class="p-sec"><h3>${currentLang==='he'?'נישואין (ניהול)':currentLang==='en'?'Marriages (admin)':'Браки (управление)'}</h3>`;
+    for(const m of marriages){
+      const spouseName = m.spouseId
+        ? pname(m.spouseId)
+        : (currentLang==='he'?'ללא בן/בת זוג':currentLang==='en'?'no spouse':'без пары');
+      const childNote = m.childCount > 0
+        ? ` <span style="color:#A88040;font-size:.62rem">(${currentLang==='he'?'ילדים':currentLang==='en'?'children':'детей'}: ${m.childCount})</span>`
+        : '';
+      const delBtn = m.childCount === 0
+        ? `<button onclick="confirmDeleteFamily('${m.famId}')" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);
+             border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020">🗑</button>`
+        : `<span title="${currentLang==='he'?'קודם יש להעביר את הילדים':currentLang==='en'?'Reassign children first':'Сначала перепривяжите детей'}"
+             style="font-size:.62rem;opacity:.35;cursor:not-allowed">🗑</span>`;
+      col2 += `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;font-size:.74rem;color:#28180A">
+        <span style="flex:1">${spouseName}${childNote}</span>${delBtn}
+      </div>`;
+    }
+    col2 += `</div>`;
+  }
 
   document.getElementById('panel-col1').innerHTML = col1;
   document.getElementById('panel-col2').innerHTML = col2;
@@ -1466,6 +1566,7 @@ const UI = {
     mtype_bio:'📝 Биография',        mtype_date:'📅 Дата / место',
     mtype_fix:'🔧 Исправить',
     lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
+    lbl_genitive:'Имя в родительном падеже (необязательно)', ph_genitive:'Например: Анны Ивановой',
     lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
     lbl_birth:'Дата рождения',       ph_birth:'Например: 15 марта 1975',
     lbl_death:'Дата смерти (если есть)', ph_death:'оставьте пустым если жив(а)',
@@ -1485,7 +1586,7 @@ const UI = {
     lbl_fix_field:'Что исправить',
     fix_name:'Имя', fix_birth:'Дата рождения', fix_death:'Дата смерти',
     fix_birth_he:'Дата рождения (евр.)', fix_death_he:'Дата смерти (евр.)',
-    fix_rel:'Степень родства', fix_family:'Семейная связь', fix_other:'Другое',
+    fix_rel:'Степень родства', fix_genitive:'Имя в родительном падеже', fix_family:'Семейная связь', fix_other:'Другое',
     ph_family:'например: добавить мужа / убрать связь / изменить родителя', ph_other:'всё что не вошло в поля выше',
     ph_birth_he:'например: יג ניסן תשל״א', ph_death_he:'например: יב שבט תשפ״א', ph_rel:'например: Зять',
     page_title:'🌳 Семейное дерево',
@@ -1499,7 +1600,7 @@ const UI = {
     help_steps:['Нажмите «✏️ Дополнить» и заполните форму','Скопируйте сформированный запрос','Откройте claude.ai','Загрузите этот HTML-файл','Вставьте скопированный текст и отправьте','Скачайте обновлённый файл'],
     modal_title:'✏️ Дополнить дерево',
     type_person:'👤 Новый человек',type_photo:'📷 Фото',type_bio:'📝 Биография',type_date:'📅 Дата / место',
-    lbl_name:'Имя (полное)',lbl_sex:'Пол',sex_f:'Женский',sex_m:'Мужской',
+    lbl_name:'Имя (полное)',lbl_genitive:'Имя в родительном падеже (необязательно)',lbl_sex:'Пол',sex_f:'Женский',sex_m:'Мужской',
     lbl_birth:'Дата рождения',lbl_death:'Дата смерти (если есть)',
     lbl_rel_person:'Связь с кем',lbl_rel_type:'Тип связи',
     rel_wife:'Жена',rel_husband:'Муж',rel_child:'Ребёнок',rel_parent:'Родитель',rel_brother:'Брат',rel_sister:'Сестра',
@@ -1544,6 +1645,7 @@ const UI = {
     mtype_bio:'📝 Biography',     mtype_date:'📅 Date / place',
     mtype_fix:'🔧 Correct',
     lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
+    lbl_genitive:'Genitive-case name (optional)', ph_genitive:'E.g.: Anny Ivanovoy',
     lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
     lbl_birth:'Date of birth',    ph_birth:'E.g.: 15 March 1975',
     lbl_death:'Date of death (if applicable)', ph_death:'leave empty if alive',
@@ -1563,7 +1665,7 @@ const UI = {
     lbl_fix_field:'Field to correct',
     fix_name:'Name', fix_birth:'Date of birth', fix_death:'Date of death',
     fix_birth_he:'Date of birth (Hebrew)', fix_death_he:'Date of death (Hebrew)',
-    fix_rel:'Relationship', fix_family:'Family link', fix_other:'Other',
+    fix_rel:'Relationship', fix_genitive:'Genitive-case name (RU grammar)', fix_family:'Family link', fix_other:'Other',
     ph_family:'e.g.: add husband / remove link / change parent', ph_other:'anything not covered by the fields above',
     ph_birth_he:'e.g.: יג ניסן תשל״א', ph_death_he:'e.g.: יב שבט תשפ״א', ph_rel:'e.g.: Son-in-law',
     page_title:'🌳 Family Tree',
@@ -1577,7 +1679,7 @@ const UI = {
     help_steps:['Click "✏️ Add info" and fill the form','Copy the generated request','Open claude.ai','Upload this HTML file','Paste the copied text and send','Download the updated file'],
     modal_title:'✏️ Add to tree',
     type_person:'👤 New person',type_photo:'📷 Photo',type_bio:'📝 Biography',type_date:'📅 Date / place',
-    lbl_name:'Full name',lbl_sex:'Sex',sex_f:'Female',sex_m:'Male',
+    lbl_name:'Full name',lbl_genitive:'Genitive-case name (optional)',lbl_sex:'Sex',sex_f:'Female',sex_m:'Male',
     lbl_birth:'Date of birth',lbl_death:'Date of death (if applicable)',
     lbl_rel_person:'Related to',lbl_rel_type:'Relationship type',
     rel_wife:'Wife',rel_husband:'Husband',rel_child:'Child',rel_parent:'Parent',rel_brother:'Brother',rel_sister:'Sister',
@@ -1622,6 +1724,7 @@ const UI = {
     mtype_bio:'📝 ביוגרפיה',   mtype_date:'📅 תאריך / מקום',
     mtype_fix:'🔧 תיקון',
     lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
+    lbl_genitive:'שם ביחסת הקניין (רשות)', ph_genitive:'לדוגמה: Анны Ивановой',
     lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
     lbl_birth:'תאריך לידה',    ph_birth:'לדוגמה: 15 במרץ 1975',
     lbl_death:'תאריך פטירה (אם רלוונטי)', ph_death:'השאר ריק אם בחיים',
@@ -1641,7 +1744,7 @@ const UI = {
     lbl_fix_field:'שדה לתיקון',
     fix_name:'שם', fix_birth:'תאריך לידה', fix_death:'תאריך פטירה',
     fix_birth_he:'תאריך לידה (עברי)', fix_death_he:'תאריך פטירה (עברי)',
-    fix_rel:'קרבה', fix_family:'קשר משפחתי', fix_other:'אחר',
+    fix_rel:'קרבה', fix_genitive:'שם ביחסת הקניין (לתחביר רוסי)', fix_family:'קשר משפחתי', fix_other:'אחר',
     ph_family:'לדוגמה: הוספת בעל / הסרת קשר / שינוי הורה', ph_other:'כל מה שלא נכלל בשדות למעלה',
     ph_birth_he:'לדוגמה: יג ניסן תשל״א', ph_death_he:'לדוגמה: יב שבט תשפ״א', ph_rel:'לדוגמה: חתן',
     page_title:'🌳 עץ משפחה',
@@ -1655,7 +1758,7 @@ const UI = {
     help_steps:['לחץ "✏️ הוספה" ומלא את הטופס','העתק את הבקשה שנוצרה','פתח את claude.ai','העלה את קובץ ה-HTML','הדבק את הטקסט ושלח','הורד את הקובץ המעודכן'],
     modal_title:'✏️ הוספה לעץ',
     type_person:'👤 אדם חדש',type_photo:'📷 תמונה',type_bio:'📝 ביוגרפיה',type_date:'📅 תאריך / מקום',
-    lbl_name:'שם מלא',lbl_sex:'מין',sex_f:'נקבה',sex_m:'זכר',
+    lbl_name:'שם מלא',lbl_genitive:'שם ביחסת הקניין (רשות)',lbl_sex:'מין',sex_f:'נקבה',sex_m:'זכר',
     lbl_birth:'תאריך לידה',lbl_death:'תאריך פטירה (אם רלוונטי)',
     lbl_rel_person:'קשור/ה ל',lbl_rel_type:'סוג קשר',
     rel_wife:'אישה',rel_husband:'בעל',rel_child:'ילד/ה',rel_parent:'הורה',rel_brother:'אח',rel_sister:'אחות',
@@ -1695,6 +1798,14 @@ function trel(s){
 // ════════════════════════════════════════════════════════
 //  NAMES DICTIONARY — RU→EN→HE for all 178 persons
 // ════════════════════════════════════════════════════════
+// B2.3 — родительный падеж полного имени (Сын/Дочь/Отец/Мать/Брат/Сестра
+// X), заполнено вручную на основе черновика pymorphy3 (см. проект B2).
+// Как и NAMES (EN/HE): статический словарь в коде, не в KV — тот же
+// паттерн, что уже используется для переводов. Для персон без записи
+// genitive() падает обратно на именительный падеж (см. ниже) — хуже
+// грамматика, но не ломается.
+const NAMES_GENITIVE = {"P1":"Якова Мостового","P2":"Сицилии Мостовой","P3":"Мирослава Мостового","P4":"Моисея Мостового","P5":"Александра Лейциса","P6":"Людмилы Гинзбург","P7":"Татьяны Журахинской","P8":"Розалии Мостовой","P9":"Михаила Мостового","P10":"Елены Мостовой","P11":"Евгения Гинзбурга","P12":"Йосефа Хаима Гинзбурга","P13":"Йуда Леви Гинзбурга","P14":"Ривки Хайой Гинзбург","P15":"Элиэзера Ицхака Гинзбурга","P16":"Адассы Рахель Гинзбург","P17":"Моше Давида Гинзбурга","P18":"Леонида Гинзбурга","P19":"Малки Журахинской","P20":"Герша Журахинского","P21":"Ефима Хаима Журахинского","P22":"Миши Журахинского","P23":"Ани Журахинской","P24":"Маши Пейсахович","P25":"Иры Витинбергской","P26":"Эдика Витинбергского","P27":"Вики Кравцовой","P28":"Бориса Рабиновича","P29":"Лева Лейциса","P30":"Мани","P31":"Жени Итигиной","P32":"Дани Лейциса","P33":"Александра Итигина","P34":"Любы Итигиной","P35":"Бори","P36":"Ницана Кравцова","P37":"Карины Кравцовой","P38":"Юры","P39":"Юстина","P40":"Юлии","P41":"Якова Мостового","P42":"Лёвика Ицика Пейсаховича","P43":"Ицика Пейсаховича","P44":"Цили","P45":"Зины","P46":"Иды Пейсахович","P47":"Лазаря Хаскилевича Вайнтроба","P48":"Леонида Вайнтроба","P49":"Оли Вайнтроб","P50":"Светланы Игнатенко","P51":"Дениса Игнатенко","P52":"Марио Игнатенко","P53":"Мани Коган","P54":"Сени Журахинского","P55":"Шая Журахинского","P56":"Розы Гелис","P57":"Цили Журахинской","P58":"Сони Журахинской","P59":"Григория Журахинского","P60":"Мили","P61":"Фимы Щиглика","P62":"Алика Щиглика","P63":"Саши Щиглика","P64":"Софы","P65":"Лены","P66":"Светы Щиглик","P67":"Юли","P68":"Фимы Щиглика","P69":"Ханка Элиновны Скородинской","P70":"Баси","P71":"Натаниэля-Шломо Гинзбурга","P73":"Менахем-Меира Гинзбурга","P74":"Даниэля-Симхи Гинзбурга","P80":"Ханы Мостовой","P81":"Маши Мостовой","P82":"Поли Мостовой","P83":"Сурка Яковлевны Мостовой","P84":"Неизвестно Мостового","P90":"Володи Кандыбы","P91":"Бёбой Берман","P92":"Гриши Кандыбы","P93":"Розы Кандыбы","P94":"Евгения Кандыбы","P95":"Славы Кандыбы","P96":"Эмили Кандыбы","P100":"Давида Зицера","P101":"Бориса Зицера","P102":"Клары Наула","P103":"Ани Зицера","P104":"Давида Зицера","P105":"Светланы Зицера","P106":"Евгения Зицера","P110":"Мити Яновския","P111":"Димы Яновския","P112":"Гена Яновския","P113":"Иры Яновской","P120":"Лёни Бердичевского","P121":"Мити Бермана","P122":"Янэка Бермана","P123":"Игоря Бермана","P124":"Владика Бермана","P125":"Аркадия Абрамовича","P126":"Александра Абрамовича","P127":"Ирины Абрамович","P130":"Александра Анапольского","P131":"Илианы Анапольской","P132":"Брендона Анапольского","P140":"Люды Журахинской","P141":"Элеоноры Журахинской","P150":"Миши Кульницкого","P151":"Лёни Кульницкого","P152":"Неизвестно Кульницкого","P153":"Маши Кульницкого","P160":"Аллы Берман","P161":"Арика","P162":"Вадима","P163":"Дины Кандыбы","P164":"Жени","P165":"Льва","P166":"Максима","P167":"Мишель","P168":"Павла","P169":"Раи Берман","P170":"Светы","P171":"Сени","P172":"Софы Байтман","P173":"Марьяны Бердичевской-Бар","P174":"Ханы","P175":"Шели","P176":"Ивы","P200":"Фени Мойсеевны Мининской","P201":"Ромы Мостового","P203":"Адама Кандыбы","P204":"Елены Рудинской","P205":"Alexander Goldberg","P206":"Marina Kaplan Rudinski","P207":"Golda Kleinberg","P208":"Иры Бенджаминович","P209":"Stanley Goldberg","P210":"Stas Tubelski","P211":"Gennadiy Goldberg","P212":"Толика","P213":"Юли Кандыбы","P214":"Иды Львовны Вайнтроб","P215":"Станислава Семёновского","P216":"Зины Семёновской","P217":"Эмили Роман","P218":"Зинаиды Исааковны Розенберг","P219":"Хаскила Вайнтроба","P220":"Миши Моисеевича Дмитвенко","P221":"Моисея Мининского","P222":"Семёна Игдала","P223":"Евгении Игдал","P224":"Неизвестно Лейциса","P225":"Владислава Игдала","P226":"Шона Игдала","P227":"Лии Игдал","P228":"Анатолия Ямпольского","P229":"Михаэля Ямпольского","P230":"Виктории Ямпольской","P231":"Вадима Ямпольского","P232":"Бориса Рувимовича Фирштёршего","P233":"Баси Фирштер","P234":"Алика Мостового","P235":"Бориса Рогинского","P236":"Оли Рогинской","P237":"Ани Авигад-Рогинской","P238":"Юры Кретингена","P239":"Изи Кретингена","P240":"Лидора Авигада","P241":"Любы Мостовой","P242":"Семёна Мостового","P243":"Майой Мостовой","P244":"Полины Мостовой","P245":"Лизы Мостовой","P246":"Лёни Мостового","P247":"Кристины Мостовая-Папай","P248":"Светланы Винаковской","P249":"Инны Гинзбург","P250":"Кальмана Гайштата","P251":"Ицика Гайштата","P252":"Якова Гайштата","P253":"Софии Вейц-Яновской","P254":"Юли Мостовой","P255":"Маргариты Мостовой","P256":"Эмилии Мостовой","P257":"Даниила Мостового","P258":"Элеоноры Мостовой","P259":"Тули Пейсаховича","P260":"Гиси Пейсахович","P261":"Лизы Пейсахович","P262":"Юзика","P263":"Светы","P264":"Поли","P265":"Пети","P266":"Тани Стрижевской","P267":"Игоря Стрижевского","P268":"Клавы","P269":"Вики Стриж","P270":"Эрики Винник","P271":"Розы Чечельницкой","P272":"Ильи Чечельницкого","P273":"Раи","P274":"Гали","P275":"Любы","P276":"Аллы Овчар","P277":"Marina Ovchar","P278":"Лианы Мягковой","P279":"Гали"};
+
 const NAMES = {"P1":{"en":"Yakov Mostovoy","he":"יעקב מוסטובוי"},"P2":{"en":"Sicilia Mostovaya","he":"סיציליה מוסטובאיה"},"P3":{"en":"Miroslav Mostovoy","he":"מירוסלב מוסטובוי"},"P4":{"en":"Moisey Mostovoy","he":"משה מוסטובוי"},"P5":{"en":"Alexander Leytsis","he":"אלכסנדר לייצס"},"P6":{"en":"Lyudmila Ginzburg","he":"לודמילה גינזבורג"},"P7":{"en":"Tatyana Zhurakhinska","he":"טטיאנה ז'ורחינסקאיה"},"P8":{"en":"Rozalia Mostovaya","he":"רוזליה מוסטובאיה"},"P9":{"en":"Mikhail Mostovoy","he":"מיכאיל מוסטובוי"},"P10":{"en":"Elena Mostovaya","he":"אלנה מוסטובאיה"},"P11":{"en":"Evgeny Ginzburg","he":"יבגני גינזבורג"},"P12":{"en":"Yosef Chaim Ginzburg","he":"יוסף חיים גינזבורג"},"P13":{"en":"Yuda Levi Ginzburg","he":"יהודה לוי גינזבורג"},"P14":{"en":"Rivka Haya Ginzburg","he":"רבקה חיה גינזבורג"},"P15":{"en":"Eliezer Yitzhak Ginzburg","he":"אליעזר יצחק גינזבורג"},"P16":{"en":"Adassa Rakhel Ginzburg","he":"עדסה רחל גינזבורג"},"P17":{"en":"Moshe David Ginzburg","he":"משה דוד גינזבורג"},"P18":{"en":"Leonid Ginzburg","he":"לאוניד גינזבורג"},"P19":{"en":"Malka Zhurakhinska","he":"מלכה ז'ורחינסקאיה"},"P20":{"en":"Gersh Zhurakhinsky","he":"הרש ז'ורחינסקי"},"P21":{"en":"Efim Khaim Zhurakhinsky","he":"אפים חיים ז'ורחינסקי"},"P22":{"en":"Misha Zhurakhinsky","he":"מישה ז'ורחינסקי"},"P23":{"en":"Anya Zhurakhinska","he":"אניה ז'ורחינסקאיה"},"P24":{"en":"Masha Peysakhovich","he":"מאשה פייסחוביץ"},"P25":{"en":"Ira Vitinbergska","he":"אירה ויטינברגסקאיה"},"P26":{"en":"Edik Vitinbergsky","he":"אדיק ויטינברגסקי"},"P27":{"en":"Vika Kravtsova","he":"ויקה קרבצובה"},"P28":{"en":"Boris Rabinovich","he":"בוריס רבינוביץ"},"P29":{"en":"Leva Leytsis","he":"לבה לייצס"},"P30":{"en":"Manya","he":"מאניה"},"P31":{"en":"Zhenya Itigina","he":"ז'ניה איטיגינה"},"P32":{"en":"Danya Leytsis","he":"דניה לייצס"},"P33":{"en":"Alexander Itigin","he":"אלכסנדר איטיגין"},"P34":{"en":"Lyuba Itigina","he":"ליובה איטיגינה"},"P35":{"en":"Borya","he":"בוריה"},"P36":{"en":"Nitsan Kravtsov","he":"ניצן קרבצוב"},"P37":{"en":"Karina Kravtsova","he":"קרינה קרבצובה"},"P38":{"en":"Yura","he":"יורה"},"P39":{"en":"Yustin","he":"יוסטין"},"P40":{"en":"Yuliya","he":"יוליה"},"P41":{"en":"Yakov Mostovoy (sr.)","he":"יעקב מוסטובוי (בכיר)"},"P42":{"en":"Levik Itsik Peysakhovich","he":"לוויק איציק פייסחוביץ"},"P43":{"en":"Itsik Peysakhovich","he":"איציק פייסחוביץ"},"P44":{"en":"Tsylya","he":"ציליה"},"P45":{"en":"Zina","he":"זינה"},"P46":{"en":"Ida Peysakhovich","he":"אידה פייסחוביץ"},"P47":{"en":"Lazar Khaskilevich Vaintrop","he":"לזר חסקילביץ ויינטרוב"},"P48":{"en":"Leonid Vaintrop","he":"לאוניד ויינטרוב"},"P49":{"en":"Olya Vaintrop","he":"אוליה ויינטרוב"},"P50":{"en":"Svetlana Ignatenko","he":"סבטלנה איגנטנקו"},"P51":{"en":"Denis Ignatenko","he":"דניס איגנטנקו"},"P52":{"en":"Mario Ignatenko","he":"מריו איגנטנקו"},"P53":{"en":"Manya (Miriam) Kogan","he":"מאניה (מרים) קוגן"},"P54":{"en":"Senya Zhurakhinsky","he":"סניה ז'ורחינסקי"},"P55":{"en":"Shaya Zhurakhinsky","he":"שאיה ז'ורחינסקי"},"P56":{"en":"Roza Gelis","he":"רוזה גליס"},"P57":{"en":"Tsylya Zhurakhinska","he":"ציליה ז'ורחינסקאיה"},"P58":{"en":"Sonya Zhurakhinska","he":"סוניה ז'ורחינסקאיה"},"P59":{"en":"Grigory (Grisha) Zhurakhinsky","he":"גריגורי (גריישה) ז'ורחינסקי"},"P60":{"en":"Milya","he":"מיליה"},"P61":{"en":"Fima Shchiglik","he":"פימה שצ'יגליק"},"P62":{"en":"Alik Shchiglik","he":"אליק שצ'יגליק"},"P63":{"en":"Sasha Shchiglik","he":"סשה שצ'יגליק"},"P64":{"en":"Sofa","he":"סופה"},"P65":{"en":"Lena","he":"לנה"},"P66":{"en":"Sveta Shchiglik","he":"סבטה שצ'יגליק"},"P67":{"en":"Yulya","he":"יוליה"},"P68":{"en":"Fima Shchiglik (jr.)","he":"פימה שצ'יגליק (בן)"},"P69":{"en":"Khanka (Lyalya) Elinovna Skorodinskaya","he":"חנקה (ליאליה) אלינובנה סקורודינסקאיה"},"P70":{"en":"Basya","he":"בסיה"},"P71":{"en":"Nataniel-Shlomo Ginzburg","he":"נתניאל שלמה גינזבורג"},"P73":{"en":"Menachem-Meir Ginzburg","he":"מנחם מאיר גינזבורג"},"P74":{"en":"Daniel-Simcha Ginzburg","he":"דניאל שמחה גינזבורג"},"P80":{"en":"Khana Mostovaya","he":"חנה מוסטובאיה"},"P81":{"en":"Masha Mostovaya","he":"מאשה מוסטובאיה"},"P82":{"en":"Polya Mostovaya","he":"פוליה מוסטובאיה"},"P83":{"en":"Surka (Sonya) Yakovlevna Mostovaya","he":"סורקה (סוניה) יעקבלבנה מוסטובאיה"},"P84":{"en":"Unknown Mostovoy","he":"לא ידוע מוסטובוי"},"P90":{"en":"Volodya Kandyba","he":"וולודיה קנדיבה"},"P91":{"en":"Beba Berman (née Kandyba)","he":"בבה ברמן (לבית קנדיבה)"},"P92":{"en":"Grisha Kandyba","he":"גריישה קנדיבה"},"P93":{"en":"Roza Kandyba","he":"רוזה קנדיבה"},"P94":{"en":"Evgeny (Zhenya) Kandyba","he":"יבגני (ז'ניה) קנדיבה"},"P95":{"en":"Slava Kandyba","he":"סלבה קנדיבה"},"P96":{"en":"Emily Kandyba","he":"אמילי קנדיבה"},"P100":{"en":"David Zitser (sr.)","he":"דוד ציצר (בכיר)"},"P101":{"en":"Boris Zitser","he":"בוריס ציצר"},"P102":{"en":"Klara Naula","he":"קלרה נאולה"},"P103":{"en":"Anya Zitser","he":"אניה ציצר"},"P104":{"en":"David Zitser","he":"דוד ציצר"},"P105":{"en":"Svetlana Zitser","he":"סבטלנה ציצר"},"P106":{"en":"Evgeny Zitser","he":"יבגני ציצר"},"P110":{"en":"Mitya Yanovsky","he":"מיטיה יאנובסקי"},"P111":{"en":"Dima Yanovsky","he":"דימה יאנובסקי"},"P112":{"en":"Gena Yanovsky","he":"גנה יאנובסקי"},"P113":{"en":"Ira Yanovska","he":"אירה יאנובסקאיה"},"P120":{"en":"Lenya Berdichevsky","he":"לניה ברדיצ'בסקי"},"P121":{"en":"Mitya Berman","he":"מיטיה ברמן"},"P122":{"en":"Yanek Berman","he":"יאנק ברמן"},"P123":{"en":"Igor Berman","he":"איגור ברמן"},"P124":{"en":"Vladik Berman","he":"ולאדיק ברמן"},"P125":{"en":"Arkady Abramovich","he":"ארקדי אברמוביץ"},"P126":{"en":"Alexander Abramovich","he":"אלכסנדר אברמוביץ"},"P127":{"en":"Irina Abramovich","he":"אירינה אברמוביץ"},"P130":{"en":"Alexander Anapolsky","he":"אלכסנדר אנפולסקי"},"P131":{"en":"Iliana Anapolska","he":"איליאנה אנפולסקאיה"},"P132":{"en":"Brandon Anapolsky","he":"ברנדון אנפולסקי"},"P140":{"en":"Lyuda Zhurakhinska (Igdal)","he":"ליודה ז'ורחינסקאיה (איגדל)"},"P141":{"en":"Eleonora (Ella) Zhurakhinska (Yampolska)","he":"אלאונורה (אלה) ז'ורחינסקאיה (יאמפולסקאיה)"},"P150":{"en":"Misha Kulnitsky","he":"מישה קולניצקי"},"P151":{"en":"Lenya Kulnitsky","he":"לניה קולניצקי"},"P152":{"en":"Unknown Kulnitsky","he":"לא ידוע קולניצקי"},"P153":{"en":"Masha Kulnitsky","he":"מאשה קולניצקי"},"P160":{"en":"Alla Berman","he":"אלה ברמן"},"P161":{"en":"Arik","he":"אריק"},"P162":{"en":"Vadim","he":"ודים"},"P163":{"en":"Dina Kandyba","he":"דינה קנדיבה"},"P164":{"en":"Zhenya","he":"ז'ניה"},"P165":{"en":"Lev","he":"לב"},"P166":{"en":"Maksim","he":"מקסים"},"P167":{"en":"Michelle","he":"מישל"},"P168":{"en":"Pavel","he":"פבל"},"P169":{"en":"Raya Berman","he":"ראיה ברמן"},"P170":{"en":"Sveta","he":"סבטה"},"P171":{"en":"Senya","he":"סניה"},"P172":{"en":"Sofa Baytman","he":"סופה ביטמן"},"P173":{"en":"Maryana Berdichevska","he":"מריאנה ברדיצ'בסקאיה"},"P174":{"en":"Khana (2)","he":"חנה (2)"},"P175":{"en":"Sheli","he":"שלי"},"P176":{"en":"Iva","he":"איבה"},"P200":{"en":"Fenya Moiseyevna Mininskaya","he":"פניה מויסייבנה מינינסקאיה"},"P201":{"en":"Roma Mostovoy","he":"רומה מוסטובוי"},"P203":{"en":"Adam Kandyba","he":"אדם קנדיבה"},"P204":{"en":"Elena Rudinska","he":"אלנה רודינסקאיה"},"P205":{"en":"Alexander Goldberg","he":"אלכסנדר גולדברג"},"P206":{"en":"Marina Kaplan Rudinski","he":"מרינה קפלן רודינסקי"},"P207":{"en":"Golda Kleinberg","he":"גולדה קליינברג"},"P208":{"en":"Ira Benjaminovich","he":"אירה בנג'מינוביץ"},"P209":{"en":"Stanley Goldberg","he":"סטנלי גולדברג"},"P210":{"en":"Stas Tubelski","he":"סטס טובלסקי"},"P211":{"en":"Gennadiy Goldberg","he":"גנאדי גולדברג"},"P212":{"en":"Tolik","he":"טוליק"},"P213":{"en":"Yulya Kandyba","he":"יוליה קנדיבה"},"P214":{"en":"Ida Lvovna Vaintrop","he":"אידה לבובנה ויינטרוב"},"P215":{"en":"Stanislav Semenovsky","he":"סטניסלב סמנובסקי"},"P216":{"en":"Zina Semenovska","he":"זינה סמנובסקאיה"},"P217":{"en":"Emily Roman","he":"אמילי רומן"},"P218":{"en":"Zinaida Isaakovna Rozenberg","he":"זינאידה יצחקובנה רוזנברג"},"P219":{"en":"Khaskil Vaintrop","he":"חסקיל ויינטרוב"},"P220":{"en":"Misha Moiseyevich Dmitvenko","he":"מישה מויסייביץ דמיטבנקו"},"P221":{"en":"Moisey Mininsky","he":"משה מינינסקי"},"P222":{"en":"Semyon Igdal","he":"סמיון איגדל"},"P223":{"en":"Evgenia Igdal","he":"יבגניה איגדל"},"P224":{"en":"Unknown Leytsis (father)","he":"לא ידוע לייצס (אב)"},"P225":{"en":"Vladislav Igdal","he":"ולאדיסלב איגדל"},"P226":{"en":"Sean Igdal","he":"שון איגדל"},"P227":{"en":"Liya Igdal","he":"ליה איגדל"},"P228":{"en":"Anatoly Yampolsky","he":"אנטולי יאמפולסקי"},"P229":{"en":"Mikhael Yampolsky","he":"מיכאל יאמפולסקי"},"P230":{"en":"Victoria Yampolska","he":"ויקטוריה יאמפולסקאיה"},"P231":{"en":"Vadim Yampolsky","he":"ודים יאמפולסקי"},"P232":{"en":"Boris (Borukh) Ruvimovich Firshter","he":"בוריס (ברוך) רובימוביץ פירשטר"},"P233":{"en":"Basya Firshter (Roginskaya)","he":"בסיה פירשטר (רוגינסקאיה)"},"P234":{"en":"Alik (Oleg/Tsudik) Mostovoy","he":"אליק (אולג/צודיק) מוסטובוי"},"P235":{"en":"Boris Roginsky","he":"בוריס רוגינסקי"},"P236":{"en":"Olya Roginskaya","he":"אוליה רוגינסקאיה"},"P237":{"en":"Anya Avigad-Roginskaya","he":"אניה אביגד-רוגינסקאיה"},"P238":{"en":"Yura Kretingen","he":"יורה קרטינגן"},"P239":{"en":"Izya (Israel) Kretingen","he":"איזיה (ישראל) קרטינגן"},"P240":{"en":"Lidor Avigad","he":"לידור אביגד"},"P241":{"en":"Lyuba Mostovaya","he":"ליובה מוסטובאיה"},"P242":{"en":"Semyon (Senya) Mostovoy","he":"סמיון (סניה) מוסטובוי"},"P243":{"en":"Maya Mostovaya","he":"מאיה מוסטובאיה"},"P244":{"en":"Polina Mostovaya","he":"פולינה מוסטובאיה"},"P245":{"en":"Liza Mostovaya","he":"ליזה מוסטובאיה"},"P246":{"en":"Lenya Mostovoy","he":"לניה מוסטובוי"},"P247":{"en":"Kristina Mostovaya-Papay","he":"קריסטינה מוסטובאיה-פאפאי"},"P248":{"en":"Svetlana Vinakovskaya","he":"סבטלנה ויניקובסקאיה"},"P249":{"en":"Inna Ginzburg","he":"אינה גינזבורג"},"P250":{"en":"Kalman Gaishtat","he":"קלמן גייסטט"},"P251":{"en":"Itsik Gaishtat","he":"איציק גייסטט"},"P252":{"en":"Yakov Gaishtat","he":"יעקב גייסטט"},"P253":{"en":"Sofia Veits-Yanovskaya","he":"סופיה וייץ-יאנובסקיה"},"P254":{"en":"Yulya Mostovaya","he":"יוליה מוסטובאיה"},"P255":{"en":"Margarita Mostovaya","he":"מרגריטה מוסטובאיה"},"P256":{"en":"Emiliya Mostovaya","he":"אמיליה מוסטובאיה"},"P257":{"en":"Daniil Mostovoy","he":"דניאל מוסטובוי"},"P258":{"en":"Eleonora Mostovaya","he":"אלאונורה מוסטובאיה"}};
 
 // Get person's display name in current language
@@ -1705,6 +1816,20 @@ function pname(id) {
   const d = NAMES[id];
   if(!d) return n.name;  // fallback to Russian
   return d[currentLang] || n.name;
+}
+
+// B2.3: genitive (родительный падеж) form for RU relationship phrasing
+// ("Сын Якова Мостового"). Lives as a normal, PATCH-able field on the
+// node (same as rel/bio/phone) rather than a separate static dictionary,
+// so it can be filled in gradually via the Fix/New-person forms instead
+// of requiring a code redeploy. Falls back to the nominative name (pname)
+// when not yet set — degrades to slightly awkward grammar, never breaks.
+// Only meaningful for RU: EN/HE relationship phrasing uses "of"/"של",
+// which don't need a case change.
+function genitive(id) {
+  const n = IDX.nodes[id];
+  if(n && n.genitive) return n.genitive;
+  return pname(id);
 }
 
 
@@ -1921,11 +2046,11 @@ function openModal(prefillId, mode){
   document.getElementById('prompt-out').textContent = '';
 
   // ── Reset all form fields to blank ──────────────────
-  ['f-name','f-birth','f-death','f-phone','f-email','f-social',
+  ['f-name','f-name-genitive','f-birth','f-death','f-phone','f-email','f-social',
    'f-photo-url','f-photo-cap',
    'f-bio-text','f-bio-url',
    'f-date-note',
-   'ff-name','ff-birth','ff-death','ff-birth-he','ff-death-he',
+   'ff-name','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
    'ff-phone','ff-email','ff-social','ff-rel','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
     const el = document.getElementById(fid);
@@ -1971,6 +2096,7 @@ function openModal(prefillId, mode){
     if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
     if(n.social)   lines.push(t('lbl_social')    + ': ' + n.social);
     if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
+    if(n.genitive) lines.push(t('fix_genitive')  + ': ' + n.genitive);
 
     if(card0 && lines.length){
       card0.textContent = lines.join('\n');
@@ -1980,6 +2106,7 @@ function openModal(prefillId, mode){
     // Prefill the editable fields with CURRENT values so user only changes what's wrong
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
     setVal('ff-name',      pname(prefillId));
+    setVal('ff-genitive',  n.genitive);
     setVal('ff-birth',     n.birth);
     setVal('ff-death',     n.death);
     setVal('ff-birth-he',  n.birth_he);
@@ -2087,14 +2214,16 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       const phoneV  = document.getElementById('f-phone').value.trim();
       const emailV  = document.getElementById('f-email').value.trim();
       const socialV = document.getElementById('f-social').value.trim();
+      const genitiveV = document.getElementById('f-name-genitive').value.trim();
       const body = {
         name,
         sex: document.getElementById('f-sex').value || '',
         birth, death,
         rel: relP ? (relT + ' ' + relP) : '',
-        ...(phoneV  ? {phone:phoneV}   : {}),
-        ...(emailV  ? {email:emailV}   : {}),
-        ...(socialV ? {social:socialV} : {}),
+        ...(phoneV    ? {phone:phoneV}       : {}),
+        ...(emailV    ? {email:emailV}       : {}),
+        ...(socialV   ? {social:socialV}     : {}),
+        ...(genitiveV ? {genitive:genitiveV} : {}),
       };
       const btn = document.getElementById('modal-generate');
       const origTxt = btn.textContent;
@@ -2299,6 +2428,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     const fields = [
       { key: 'name',     label: t('fix_name'),       val: getV('ff-name'),     orig: orig.name || '' },
+      { key: 'genitive', label: t('fix_genitive'),   val: getV('ff-genitive'), orig: orig.genitive || '' },
       { key: 'birth',    label: t('fix_birth'),       val: getV('ff-birth'),    orig: orig.birth || '' },
       { key: 'death',    label: t('fix_death'),       val: getV('ff-death'),    orig: orig.death || '' },
       { key: 'birth_he', label: t('fix_birth_he'),    val: getV('ff-birth-he'), orig: orig.birth_he || '' },
@@ -2317,8 +2447,14 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const otherNote  = getV('ff-other');
     const comment    = getV('f-fix-comment');
 
-    // Only include fields that changed (value differs from original) or were filled when no original existed
-    const changed = fields.filter(f => f.val && f.val !== f.orig);
+    // Include fields with a new non-empty value that differs from before,
+    // AND fields the user explicitly cleared (had a value before, empty
+    // now) — the latter is a deliberate "delete this data" action, not
+    // "nothing to do". "name" is exempted from clear-to-empty since it's
+    // a required field and an empty name would break rendering elsewhere.
+    const changed = fields.filter(f =>
+      (f.val && f.val !== f.orig) || (!f.val && f.orig && f.key !== 'name')
+    );
 
     if(!changed.length && !familyNote && !otherNote){
       alert(t('alert_fix_empty') || 'Укажите хотя бы одно изменение');
@@ -2327,7 +2463,10 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     if(isAdminFix && !familyNote && !otherNote){
       const patch = {};
-      for(const f of changed) patch[f.key] = f.val;
+      // val === '' here always means "user cleared this field" (see the
+      // `changed` filter above) — send null so the server deletes the key,
+      // instead of writing an empty string that still counts as "has data".
+      for(const f of changed) patch[f.key] = f.val || null;
 
       if(Object.keys(patch).length === 0){
         showToast(currentLang==='he' ? '✓ אין שינויים לשמירה — הנתונים כבר עודכנו'
@@ -2351,12 +2490,21 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
         const data = await r.json();
         if(data.ok){
           // Update local IDX immediately (optimistic update) — this is what
-          // rendering, panels, and forms actually read from after API load
-          if(IDX && IDX.nodes[origId])
-            Object.assign(IDX.nodes[origId], patch);
+          // rendering, panels, and forms actually read from after API load.
+          // A null value in patch means the server deleted the key — mirror
+          // that locally instead of leaving a literal `null` (which is what
+          // plain Object.assign would do, and which isn't the same as an
+          // absent field everywhere in the render/panel code).
+          const applyPatch = (node, p) => {
+            for(const [k,v] of Object.entries(p)){
+              if(v === null || v === undefined) delete node[k];
+              else node[k] = v;
+            }
+          };
+          if(IDX && IDX.nodes[origId]) applyPatch(IDX.nodes[origId], patch);
           // Also keep FALLBACK_DATA in sync for offline fallback scenarios
           if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[origId])
-            Object.assign(window.FALLBACK_DATA.nodes[origId], patch);
+            applyPatch(window.FALLBACK_DATA.nodes[origId], patch);
           // Close modal and refresh display
           document.getElementById('modal-overlay').classList.remove('open');
           if(typeof navigateTo === 'function') navigateTo(currentFocal);
@@ -2381,7 +2529,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     text += 'Тип: Исправление данных\n';
     text += 'Персона: ' + person + '\n';
     for(const f of changed){
-      text += f.label + ': ' + f.val + (f.orig ? ' (было: ' + f.orig + ')' : '') + '\n';
+      const shownVal = f.val || (currentLang==='he' ? '[למחוק שדה זה]' : currentLang==='en' ? '[clear this field]' : '[очистить это поле]');
+      text += f.label + ': ' + shownVal + (f.orig ? ' (было: ' + f.orig + ')' : '') + '\n';
     }
     if(familyNote) text += t('fix_family') + ': ' + familyNote + '\n';
     if(otherNote)  text += t('fix_other')  + ': ' + otherNote  + '\n';
@@ -3589,6 +3738,125 @@ async function confirmDeletePerson(id){
         currentLang==='he' ? '✓ נמחק'
         : currentLang==='en' ? '✓ Deleted'
         : '✓ Удалено', false);
+    } else {
+      showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
+    }
+  } catch(e){
+    showToast('⚠ Ошибка соединения: ' + e.message, true);
+  }
+}
+
+// A2.2: delete an erroneously created marriage/family via DELETE /api/family.
+// Mirrors confirmDeletePerson()'s structure: explain-then-block if the
+// server would refuse (children present), confirm, call, sync local state.
+async function confirmDeleteFamily(famId){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
+  const fam = IDX.families[famId];
+  if(!fam) return;
+
+  if(fam.children && fam.children.length > 0){
+    // Server will refuse — explain why instead of attempting the call
+    alert(currentLang==='he'
+      ? 'לא ניתן למחוק — יש ילדים בקשר זוגי זה.\nיש לשייך את הילדים למשפחה אחרת לפני המחיקה.'
+      : currentLang==='en'
+      ? 'Cannot delete — this marriage has children.\nReassign the children to a different family first.'
+      : 'Нельзя удалить — в этом браке есть дети.\nСначала перепривяжите детей к другой семье (через форму «Исправить» → «Семейная связь»).');
+    return;
+  }
+
+  const h = fam.husband ? pname(fam.husband) : null;
+  const w = fam.wife    ? pname(fam.wife)    : null;
+  const label = [h, w].filter(Boolean).join(' + ') || famId;
+
+  const confirmMsg = currentLang==='he'
+    ? `למחוק את הקשר הזוגי (${label})? פעולה זו אינה הפיכה.`
+    : currentLang==='en'
+    ? `Delete this marriage (${label})? This cannot be undone.`
+    : `Удалить этот брак (${label})? Это действие необратимо.`;
+  if(!confirm(confirmMsg)) return;
+
+  try {
+    const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+      method: 'DELETE',
+      headers: { 'X-Password': _sessionPassword }
+    });
+    const d = await r.json();
+    if(d.ok){
+      // Remove from local IDX immediately (optimistic update)
+      const p1 = fam.husband, p2 = fam.wife;
+      delete IDX.families[famId];
+      if(p1 && IDX.parent_in[p1]) IDX.parent_in[p1] = IDX.parent_in[p1].filter(f => f !== famId);
+      if(p2 && IDX.parent_in[p2]) IDX.parent_in[p2] = IDX.parent_in[p2].filter(f => f !== famId);
+      if(p1 && p2 && IDX.relatives[p1] && IDX.relatives[p2]){
+        const stillMarried = Object.values(IDX.families).some(f =>
+          (f.husband === p1 && f.wife === p2) || (f.husband === p2 && f.wife === p1));
+        if(!stillMarried){
+          IDX.relatives[p1].spouses = (IDX.relatives[p1].spouses || []).filter(s => s !== p2);
+          IDX.relatives[p2].spouses = (IDX.relatives[p2].spouses || []).filter(s => s !== p1);
+        }
+      }
+      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof showPanel === 'function') showPanel(currentFocal);
+      showToast(
+        currentLang==='he' ? '✓ הקשר נמחק'
+        : currentLang==='en' ? '✓ Marriage deleted'
+        : '✓ Брак удалён', false);
+    } else {
+      showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
+    }
+  } catch(e){
+    showToast('⚠ Ошибка соединения: ' + e.message, true);
+  }
+}
+
+// A2.3: unlink a child from a specific family via PATCH /api/family
+// { removeChild }. Previously the only path to fix a wrong parent/child
+// link was the free-text "Семейная связь" field in the Fix form, routed
+// to email for manual review — this gives admins a direct one-click action
+// for the common case of "this child was linked to the wrong family".
+async function confirmRemoveChild(famId, childId){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
+  const fam = IDX.families[famId];
+  if(!fam) return;
+
+  const childName = pname(childId);
+  const famLabel = [fam.husband ? pname(fam.husband) : null, fam.wife ? pname(fam.wife) : null]
+    .filter(Boolean).join(' + ') || famId;
+
+  const confirmMsg = currentLang==='he'
+    ? `להסיר את ${childName} מהמשפחה (${famLabel})?\n${childName} יישאר בעץ, אך ללא הורים משויכים עד שתשייך אותו מחדש.`
+    : currentLang==='en'
+    ? `Unlink ${childName} from this family (${famLabel})?\n${childName} stays in the tree, but with no parents until relinked.`
+    : `Отвязать ${childName} от этой семьи (${famLabel})?\n${childName} останется в дереве, но без родителей, пока не привяжете заново.`;
+  if(!confirm(confirmMsg)) return;
+
+  try {
+    const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({ removeChild: childId })
+    });
+    const d = await r.json();
+    if(d.ok){
+      // Mirror the server's own removeChild logic locally (see
+      // PATCH /api/family/:id in src/index.js) so the panel/tree update
+      // immediately without waiting on the next /api/tree fetch.
+      fam.children = (fam.children || []).filter(c => c !== childId);
+      if(IDX.child_of[childId] === famId) delete IDX.child_of[childId];
+      const parents = [fam.husband, fam.wife].filter(Boolean);
+      if(IDX.relatives[childId]){
+        IDX.relatives[childId].parents  = (IDX.relatives[childId].parents  || []).filter(p => !parents.includes(p));
+        IDX.relatives[childId].siblings = (IDX.relatives[childId].siblings || []).filter(s => !fam.children.includes(s));
+      }
+      for(const pid of parents){
+        if(IDX.relatives[pid]) IDX.relatives[pid].children = (IDX.relatives[pid].children || []).filter(c => c !== childId);
+      }
+      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof showPanel === 'function') showPanel(currentFocal);
+      showToast(
+        currentLang==='he' ? '✓ הוסר מהמשפחה'
+        : currentLang==='en' ? '✓ Unlinked from family'
+        : '✓ Отвязано от семьи', false);
     } else {
       showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
     }
