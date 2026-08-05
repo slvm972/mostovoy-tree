@@ -351,7 +351,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <label data-i="fix_name">Имя</label>
     <input id="ff-name" type="text" data-ph="ph_name" placeholder="Например: Анна Иванова">
 
-    <label data-i="fix_genitive">Имя в родительном падеже (для фраз родства)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="fix_genitive" style="margin:10px 0 3px">Имя в родительном падеже (для фраз родства)</label>
+      <button type="button" onclick="quickClearField('ff-genitive','genitive','fix_genitive')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <input id="ff-genitive" type="text" data-ph="ph_genitive" placeholder="Например: Анны Ивановой">
 
     <label data-i="fix_birth">Дата рождения</label>
@@ -360,19 +363,34 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <label data-i="fix_death">Дата смерти</label>
     <input id="ff-death" type="text" data-ph="ph_death" placeholder="оставьте пустым если жив(а)">
 
-    <label data-i="fix_birth_he">Дата рождения (еврейский календарь)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="fix_birth_he" style="margin:10px 0 3px">Дата рождения (еврейский календарь)</label>
+      <button type="button" onclick="quickClearField('ff-birth-he','birth_he','fix_birth_he')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <input id="ff-birth-he" type="text" data-ph="ph_birth_he" placeholder="например: יג ניסן תשל״א">
 
-    <label data-i="fix_death_he">Дата смерти (еврейский календарь)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="fix_death_he" style="margin:10px 0 3px">Дата смерти (еврейский календарь)</label>
+      <button type="button" onclick="quickClearField('ff-death-he','death_he','fix_death_he')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <input id="ff-death-he" type="text" data-ph="ph_death_he" placeholder="например: יב שבט תשפ״א">
 
-    <label data-i="lbl_phone">Телефон(ы)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="lbl_phone" style="margin:10px 0 3px">Телефон(ы)</label>
+      <button type="button" onclick="quickClearField('ff-phone','phone','lbl_phone')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <textarea id="ff-phone" data-ph="ph_phone" placeholder="+972-50-000-0000&#10;можно указать несколько через запятую или с новой строки" style="min-height:50px"></textarea>
 
-    <label data-i="lbl_email">Email(ы)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="lbl_email" style="margin:10px 0 3px">Email(ы)</label>
+      <button type="button" onclick="quickClearField('ff-email','email','lbl_email')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <textarea id="ff-email" data-ph="ph_email" placeholder="example@mail.com&#10;можно указать несколько через запятую" style="min-height:50px"></textarea>
 
-    <label data-i="lbl_social">Страницы в соц. сетях</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="lbl_social" style="margin:10px 0 3px">Страницы в соц. сетях</label>
+      <button type="button" onclick="quickClearField('ff-social','social','lbl_social')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <textarea id="ff-social" data-ph="ph_social" placeholder="https://facebook.com/...&#10;можно указать несколько ссылок, каждую с новой строки" style="min-height:50px"></textarea>
 
     <label data-i="lbl_sex">Пол</label>
@@ -382,7 +400,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <option value="M" data-i="sex_m">Мужской</option>
     </select>
 
-    <label data-i="fix_rel">Степень родства</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="fix_rel" style="margin:10px 0 3px">Степень родства</label>
+      <button type="button" onclick="quickClearField('ff-rel','rel','fix_rel')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
+    </div>
     <input id="ff-rel" type="text" data-ph="ph_rel" placeholder="например: Зять">
 
     <label data-i="fix_family">Семейная связь (что изменить)</label>
@@ -1832,6 +1853,18 @@ function genitive(id) {
   return pname(id);
 }
 
+// Shared by every admin-direct PATCH handler (fix/photo/bio/field-level
+// clear buttons): mirrors the server's null-means-delete semantics in the
+// local optimistic update, instead of Object.assign leaving a literal
+// `null` on the node (which isn't the same as an absent field elsewhere
+// in render/panel code).
+function applyLocalPatch(node, patch) {
+  for(const [k, v] of Object.entries(patch)){
+    if(v === null || v === undefined) delete node[k];
+    else node[k] = v;
+  }
+}
+
 
 // Apply language to all static UI elements and re-render
 window.applyLang = function(lang){
@@ -2284,19 +2317,23 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const person = document.getElementById('f-photo-person').value.trim();
     const url    = document.getElementById('f-photo-url').value.trim();
     const cap    = document.getElementById('f-photo-cap').value.trim();
-    if(!person || !url){ alert('Укажите персону и URL фото'); return; }
+    if(!person){ alert('Укажите персону'); return; }
 
     const photoIdMatch = person.match(/\[(P\d+)\]\s*$/);
     const photoTargetId = photoIdMatch ? photoIdMatch[1] : null;
     const isAdminPhoto = !!(_sessionPassword && window._userRole === 'admin' && photoTargetId && WORKER_URL);
 
     if(isAdminPhoto){
+      // Empty URL from an admin is a deliberate "remove this photo", not a
+      // mistake — send null so the server deletes the field (same
+      // clear-aware pattern as the Fix form, A2.1). Guests still can't
+      // submit an empty request below (that path requires text).
+      const patchBody = { photo: url || null };
       const btn = document.getElementById('modal-generate');
       const origTxt = btn.textContent;
       btn.textContent = '⏳ Сохраняю...';
       btn.disabled = true;
       try {
-        const patchBody = { photo: url };
         const r = await fetch(WORKER_URL + '/api/person/' + photoTargetId, {
           method: 'PATCH',
           headers: {'Content-Type':'application/json','X-Password':_sessionPassword},
@@ -2304,12 +2341,12 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
         });
         const d = await r.json();
         if(d.ok){
-          if(IDX && IDX.nodes[photoTargetId]) Object.assign(IDX.nodes[photoTargetId], patchBody);
-          if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[photoTargetId]) Object.assign(window.FALLBACK_DATA.nodes[photoTargetId], patchBody);
+          if(IDX && IDX.nodes[photoTargetId]) applyLocalPatch(IDX.nodes[photoTargetId], patchBody);
+          if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[photoTargetId]) applyLocalPatch(window.FALLBACK_DATA.nodes[photoTargetId], patchBody);
           document.getElementById('modal-overlay').classList.remove('open');
           if(typeof navigateTo === 'function') navigateTo(currentFocal);
           if(typeof showPanel === 'function') showPanel(photoTargetId);
-          showToast('✓ Фото сохранено', false);
+          showToast(url ? '✓ Фото сохранено' : '✓ Фото удалено', false);
         } else {
           showToast('⚠ ' + (d.error||'Ошибка сервера'), true);
         }
@@ -2322,6 +2359,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       return;
     }
 
+    if(!url){ alert('Укажите URL фото'); return; }
     text  = t('prompt_header');
     text += 'Тип: Добавить фото\n';
     text += 'Персона: ' + person + '\n';
@@ -2341,14 +2379,15 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     if(isAdminBio){
       // Worker only has one 'bio' field — merge text + source URL if both given
       const bioValue = burl ? (bio ? bio + '\n\nИсточник: ' + burl : 'Источник: ' + burl) : bio;
-      if(!bioValue){ alert('Укажите текст биографии или ссылку'); return; }
+      // Both empty is a deliberate "remove this bio" action from an admin,
+      // not a mistake — send null instead of blocking with an alert.
+      const patchBody = { bio: bioValue || null };
 
       const btn = document.getElementById('modal-generate');
       const origTxt = btn.textContent;
       btn.textContent = '⏳ Сохраняю...';
       btn.disabled = true;
       try {
-        const patchBody = { bio: bioValue };
         const r = await fetch(WORKER_URL + '/api/person/' + bioTargetId, {
           method: 'PATCH',
           headers: {'Content-Type':'application/json','X-Password':_sessionPassword},
@@ -2356,12 +2395,12 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
         });
         const d = await r.json();
         if(d.ok){
-          if(IDX && IDX.nodes[bioTargetId]) Object.assign(IDX.nodes[bioTargetId], patchBody);
-          if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[bioTargetId]) Object.assign(window.FALLBACK_DATA.nodes[bioTargetId], patchBody);
+          if(IDX && IDX.nodes[bioTargetId]) applyLocalPatch(IDX.nodes[bioTargetId], patchBody);
+          if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[bioTargetId]) applyLocalPatch(window.FALLBACK_DATA.nodes[bioTargetId], patchBody);
           document.getElementById('modal-overlay').classList.remove('open');
           if(typeof navigateTo === 'function') navigateTo(currentFocal);
           if(typeof showPanel === 'function') showPanel(bioTargetId);
-          showToast('✓ Биография сохранена', false);
+          showToast(bioValue ? '✓ Биография сохранена' : '✓ Биография удалена', false);
         } else {
           showToast('⚠ ' + (d.error||'Ошибка сервера'), true);
         }
@@ -2491,20 +2530,10 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
         if(data.ok){
           // Update local IDX immediately (optimistic update) — this is what
           // rendering, panels, and forms actually read from after API load.
-          // A null value in patch means the server deleted the key — mirror
-          // that locally instead of leaving a literal `null` (which is what
-          // plain Object.assign would do, and which isn't the same as an
-          // absent field everywhere in the render/panel code).
-          const applyPatch = (node, p) => {
-            for(const [k,v] of Object.entries(p)){
-              if(v === null || v === undefined) delete node[k];
-              else node[k] = v;
-            }
-          };
-          if(IDX && IDX.nodes[origId]) applyPatch(IDX.nodes[origId], patch);
+          if(IDX && IDX.nodes[origId]) applyLocalPatch(IDX.nodes[origId], patch);
           // Also keep FALLBACK_DATA in sync for offline fallback scenarios
           if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[origId])
-            applyPatch(window.FALLBACK_DATA.nodes[origId], patch);
+            applyLocalPatch(window.FALLBACK_DATA.nodes[origId], patch);
           // Close modal and refresh display
           document.getElementById('modal-overlay').classList.remove('open');
           if(typeof navigateTo === 'function') navigateTo(currentFocal);
@@ -3814,6 +3843,68 @@ async function confirmDeleteFamily(famId){
 // link was the free-text "Семейная связь" field in the Fix form, routed
 // to email for manual review — this gives admins a direct one-click action
 // for the common case of "this child was linked to the wrong family".
+// C1: instant single-field clear from the Fix form — one click instead of
+// "select an empty value, then Save the whole form" (A2.1 already made
+// that path work; this just makes the common case — remove one wrong
+// field — a single click). apiKey must be in the server's ALLOWED
+// whitelist (see PATCH /api/person/:id in src/index.js).
+async function quickClearField(inputId, apiKey, labelKey){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
+
+  const personVal = document.getElementById('f-fix-person').value.trim();
+  const idMatch = personVal.match(/\[(P\d+)\]\s*$/);
+  const origId = idMatch ? idMatch[1] : null;
+  if(!origId){
+    showToast(currentLang==='he' ? '⚠ קודם בחר אדם' : currentLang==='en' ? '⚠ Select a person first' : '⚠ Сначала выберите персону (поле выше)', true);
+    return;
+  }
+
+  const n = IDX.nodes[origId];
+  if(!n || !n[apiKey]){
+    // nothing on the server to clear — just blank the input locally
+    const el = document.getElementById(inputId);
+    if(el) el.value = '';
+    return;
+  }
+
+  const fieldLabel = t(labelKey);
+  const confirmMsg = currentLang==='he' ? `למחוק את השדה "${fieldLabel}" של ${pname(origId)}?`
+    : currentLang==='en' ? `Clear field "${fieldLabel}" for ${pname(origId)}?`
+    : `Очистить поле «${fieldLabel}» у ${pname(origId)}?`;
+  if(!confirm(confirmMsg)) return;
+
+  try {
+    const r = await fetch(WORKER_URL + '/api/person/' + origId, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','X-Password':_sessionPassword},
+      body: JSON.stringify({ [apiKey]: null })
+    });
+    const d = await r.json();
+    if(d.ok){
+      applyLocalPatch(IDX.nodes[origId], { [apiKey]: null });
+      if(window.FALLBACK_DATA && window.FALLBACK_DATA.nodes[origId])
+        applyLocalPatch(window.FALLBACK_DATA.nodes[origId], { [apiKey]: null });
+      const el = document.getElementById(inputId);
+      if(el) el.value = '';
+      // Refresh the reference card at the top of the form and the panel
+      // underneath, so both reflect the field being gone immediately.
+      if(typeof openModal === 'function') {
+        const card0 = document.getElementById('fix-current-data');
+        if(card0 && card0.textContent) {
+          card0.textContent = card0.textContent.split('\n').filter(line => !line.startsWith(fieldLabel + ':')).join('\n');
+        }
+      }
+      if(typeof navigateTo === 'function') navigateTo(currentFocal);
+      if(typeof showPanel === 'function') showPanel(origId);
+      showToast(currentLang==='he' ? '✓ נמחק' : currentLang==='en' ? '✓ Cleared' : '✓ Очищено', false);
+    } else {
+      showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
+    }
+  } catch(e){
+    showToast('⚠ Ошибка соединения: ' + e.message, true);
+  }
+}
+
 async function confirmRemoveChild(famId, childId){
   if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
   const fam = IDX.families[famId];
