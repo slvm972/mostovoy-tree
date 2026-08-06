@@ -1,3 +1,5 @@
 node_modules/
-(
-type
+.wrangler/
+.tmp.driveupload/
+desktop.ini
+*.ini
