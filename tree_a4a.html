@@ -2140,6 +2140,15 @@ function openModal(prefillId, mode){
     const el = document.getElementById(fid);
     if(el) el.value = '';
   });
+  // P-Fix1: unconditional reset — every openModal() call starts with no
+  // remembered fix target and an editable "Персона" field, unless the
+  // 'fix' branch below re-locks it.
+  fixTargetId = null;
+  const fixPersonFieldReset = document.getElementById('f-fix-person');
+  if(fixPersonFieldReset){
+    fixPersonFieldReset.readOnly = false;
+    fixPersonFieldReset.style.background = '';
+  }
   // Reset selects to empty default
   const fSex     = document.getElementById('f-sex');
   const fRelType = document.getElementById('f-rel-type');
@@ -2163,6 +2172,12 @@ function openModal(prefillId, mode){
     // Fill fix-person field
     const fp = document.getElementById('f-fix-person');
     if(fp) fp.value = label;
+
+    // P-Fix1: remember the target id explicitly and lock the field so it
+    // can't be accidentally overwritten with a new value that has no
+    // trailing [Pxxx] tag (which would otherwise silently break save).
+    fixTargetId = prefillId;
+    if(fp){ fp.readOnly = true; fp.style.background = '#EDE4D3'; }
 
     // Show current data as a reference card (read-only summary)
     const lines = [];
@@ -2245,6 +2260,11 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 
 // Type switching
 let currentType = 'person';
+// P-Fix1: remembers which person id the "🔧 Исправить" form was opened
+// for, so save-time logic doesn't have to re-parse the (editable!)
+// "Персона" text field and risk losing the [Pxxx] suffix if the user
+// accidentally types into that field instead of the "Имя" field below.
+let fixTargetId = null;
 document.querySelectorAll('.mtype').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
@@ -2478,8 +2498,16 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const person  = document.getElementById('f-fix-person').value.trim();
     if(!person){ alert(t('alert_person')); return; }
 
-    const idMatch = person.match(/\[(P\d+)\]\s*$/);
-    const origId  = idMatch ? idMatch[1] : null;
+    // P-Fix1: trust the id remembered at modal-open time first — the
+    // "Персона" field is only readOnly while it holds that id, but stays
+    // editable for the "type a name to search" flow, so a naive re-parse
+    // of its live text can silently lose the [Pxxx] suffix and fall back
+    // to the email path even when the button promised a direct save.
+    let origId = (fixTargetId && IDX.nodes[fixTargetId]) ? fixTargetId : null;
+    if(!origId){
+      const idMatch = person.match(/\[(P\d+)\]\s*$/);
+      origId = idMatch ? idMatch[1] : null;
+    }
 
     const isAdminFix = !!(_sessionPassword && window._userRole === 'admin' && origId && WORKER_URL);
     let orig = origId && IDX.nodes[origId] ? IDX.nodes[origId] : {};
@@ -2543,6 +2571,19 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     if(!changed.length && !familyNote && !otherNote){
       alert(t('alert_fix_empty') || 'Укажите хотя бы одно изменение');
+      return;
+    }
+
+    // P-Fix1: guard against the silent admin→email fallback. This only
+    // fires when we're logged in as admin AND have real field changes to
+    // save AND still couldn't identify origId — meaning the "Персона"
+    // field's [Pxxx] tag was lost some other way (e.g. readOnly bypass).
+    // It never touches the normal guest email flow or intentional
+    // familyNote/otherNote structural requests.
+    if(_sessionPassword && window._userRole === 'admin' && !origId && !familyNote && !otherNote && changed.length){
+      showToast(currentLang==='he' ? '⚠ לא ניתן לזהות את האדם לשמירה — בחר שוב מהרשימה'
+              : currentLang==='en' ? '⚠ Could not identify the person to save — please reselect from the list'
+              : '⚠ Не удалось определить персону для сохранения — выберите её заново из списка', true);
       return;
     }
 
