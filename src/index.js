@@ -521,6 +521,7 @@ export default {
         r.siblings = (r.siblings||[]).filter(s => s !== personId);
         r.spouses  = (r.spouses ||[]).filter(s => s !== personId);
         r.parents  = (r.parents ||[]).filter(s => s !== personId);
+        r.children = (r.children||[]).filter(s => s !== personId);
       }
 
       // Remove from all family references
