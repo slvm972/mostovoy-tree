@@ -779,6 +779,8 @@ function getCenteredLayout(focalId){
     .filter(n => n.y === LEVEL_H && n.id !== focalId)
     .sort((a,b) => a.x - b.x);  // left to right order
 
+  let prevRightGC = -Infinity; // track right edge of last placed grandchildren group
+
   for(const cNode of placedChildren){
     const cId  = cNode.id;
     const cRel = IDX.relatives[cId];
@@ -803,11 +805,18 @@ function getCenteredLayout(focalId){
     const gcW     = gcList.length * CW + (gcList.length - 1) * SIBLING_GAP;
     const childCX = cNode.x + CW / 2;
     let gx = childCX - gcW / 2;
+    // Anti-overlap: a wide grandchildren group under this child can start
+    // to the left of where the previous child's own (possibly narrower or
+    // wider) grandchildren group already ended. Clamp forward so groups
+    // never overlap, at the cost of drifting right of the "ideal" center
+    // under a densely-populated branch.
+    if(gx < prevRightGC + SIBLING_GAP) gx = prevRightGC + SIBLING_GAP;
 
     for(const gcId of gcList){
       add({id: gcId, x: gx, y: 2 * LEVEL_H, role: 'grandchild'});
       gx += CW + SIBLING_GAP;
     }
+    prevRightGC = gx - SIBLING_GAP;
   }
 
   return { nodes, focalId, coupleAnchorX };
