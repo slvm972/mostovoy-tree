@@ -2317,6 +2317,24 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const relP  = document.getElementById('f-rel-person').value.trim();
     const relT  = document.getElementById('f-rel-type').value;
     if(!name){ alert('Введите имя'); return; }
+	// Проверка на дубль имени — не даём случайно создать вторую запись
+    // того же человека, если имя уже встречается в дереве.
+    if(isAdminDirect){
+      const nameLower = name.trim().toLowerCase();
+      const matches = Object.entries(IDX.nodes)
+        .filter(([, pn]) => (pn.name||'').trim().toLowerCase() === nameLower);
+      if(matches.length){
+        const list = matches.map(([pid, pn]) =>
+          `${pn.name} (${pn.birth || '?'}) [${pid}]`).join('\n');
+        const proceed = confirm(
+          'Персона с таким именем уже есть в дереве:\n\n' + list +
+          '\n\nЕсли это ТОТ ЖЕ человек — нажмите «Отмена» и используйте ' +
+          'вкладку «🔗 Прикрепить» вместо создания новой записи.\n' +
+          'Если это другой человек с совпадающим именем — нажмите «ОК».'
+        );
+        if(!proceed) return;
+      }
+    }
 
     if(isAdminDirect){
       const phoneV  = document.getElementById('f-phone').value.trim();
