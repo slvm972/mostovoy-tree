@@ -277,6 +277,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <div class="mtype" data-type="bio" data-i="mtype_bio">📝 Биография</div>
     <div class="mtype" data-type="date" data-i="mtype_date">📅 Дата / место</div>
     <div class="mtype" data-type="fix" data-i="mtype_fix">🔧 Исправить</div>
+	<div class="mtype" data-type="attach" data-i="mtype_attach">🔗 Прикрепить</div>
   </div>
 
   <!-- Поля: Новый человек -->
@@ -414,6 +415,22 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 
     <label data-i="lbl_comment">Комментарий (необязательно)</label>
     <input id="f-fix-comment" type="text" data-ph="ph_comment" placeholder="Источник, пояснение...">
+  </div>
+  
+  <!-- Поля: Прикрепить существующего -->
+  <div class="mfields" id="mf-attach">
+    <label data-i="lbl_attach_existing">Кого прикрепить</label>
+    <input id="f-attach-existing" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_attach_target">К кому</label>
+    <input id="f-attach-target" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_rel_type">Тип связи</label>
+    <select id="f-attach-type">
+      <option value="" data-i="rel_choose">— выбрать —</option>
+      <option value="жена" data-i="rel_wife">Жена</option>
+      <option value="муж" data-i="rel_husband">Муж</option>
+      <option value="ребёнок" data-i="rel_child">Ребёнок</option>
+      <option value="родитель" data-i="rel_parent">Родитель</option>
+    </select>
   </div>
 
 
@@ -1641,6 +1658,9 @@ const UI = {
     mtype_person:'👤 Новый человек', mtype_photo:'📷 Фото',
     mtype_bio:'📝 Биография',        mtype_date:'📅 Дата / место',
     mtype_fix:'🔧 Исправить',
+	mtype_attach:'🔗 Прикрепить',
+    lbl_attach_existing:'Кого прикрепить',
+    lbl_attach_target:'К кому',
     lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
     lbl_genitive:'Имя в родительном падеже (необязательно)', ph_genitive:'Например: Анны Ивановой',
     lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
@@ -1720,6 +1740,9 @@ const UI = {
     mtype_person:'👤 New person', mtype_photo:'📷 Photo',
     mtype_bio:'📝 Biography',     mtype_date:'📅 Date / place',
     mtype_fix:'🔧 Correct',
+	mtype_attach:'🔗 Attach existing',
+    lbl_attach_existing:'Attach who',
+    lbl_attach_target:'To whom',
     lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
     lbl_genitive:'Genitive-case name (optional)', ph_genitive:'E.g.: Anny Ivanovoy',
     lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
@@ -1799,6 +1822,9 @@ const UI = {
     mtype_person:'👤 אדם חדש', mtype_photo:'📷 תמונה',
     mtype_bio:'📝 ביוגרפיה',   mtype_date:'📅 תאריך / מקום',
     mtype_fix:'🔧 תיקון',
+	mtype_attach:'🔗 חיבור',
+    lbl_attach_existing:'את מי לחבר',
+    lbl_attach_target:'למי',
     lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
     lbl_genitive:'שם ביחסת הקניין (רשות)', ph_genitive:'לדוגמה: Анны Ивановой',
     lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
@@ -2292,7 +2318,7 @@ function updateGenerateButtonLabel(){
   const btn = document.getElementById('modal-generate');
   if(!btn) return;
   const isAdmin = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  const directTypes = ['person','fix','photo','bio']; // types with direct API save (date excluded — free-text notes go via email for human review)
+  const directTypes = ['person','fix','photo','bio','attach']; // types with direct API save (date excluded — free-text notes go via email for human review)
   if(isAdmin && directTypes.includes(currentType)){
     btn.innerHTML = currentLang==='he' ? '💾 שמור ישירות'
                   : currentLang==='en' ? '💾 Save directly'
@@ -2520,6 +2546,44 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     text += 'Тип: Уточнение дат / места\n';
     text += 'Персона: ' + person + '\n';
     text += 'Уточнение: ' + note + '\n';
+	
+	} else if(currentType === 'attach'){
+    const existingLabel = document.getElementById('f-attach-existing').value.trim();
+    const targetLabel   = document.getElementById('f-attach-target').value.trim();
+    const relT          = document.getElementById('f-attach-type').value;
+    if(!existingLabel || !targetLabel || !relT){ alert(t('alert_person')); return; }
+
+    const exM = existingLabel.match(/\[(P\d+)\]\s*$/);
+    const tgM = targetLabel.match(/\[(P\d+)\]\s*$/);
+    if(!exM || !tgM){ alert(t('alert_person')); return; }
+    const existingId = exM[1], targetId = tgM[1];
+
+    const isAdminDirect = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+
+    if(isAdminDirect){
+      const btn = document.getElementById('modal-generate');
+      const origTxt = btn.textContent;
+      btn.textContent = '⏳ Сохраняю...';
+      btn.disabled = true;
+      try {
+        await linkExistingPersonToFamily(existingId, targetId, relT);
+        if(typeof loadTree === 'function') await loadTree();
+        document.getElementById('modal-overlay').classList.remove('open');
+        showToast('✓ Связь установлена', false);
+      } catch(e){
+        showToast('⚠ ' + e.message, true);
+      } finally {
+        btn.textContent = origTxt;
+        btn.disabled = false;
+      }
+      return;
+    }
+
+    text  = t('prompt_fix_header');
+    text += 'Тип: Прикрепить существующую персону\n';
+    text += 'Кого: ' + existingLabel + '\n';
+    text += 'К кому: ' + targetLabel + '\n';
+    text += 'Связь: ' + relT + '\n';
 
   } else if(currentType === 'fix'){
     const person  = document.getElementById('f-fix-person').value.trim();
@@ -4131,12 +4195,9 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
     } else {
-      const fam = IDX.families[famId];
-      const slot = !fam.husband ? 'parent1' : !fam.wife ? 'parent2' : null;
-      if(!slot) throw new Error('У этой персоны уже есть оба родителя');
       const r = await fetch(WORKER_URL + '/api/family/' + famId, {
         method: 'PATCH', headers,
-        body: JSON.stringify({[slot]: newId})
+        body: JSON.stringify({addParent: newId})
       });
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось добавить родителя');
@@ -4160,6 +4221,79 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
     }
   }
   // else: relType empty or unrecognized — silently skip linking
+}
+
+async function linkExistingPersonToFamily(existingId, targetId, relType){
+  const existingNode = IDX.nodes[existingId];
+  const targetNode    = IDX.nodes[targetId];
+  if(!existingNode) throw new Error('Существующая персона не найдена: ' + existingId);
+  if(!targetNode)   throw new Error('Целевая персона не найдена: ' + targetId);
+  if(existingId === targetId) throw new Error('Нельзя прикрепить персону к самой себе');
+
+  const headers = {'Content-Type':'application/json','X-Password':_sessionPassword};
+
+  if(relType === 'жена' || relType === 'муж'){
+    const famIds = IDX.parent_in[targetId] || [];
+    let reusedFamId = null;
+    for(const fid of famIds){
+      const fam = IDX.families[fid];
+      if(!fam) continue;
+      const needsHusband = !fam.husband && existingNode.sex !== 'F';
+      const needsWife    = !fam.wife    && existingNode.sex !== 'M';
+      if(needsHusband || needsWife){ reusedFamId = fid; break; }
+    }
+    if(reusedFamId){
+      const r = await fetch(WORKER_URL + '/api/family/' + reusedFamId, {
+        method: 'PATCH', headers, body: JSON.stringify({addParent: existingId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить супруга к существующей семье');
+    } else {
+      const isHusband = relType === 'муж' || existingNode.sex === 'M';
+      const p1 = isHusband ? existingId : targetId;
+      const p2 = isHusband ? targetId : existingId;
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers, body: JSON.stringify({parent1:p1, parent2:p2, children:[]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    }
+  } else if(relType === 'ребёнок'){
+    const famIds = IDX.parent_in[targetId] || [];
+    let famId = famIds[0];
+    if(!famId){
+      const isFemale = targetNode.sex === 'F';
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify(isFemale ? {parent1:null,parent2:targetId,children:[]} : {parent1:targetId,parent2:null,children:[]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+      famId = d.familyId;
+    }
+    const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+      method: 'PATCH', headers, body: JSON.stringify({addChild: existingId})
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить ребёнка к семье');
+  } else if(relType === 'родитель'){
+    const famId = IDX.child_of[targetId];
+    if(!famId){
+      const isFemale = existingNode.sex === 'F';
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify(isFemale ? {parent1:null,parent2:existingId,children:[targetId]} : {parent1:existingId,parent2:null,children:[targetId]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    } else {
+      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+        method: 'PATCH', headers, body: JSON.stringify({addParent: existingId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить родителя');
+    }
+  } else throw new Error('Неизвестный тип связи: ' + relType);
 }
 
 // Инициализировать дерево с данными из API
