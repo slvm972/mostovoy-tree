@@ -292,7 +292,15 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <input id="f-birth" type="text" data-ph="ph_birth" placeholder="Например: 15 марта 1975">
     <label data-i="lbl_death">Дата смерти (если есть)</label>
     <input id="f-death" type="text" data-ph="ph_death" placeholder="оставьте пустым если жив(а)">
-    <label data-i="lbl_rel_person">Связь с кем</label>
+    <label data-i="lbl_father">Отец</label>
+    <input id="f-father" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_mother">Мать</label>
+    <input id="f-mother" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+	<label data-i="lbl_father">Отец</label>
+    <input id="f-father" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_mother">Мать</label>
+    <input id="f-mother" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+	<label data-i="lbl_rel_person">Связь с кем</label>
     <input id="f-rel-person" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
     <label data-i="lbl_rel_type">Тип связи</label>
     <select id="f-rel-type">
@@ -1661,6 +1669,8 @@ const UI = {
 	mtype_attach:'🔗 Прикрепить',
     lbl_attach_existing:'Кого прикрепить',
     lbl_attach_target:'К кому',
+	lbl_father:'Отец',
+    lbl_mother:'Мать',
     lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
     lbl_genitive:'Имя в родительном падеже (необязательно)', ph_genitive:'Например: Анны Ивановой',
     lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
@@ -1743,6 +1753,8 @@ const UI = {
 	mtype_attach:'🔗 Attach existing',
     lbl_attach_existing:'Attach who',
     lbl_attach_target:'To whom',
+	lbl_father:'Father',
+    lbl_mother:'Mother',
     lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
     lbl_genitive:'Genitive-case name (optional)', ph_genitive:'E.g.: Anny Ivanovoy',
     lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
@@ -1825,6 +1837,8 @@ const UI = {
 	mtype_attach:'🔗 חיבור',
     lbl_attach_existing:'את מי לחבר',
     lbl_attach_target:'למי',
+	lbl_father:'אבא',
+    lbl_mother:'אמא',
     lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
     lbl_genitive:'שם ביחסת הקניין (רשות)', ph_genitive:'לדוגמה: Анны Ивановой',
     lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
@@ -2163,7 +2177,7 @@ function openModal(prefillId, mode){
   ['f-name','f-name-genitive','f-birth','f-death','f-phone','f-email','f-social',
    'f-photo-url','f-photo-cap',
    'f-bio-text','f-bio-url',
-   'f-date-note',
+   'f-date-note','f-father','f-mother',
    'ff-name','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
    'ff-phone','ff-email','ff-social','ff-rel','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
@@ -2342,6 +2356,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const death = document.getElementById('f-death').value.trim();
     const relP  = document.getElementById('f-rel-person').value.trim();
     const relT  = document.getElementById('f-rel-type').value;
+	const fatherLabel = document.getElementById('f-father').value.trim();
+    const motherLabel = document.getElementById('f-mother').value.trim();
     if(!name){ alert('Введите имя'); return; }
 	// Проверка на дубль имени — не даём случайно создать вторую запись
     // того же человека, если имя уже встречается в дереве.
@@ -2403,6 +2419,21 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
             }
           }
 
+			const fatherMatch = fatherLabel.match(/\[(P\d+)\]\s*$/);
+          const motherMatch = motherLabel.match(/\[(P\d+)\]\s*$/);
+          const fatherId = fatherMatch ? fatherMatch[1] : null;
+          const motherId = motherMatch ? motherMatch[1] : null;
+          if(fatherLabel && !fatherId) showToast('⚠ Поле «Отец» проигнорировано — выберите персону из списка', true);
+          if(motherLabel && !motherId) showToast('⚠ Поле «Мать» проигнорировано — выберите персону из списка', true);
+          if(fatherId || motherId){
+            try {
+              await attachParentsToNewPerson(newId, fatherId, motherId);
+            } catch(parentErr){
+              console.warn('[C5] Parent link failed (person still created):', parentErr.message);
+              showToast('✓ Персона создана, но родителей не удалось привязать автоматически', true);
+            }
+          }
+
           if(typeof loadTree === 'function') await loadTree();
           document.getElementById('modal-overlay').classList.remove('open');
           showToast('✓ Добавлено: ' + name, false);
@@ -2425,6 +2456,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     if(birth) text += 'Дата рождения: ' + birth + '\n';
     if(death) text += 'Дата смерти: ' + death + '\n';
     if(relP)  text += 'Связь: ' + relT + ' ' + relP + '\n';
+	if(fatherLabel) text += 'Отец: ' + fatherLabel + '\n';
+    if(motherLabel) text += 'Мать: ' + motherLabel + '\n';
     const phone = document.getElementById('f-phone').value.trim();
     const email = document.getElementById('f-email').value.trim();
     const social = document.getElementById('f-social').value.trim();
@@ -4294,6 +4327,37 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
       if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить родителя');
     }
   } else throw new Error('Неизвестный тип связи: ' + relType);
+}
+
+async function attachParentsToNewPerson(newId, fatherId, motherId){
+  const headers = {'Content-Type':'application/json','X-Password':_sessionPassword};
+  if(fatherId && motherId){
+    const famIds = (IDX.parent_in[fatherId]||[]).filter(fid => (IDX.parent_in[motherId]||[]).includes(fid));
+    let famId = famIds[0];
+    if(famId){
+      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+        method:'PATCH', headers, body: JSON.stringify({addChild: newId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось добавить ребёнка в существующий брак родителей');
+    } else {
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method:'POST', headers, body: JSON.stringify({parent1:fatherId, parent2:motherId, children:[newId]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью с обоими родителями');
+    }
+  } else if(fatherId || motherId){
+    const pid = fatherId || motherId;
+    const pNode = IDX.nodes[pid];
+    const isFemale = pNode && pNode.sex === 'F';
+    const r = await fetch(WORKER_URL + '/api/family', {
+      method:'POST', headers,
+      body: JSON.stringify(isFemale ? {parent1:null, parent2:pid, children:[newId]} : {parent1:pid, parent2:null, children:[newId]})
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Не удалось привязать родителя');
+  }
 }
 
 // Инициализировать дерево с данными из API
