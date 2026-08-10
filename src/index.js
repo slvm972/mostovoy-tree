@@ -30,6 +30,58 @@ async function checkPassword(provided, storedHash) {
   return h === storedHash;
 }
 
+// ── Cycle guard ─────────────────────────────────────────
+// Prevents a person from becoming their own ancestor or descendant
+// (e.g. "add my father as my child") when linking family relations.
+// Walks IDX.relatives in both directions from `candidateId` and
+// returns true if `targetId` is found among its ancestors or
+// descendants (which would make targetId<->candidateId a cycle).
+function isAncestorOrDescendant(IDX, targetId, candidateId) {
+  if(!targetId || !candidateId) return false;
+  if(targetId === candidateId) return true;
+
+  const visited = new Set();
+  const stack = [candidateId];
+  // Walk descendants of candidateId
+  while(stack.length) {
+    const cur = stack.pop();
+    if(visited.has(cur)) continue;
+    visited.add(cur);
+    if(cur === targetId) return true;
+    const rel = IDX.relatives[cur];
+    if(rel && rel.children) for(const c of rel.children) stack.push(c);
+  }
+
+  visited.clear();
+  stack.push(candidateId);
+  // Walk ancestors of candidateId
+  while(stack.length) {
+    const cur = stack.pop();
+    if(visited.has(cur)) continue;
+    visited.add(cur);
+    if(cur === targetId) return true;
+    const rel = IDX.relatives[cur];
+    if(rel && rel.parents) for(const p of rel.parents) stack.push(p);
+  }
+
+  return false;
+}
+
+// Checks whether making `childId` a child of `parentId` would create
+// a cycle (parentId is already a descendant of childId, or they're
+// the same person). Returns an error message string, or null if safe.
+function checkParentChildCycle(IDX, parentId, childId) {
+  if(!parentId || !childId) return null;
+  if(parentId === childId) {
+    return 'Персона не может быть собственным родителем/ребёнком';
+  }
+  if(isAncestorOrDescendant(IDX, parentId, childId)) {
+    return 'Эта связь создала бы цикл: ' + (IDX.nodes[parentId]?.name || parentId) +
+      ' уже является потомком ' + (IDX.nodes[childId]?.name || childId);
+  }
+  return null;
+}
+
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -562,6 +614,15 @@ export default {
       if(p1 && !IDX.nodes[p1]) return err('Персона не найдена: ' + p1, 404);
       if(p2 && !IDX.nodes[p2]) return err('Персона не найдена: ' + p2, 404);
 
+      // Cycle guard: no parent may already be an ancestor/descendant of
+      // any listed child (e.g. "add my father as my child")
+      for(const parentId of [p1, p2].filter(Boolean)){
+        for(const cid of children){
+          const cycleErr = checkParentChildCycle(IDX, parentId, cid);
+          if(cycleErr) return err(cycleErr, 409);
+        }
+      }
+
       // Generate next family ID
       const maxF = Math.max(0, ...Object.keys(IDX.families)
         .filter(k => k.startsWith('F'))
@@ -645,6 +706,14 @@ export default {
       if(body.addChild) {
         const cid = body.addChild;
         if(!IDX.nodes[cid]) return err('Персона не найдена: ' + cid, 404);
+
+        // Cycle guard: cid must not already be an ancestor of either
+        // parent in this family (e.g. "add my father as my child")
+        for(const pid of parents){
+          const cycleErr = checkParentChildCycle(IDX, pid, cid);
+          if(cycleErr) return err(cycleErr, 409);
+        }
+
         if(!fam.children.includes(cid)) fam.children.push(cid);
 
         IDX.child_of[cid] = famId;
@@ -682,6 +751,14 @@ export default {
       if(body.addParent) {
         const pid = body.addParent;
         if(!IDX.nodes[pid]) return err('Персона не найдена: ' + pid, 404);
+
+        // Cycle guard: pid must not already be a descendant of any
+        // child in this family (e.g. "add my child as my parent")
+        for(const cid of fam.children){
+          const cycleErr = checkParentChildCycle(IDX, pid, cid);
+          if(cycleErr) return err(cycleErr, 409);
+        }
+
         const sex = IDX.nodes[pid].sex;
         if(!fam.husband && sex !== 'F') fam.husband = pid;
         else if(!fam.wife && sex !== 'M') fam.wife = pid;
