@@ -136,6 +136,57 @@ function checkGenOrder(IDX, parentId, childId) {
   return null;
 }
 
+// ── Auto-fill missing generation numbers ────────────────
+// A person created without an explicit `gen` gets `gen: null` (see
+// POST /api/person below) instead of silently defaulting to 0 — 0 is
+// a legitimate value for real eldest ancestors, so guessing 0 for
+// "unspecified" would be indistinguishable from a real great-grandparent
+// and slip past checkGenOrder undetected (exactly the bug that caused
+// the Sveta/Sasha Kulnitsky case).
+//
+// Instead, whenever a family gets a parent/child link established
+// (POST /api/family, addChild, addParent, setSlot), this fills in
+// any still-missing gen using whoever ELSE in that same family already
+// has a known gen: children = parents' gen + 1, parents = children's
+// gen - 1 (or match the other parent's gen if that's what's known).
+// If nobody in the family has a known gen yet, nothing is set — that
+// rare case still needs a human to specify it once, but doesn't
+// silently corrupt data with a fake 0.
+function autoFillGen(IDX, famId) {
+  const fam = IDX.families[famId];
+  if(!fam) return;
+  const parents  = [fam.husband, fam.wife].filter(Boolean);
+  const children = fam.children || [];
+
+  const knownParentGen = parents
+    .map(p => IDX.nodes[p]?.gen)
+    .find(g => g !== null && g !== undefined);
+  const knownChildGen = children
+    .map(c => IDX.nodes[c]?.gen)
+    .find(g => g !== null && g !== undefined);
+
+  let parentGen = knownParentGen;
+  if(parentGen === undefined && knownChildGen !== undefined) parentGen = knownChildGen - 1;
+
+  let childGen = knownChildGen;
+  if(childGen === undefined && parentGen !== undefined) childGen = parentGen + 1;
+
+  if(parentGen !== undefined){
+    for(const p of parents){
+      if(IDX.nodes[p] && (IDX.nodes[p].gen === null || IDX.nodes[p].gen === undefined)) {
+        IDX.nodes[p].gen = parentGen;
+      }
+    }
+  }
+  if(childGen !== undefined){
+    for(const c of children){
+      if(IDX.nodes[c] && (IDX.nodes[c].gen === null || IDX.nodes[c].gen === undefined)) {
+        IDX.nodes[c].gen = childGen;
+      }
+    }
+  }
+}
+
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -568,7 +619,7 @@ export default {
         id:      newId,
         name:    body.name,
         sex:     body.sex    || '',
-        gen:     body.gen    ?? 0,
+        gen:     body.gen    ?? null,
         birth:   body.birth  || '',
         death:   body.death  || '',
         rel:     body.rel    || '',
@@ -739,6 +790,10 @@ export default {
         }
       }
 
+      // Fill in missing generation numbers for anyone in this new
+      // family who doesn't have one yet (see autoFillGen above)
+      autoFillGen(IDX, famId);
+
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
       await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
@@ -854,6 +909,10 @@ export default {
           if(IDX.relatives[cid] && !IDX.relatives[cid].parents.includes(pid)) IDX.relatives[cid].parents.push(pid);
         }
       }
+
+      // Fill in missing generation numbers for anyone newly linked
+      // into this family who doesn't have one yet (see autoFillGen above)
+      autoFillGen(IDX, famId);
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
