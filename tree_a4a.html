@@ -3343,6 +3343,53 @@ function runDiagnostics(){
     const d = n.death ? (n.death.match(/\d{4}/)||[])[0] : null;
     if(b && d && +d < +b) deadBeforeBorn++;
   }
+
+  // ── 1b. РОДСТВЕННЫЕ СВЯЗИ (циклы и путаница родитель/ребёнок) ──
+  // Проверяет то, от чего защищает backend при новых изменениях, но
+  // здесь дополнительно ловит уже существующие ошибки в данных
+  // (например, занесённые вручную через «Загрузить дерево» в admin.html,
+  // до того как эти проверки появились на сервере).
+  const famProblems = []; // { famId, childId, childName, reason }
+  function famProblem(famId, childId, reason){
+    famProblems.push({ famId, childId, childName: IDX.nodes[childId]?.name || childId, reason });
+  }
+  function birthYr(id){ const m = IDX.nodes[id]?.birth && IDX.nodes[id].birth.match(/\d{4}/); return m ? +m[0] : null; }
+  function genOf(id){ const g = IDX.nodes[id]?.gen; return (g===undefined||g===null) ? null : g; }
+
+  const childFamilyCount = {}; // childId -> count of families listing them as a child
+  for(const [fid, f] of Object.entries(IDX.families)){
+    const parents = [f.husband, f.wife].filter(Boolean);
+    for(const cid of f.children || []){
+      childFamilyCount[cid] = (childFamilyCount[cid] || 0) + 1;
+      if(parents.includes(cid)){
+        famProblem(fid, cid, 'родитель этой же семьи указан в её собственных детях');
+        continue;
+      }
+      for(const pid of parents){
+        const py = birthYr(pid), cy = birthYr(cid);
+        if(py != null && cy != null && cy <= py){
+          famProblem(fid, cid, `родился(ась) в ${cy}, раньше или в тот же год что «родитель» (${py})`);
+        }
+        const pg = genOf(pid), cg = genOf(cid);
+        if(pg != null && cg != null && cg <= pg){
+          famProblem(fid, cid, `поколение ${cg} не младше поколения «родителя» (${pg})`);
+        }
+      }
+    }
+  }
+  for(const [cid, count] of Object.entries(childFamilyCount)){
+    if(count > 1){
+      famProblem('—', cid, `числится "ребёнком" сразу в ${count} разных семьях`);
+    }
+  }
+  famProblems.length === 0
+    ? ok('Родственные связи без противоречий')
+    : fail('Подозрительные родственные связи', famProblems.length + ' — см. подробности ниже');
+  if(famProblems.length){
+    for(const p of famProblems.slice(0, 15)){
+      warn('  ⚠ ' + p.childName + (p.famId !== '—' ? ' (семья ' + p.famId + ')' : ''), p.reason);
+    }
+  }
   deadBeforeBorn === 0 ? ok('Хронология дат корректна')
                        : fail('Смерть раньше рождения', deadBeforeBorn + ' случаев');
 

@@ -82,6 +82,60 @@ function checkParentChildCycle(IDX, parentId, childId) {
   return null;
 }
 
+// ── Additional data-integrity guards ────────────────────
+// These catch corruption that is NOT a graph cycle (so
+// checkParentChildCycle wouldn't see it) but is still
+// biologically/structurally impossible.
+
+// A person may only be a "child" (have parents) in ONE family.
+// Catches the case where the same person gets attached as a child
+// in two different families (e.g. once by mistake, once correctly).
+function checkAlreadyHasFamily(IDX, childId, famId) {
+  const existing = IDX.child_of[childId];
+  if(existing && existing !== famId) {
+    const existingFam = IDX.families[existing];
+    const existingParents = existingFam
+      ? [existingFam.husband, existingFam.wife].filter(Boolean).map(pid => IDX.nodes[pid]?.name || pid).join(' и ')
+      : existing;
+    return (IDX.nodes[childId]?.name || childId) +
+      ' уже привязан(а) как ребёнок в другой семье (родители: ' + (existingParents || existing) +
+      '). Сначала отвяжите (✕) от старой семьи, прежде чем привязывать к новой.';
+  }
+  return null;
+}
+
+// A child cannot be born before (or in the same year as) their parent.
+// Only fires when BOTH birth years are known — absence of a date is
+// not itself an error, just means this check can't confirm either way.
+function parseBirthYear(str) {
+  const m = str && String(str).match(/\d{4}/);
+  return m ? parseInt(m[0], 10) : null;
+}
+function checkBirthYearOrder(IDX, parentId, childId) {
+  const py = parseBirthYear(IDX.nodes[parentId]?.birth);
+  const cy = parseBirthYear(IDX.nodes[childId]?.birth);
+  if(py != null && cy != null && cy <= py) {
+    return (IDX.nodes[childId]?.name || childId) + ' (' + cy + ') не может быть ребёнком ' +
+      (IDX.nodes[parentId]?.name || parentId) + ' (' + py + ') — родился(ась) раньше или в тот же год';
+  }
+  return null;
+}
+
+// A child's generation number must be strictly greater than their
+// parent's (gen: 0 = eldest ancestors, increases downward). Unlike
+// birth years, `gen` is set on almost every person, so this catches
+// cases where birth dates are missing (e.g. a spouse with no known
+// birth date) but still forms an impossible generation order.
+function checkGenOrder(IDX, parentId, childId) {
+  const pg = IDX.nodes[parentId]?.gen;
+  const cg = IDX.nodes[childId]?.gen;
+  if(pg != null && cg != null && cg <= pg) {
+    return (IDX.nodes[childId]?.name || childId) + ' (поколение ' + cg + ') не может быть ребёнком ' +
+      (IDX.nodes[parentId]?.name || parentId) + ' (поколение ' + pg + ') — поколение ребёнка должно быть больше';
+  }
+  return null;
+}
+
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -616,11 +670,22 @@ export default {
 
       // Cycle guard: no parent may already be an ancestor/descendant of
       // any listed child (e.g. "add my father as my child")
+      // Duplicate-family guard: none of the children may already belong
+      // to a different family (a person has only one set of parents)
+      // Birth-order guard: a child cannot be born before/with a parent
       for(const parentId of [p1, p2].filter(Boolean)){
         for(const cid of children){
           const cycleErr = checkParentChildCycle(IDX, parentId, cid);
           if(cycleErr) return err(cycleErr, 409);
+          const birthErr = checkBirthYearOrder(IDX, parentId, cid);
+          if(birthErr) return err(birthErr, 409);
+          const genErr = checkGenOrder(IDX, parentId, cid);
+          if(genErr) return err(genErr, 409);
         }
+      }
+      for(const cid of children){
+        const dupErr = checkAlreadyHasFamily(IDX, cid, null);
+        if(dupErr) return err(dupErr, 409);
       }
 
       // Generate next family ID
@@ -709,10 +774,19 @@ export default {
 
         // Cycle guard: cid must not already be an ancestor of either
         // parent in this family (e.g. "add my father as my child")
+        // Duplicate-family guard: cid must not already be a child in
+        // a DIFFERENT family (a person has only one set of parents)
+        // Birth-order guard: cid cannot be born before/with a parent
         for(const pid of parents){
           const cycleErr = checkParentChildCycle(IDX, pid, cid);
           if(cycleErr) return err(cycleErr, 409);
+          const birthErr = checkBirthYearOrder(IDX, pid, cid);
+          if(birthErr) return err(birthErr, 409);
+          const genErr = checkGenOrder(IDX, pid, cid);
+          if(genErr) return err(genErr, 409);
         }
+        const dupErr = checkAlreadyHasFamily(IDX, cid, famId);
+        if(dupErr) return err(dupErr, 409);
 
         if(!fam.children.includes(cid)) fam.children.push(cid);
 
@@ -754,9 +828,14 @@ export default {
 
         // Cycle guard: pid must not already be a descendant of any
         // child in this family (e.g. "add my child as my parent")
+        // Birth-order guard: pid must not be born after/with a child
         for(const cid of fam.children){
           const cycleErr = checkParentChildCycle(IDX, pid, cid);
           if(cycleErr) return err(cycleErr, 409);
+          const birthErr = checkBirthYearOrder(IDX, pid, cid);
+          if(birthErr) return err(birthErr, 409);
+          const genErr = checkGenOrder(IDX, pid, cid);
+          if(genErr) return err(genErr, 409);
         }
 
         const sex = IDX.nodes[pid].sex;
