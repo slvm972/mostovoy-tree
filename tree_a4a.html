@@ -4303,6 +4303,13 @@ function initTree(data, pwd) {
   if (pwd) _sessionPassword = pwd;
   buildDatalist();           // ← populate search autocomplete now that IDX is ready
   updateBackBtn();
+  // Явно очищаем поле поиска. HTML-атрибут autocomplete="off" не помогает,
+  // если браузер восстанавливает вкладку целиком (session restore) — это
+  // не автозаполнение из истории, а полное восстановление состояния
+  // DOM, включая введённый текст в полях. Единственный надёжный способ —
+  // сбросить значение явно в коде, а не полагаться на атрибут разметки.
+  const searchEl = document.getElementById('tree-search');
+  if(searchEl) searchEl.value = '';
   // Если это не самая первая загрузка страницы (пользователь уже где-то
   // был) — остаёмся на том же человеке вместо жёсткого перехода на P3.
   // currentFocal обнуляем перед navigateTo, иначе navigateTo() увидит
@@ -4358,6 +4365,16 @@ async function loadTree() {
   hideLoader();
   initTree(FALLBACK_DATA, '');
 }
+
+// Доп. защита от восстановления поля поиска браузером: если страница
+// показывается из bfcache (кнопка «Назад»/«Вперёд»), скрипт заново не
+// выполняется — initTree() не вызывается — а браузер может восстановить
+// значение в поле уже ПОСЛЕ первого рендера. pageshow с event.persisted
+// ловит именно этот случай.
+window.addEventListener('pageshow', function(e){
+  const el = document.getElementById('tree-search');
+  if(el) el.value = '';
+});
 
 loadTree();
 </script>
