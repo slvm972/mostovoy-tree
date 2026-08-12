@@ -223,7 +223,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <button class="btn" id="btn-p42" data-i="nav_levik">Левик (P42)</button>
   <button class="btn" id="btn-p11" data-i="nav_evgeny">Евгений (P11)</button>
   <input id="tree-search" type="text" list="names-list" data-ph="ph_search"
-         placeholder="🔍 Поиск по имени..."
+         placeholder="🔍 Поиск по имени..." autocomplete="off"
          style="margin-left:8px;padding:5px 10px;border-radius:4px;border:1px solid rgba(237,216,144,.3);
                 background:rgba(255,255,255,.06);color:#EDD890;font-family:inherit;font-size:.78rem;
                 width:160px;outline:none">
@@ -4303,7 +4303,14 @@ function initTree(data, pwd) {
   if (pwd) _sessionPassword = pwd;
   buildDatalist();           // ← populate search autocomplete now that IDX is ready
   updateBackBtn();
-  navigateTo('P3');
+  // Если это не самая первая загрузка страницы (пользователь уже где-то
+  // был) — остаёмся на том же человеке вместо жёсткого перехода на P3.
+  // currentFocal обнуляем перед navigateTo, иначе navigateTo() увидит
+  // "focalId === currentFocal" и молча пропустит перерисовку дерева
+  // (тот же приём уже используется в applyLang() и goBack()).
+  const keepFocal = (currentFocal && IDX.nodes[currentFocal]) ? currentFocal : 'P3';
+  currentFocal = null;
+  navigateTo(keepFocal);
   if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
   hideLoader();
 }
