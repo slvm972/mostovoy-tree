@@ -438,6 +438,8 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <option value="муж" data-i="rel_husband">Муж</option>
       <option value="ребёнок" data-i="rel_child">Ребёнок</option>
       <option value="родитель" data-i="rel_parent">Родитель</option>
+      <option value="брат" data-i="rel_brother">Брат</option>
+      <option value="сестра" data-i="rel_sister">Сестра</option>
     </select>
   </div>
 
@@ -4237,6 +4239,25 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
       });
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить родителя');
+    }
+  } else if(relType === 'брат' || relType === 'сестра'){
+    if(IDX.child_of[existingId]){
+      throw new Error('У прикрепляемой персоны уже есть родительская семья (' + IDX.child_of[existingId] + '). Прикрепление как брата/сестры для персон с уже назначенными родителями пока не поддерживается — нужна ручная проверка через «Исправить» → «Семейная связь».');
+    }
+    const famId = IDX.child_of[targetId];
+    if(!famId){
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify({parent1:null, parent2:null, children:[targetId, existingId]})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    } else {
+      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+        method: 'PATCH', headers, body: JSON.stringify({addChild: existingId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
     }
   } else throw new Error('Неизвестный тип связи: ' + relType);
 }
