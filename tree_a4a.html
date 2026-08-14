@@ -4226,13 +4226,29 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
   } else if(relType === 'родитель'){
     const famId = IDX.child_of[targetId];
     if(!famId){
-      const isFemale = existingNode.sex === 'F';
-      const r = await fetch(WORKER_URL + '/api/family', {
-        method: 'POST', headers,
-        body: JSON.stringify(isFemale ? {parent1:null,parent2:existingId,children:[targetId]} : {parent1:existingId,parent2:null,children:[targetId]})
-      });
-      const d = await r.json();
-      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+      // Если у прикрепляемого родителя уже есть семья, где известны ОБА
+      // супруга (полноценная пара) — переиспользуем её вместо создания
+      // новой. Иначе при последовательном прикреплении сначала отца, потом
+      // матери получаются два независимых семейных дубля с теми же людьми
+      // (именно так уже возникал баг с расколотой семьёй).
+      const reusableFamId = (IDX.parent_in[existingId] || [])
+        .find(fid => { const f = IDX.families[fid]; return f && f.husband && f.wife; });
+
+      if(reusableFamId){
+        const r = await fetch(WORKER_URL + '/api/family/' + reusableFamId, {
+          method: 'PATCH', headers, body: JSON.stringify({addChild: targetId})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить к существующей семье родителя');
+      } else {
+        const isFemale = existingNode.sex === 'F';
+        const r = await fetch(WORKER_URL + '/api/family', {
+          method: 'POST', headers,
+          body: JSON.stringify(isFemale ? {parent1:null,parent2:existingId,children:[targetId]} : {parent1:existingId,parent2:null,children:[targetId]})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+      }
     } else {
       const r = await fetch(WORKER_URL + '/api/family/' + famId, {
         method: 'PATCH', headers, body: JSON.stringify({addParent: existingId})
