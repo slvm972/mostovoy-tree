@@ -592,7 +592,7 @@ function getCenteredLayout(focalId){
 
   const placed = new Set();  // avoid placing same person twice
   const nodes  = [];
-  const MAX_GC = 5; // raised from 3 — show more grandchildren
+  const MAX_GC = Infinity; // без ограничения — показываем всех внуков
 
   function add(n){
     if(placed.has(n.id)) return;
