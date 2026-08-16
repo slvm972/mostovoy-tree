@@ -613,7 +613,8 @@ export default {
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
                        'sex','rel','phone','email','social','bio','photo','missing','genitive',
-                       'family_note','other_note'];
+                       'family_note','other_note',
+                       'rel_en','rel_he','family_note_en','family_note_he','other_note_en','other_note_he'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
@@ -699,6 +700,12 @@ export default {
         ...(body.genitive    ? { genitive:    body.genitive }    : {}),
         ...(body.family_note ? { family_note: body.family_note } : {}),
         ...(body.other_note  ? { other_note:  body.other_note }  : {}),
+        ...(body.rel_en          ? { rel_en:          body.rel_en }          : {}),
+        ...(body.rel_he          ? { rel_he:          body.rel_he }          : {}),
+        ...(body.family_note_en  ? { family_note_en:  body.family_note_en }  : {}),
+        ...(body.family_note_he  ? { family_note_he:  body.family_note_he }  : {}),
+        ...(body.other_note_en   ? { other_note_en:   body.other_note_en }   : {}),
+        ...(body.other_note_he   ? { other_note_he:   body.other_note_he }   : {}),
       };
 
       // Initialize empty relatives entry

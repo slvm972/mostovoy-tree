@@ -416,12 +416,24 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <button type="button" onclick="quickClearField('ff-rel','rel','fix_rel')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
     </div>
     <input id="ff-rel" type="text" data-ph="ph_rel" placeholder="например: Зять">
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <input id="ff-rel-en" type="text" placeholder="EN" style="font-size:.72rem">
+      <input id="ff-rel-he" type="text" placeholder="עברית" dir="rtl" style="font-size:.72rem">
+    </div>
 
     <label data-i="fix_family">Семейная связь (что изменить)</label>
     <textarea id="ff-family" data-ph="ph_family" placeholder="например: добавить мужа / убрать связь / изменить родителя"></textarea>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <textarea id="ff-family-en" placeholder="EN" style="font-size:.72rem;min-height:44px"></textarea>
+      <textarea id="ff-family-he" placeholder="עברית" dir="rtl" style="font-size:.72rem;min-height:44px"></textarea>
+    </div>
 
     <label data-i="fix_other">Другое (любые иные уточнения)</label>
     <textarea id="ff-other" data-ph="ph_other" placeholder="всё что не вошло в поля выше"></textarea>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <textarea id="ff-other-en" placeholder="EN" style="font-size:.72rem;min-height:44px"></textarea>
+      <textarea id="ff-other-he" placeholder="עברית" dir="rtl" style="font-size:.72rem;min-height:44px"></textarea>
+    </div>
 
     <label data-i="lbl_comment">Комментарий (необязательно)</label>
     <input id="f-fix-comment" type="text" data-ph="ph_comment" placeholder="Источник, пояснение...">
@@ -1348,7 +1360,7 @@ function showPanel(id){
       border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;
       white-space:nowrap;flex-shrink:0">🗑 ${currentLang==='he'?'מחק':currentLang==='en'?'Delete':'Удалить'}</button>` : ''}
   </h2>`;
-  if(n.rel) col1 += `<span class="p-rel">${trel(n.rel)}</span>`;
+  if(n.rel) col1 += `<span class="p-rel">${relText(n)}</span>`;
   const relLabelLines = computeRelLabel(id);
   if(relLabelLines.length){
     col1 += `<div style="font-size:.68rem;color:#5A3C10;line-height:1.6;margin:2px 0 6px">
@@ -1914,6 +1926,19 @@ function trel(s){
   return currentLang==='ru' ? s : s; // fallback: show as-is
 }
 
+// Localized "rel" text for a person: prefers a manually entered EN/HE
+// translation (n.rel_en / n.rel_he, filled in via the Fix form), falls
+// back to the rule-based trel() dictionary for common short phrases
+// ("Тётя", "Зять", etc.), and finally shows the raw Russian text.
+function relText(n){
+  if(!n) return '';
+  if(currentLang !== 'ru'){
+    const manual = n['rel_' + currentLang];
+    if(manual) return manual;
+  }
+  return trel(n.rel);
+}
+
 // ════════════════════════════════════════════════════════
 //  NAMES DICTIONARY — RU→EN→HE for all 178 persons
 // ════════════════════════════════════════════════════════
@@ -2138,8 +2163,14 @@ function openModal(prefillId, mode){
     if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
     if(n.social)   lines.push(t('lbl_social')    + ': ' + n.social);
     if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
+    if(n.rel_en)   lines.push(t('fix_rel') + ' (EN): ' + n.rel_en);
+    if(n.rel_he)   lines.push(t('fix_rel') + ' (HE): ' + n.rel_he);
     if(n.family_note) lines.push(t('fix_family') + ': ' + n.family_note);
+    if(n.family_note_en) lines.push(t('fix_family') + ' (EN): ' + n.family_note_en);
+    if(n.family_note_he) lines.push(t('fix_family') + ' (HE): ' + n.family_note_he);
     if(n.other_note)  lines.push(t('fix_other')  + ': ' + n.other_note);
+    if(n.other_note_en)  lines.push(t('fix_other') + ' (EN): ' + n.other_note_en);
+    if(n.other_note_he)  lines.push(t('fix_other') + ' (HE): ' + n.other_note_he);
     if(n.gen !== undefined && n.gen !== null) lines.push(t('fix_gen') + ': ' + n.gen);
     if(n.genitive) lines.push(t('fix_genitive')  + ': ' + n.genitive);
 
@@ -2160,8 +2191,14 @@ function openModal(prefillId, mode){
     setVal('ff-email',     n.email);
     setVal('ff-social',    n.social);
     setVal('ff-rel',       trel(n.rel));
+    setVal('ff-rel-en',    n.rel_en);
+    setVal('ff-rel-he',    n.rel_he);
     setVal('ff-family',    n.family_note);
+    setVal('ff-family-en', n.family_note_en);
+    setVal('ff-family-he', n.family_note_he);
     setVal('ff-other',     n.other_note);
+    setVal('ff-other-en',  n.other_note_en);
+    setVal('ff-other-he',  n.other_note_he);
     setVal('ff-gen',       (n.gen !== undefined && n.gen !== null) ? n.gen : '');
 
     // Switch to fix tab
@@ -2579,6 +2616,12 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       { key: 'email',    label: t('lbl_email'),       val: getV('ff-email'),    orig: orig.email || '' },
       { key: 'social',   label: t('lbl_social'),      val: getV('ff-social'),   orig: orig.social || '' },
       { key: 'rel',      label: t('fix_rel'),         val: getV('ff-rel'),      orig: orig.rel || '' },
+      { key: 'rel_en',   label: t('fix_rel') + ' (EN)', val: getV('ff-rel-en'), orig: orig.rel_en || '' },
+      { key: 'rel_he',   label: t('fix_rel') + ' (HE)', val: getV('ff-rel-he'), orig: orig.rel_he || '' },
+      { key: 'family_note_en', label: t('fix_family') + ' (EN)', val: getV('ff-family-en'), orig: orig.family_note_en || '' },
+      { key: 'family_note_he', label: t('fix_family') + ' (HE)', val: getV('ff-family-he'), orig: orig.family_note_he || '' },
+      { key: 'other_note_en',  label: t('fix_other')  + ' (EN)', val: getV('ff-other-en'),  orig: orig.other_note_en || '' },
+      { key: 'other_note_he',  label: t('fix_other')  + ' (HE)', val: getV('ff-other-he'),  orig: orig.other_note_he || '' },
       { key: 'gen',      label: t('fix_gen'),         val: getV('ff-gen'),      orig: (orig.gen !== undefined && orig.gen !== null) ? String(orig.gen) : '' },
     ];
 
