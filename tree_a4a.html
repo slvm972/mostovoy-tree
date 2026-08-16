@@ -1522,7 +1522,7 @@ document.getElementById('tree-search').addEventListener('keydown', e => {
 
 // keyboard: Backspace / Alt+← = go back
 document.addEventListener('keydown', e => {
-  if((e.key === 'Backspace' || (e.key === 'ArrowLeft' && e.altKey)) && !e.target.matches('input')){
+  if((e.key === 'Backspace' || (e.key === 'ArrowLeft' && e.altKey)) && !e.target.matches('input, textarea')){
     e.preventDefault();
     goBack();
   }
