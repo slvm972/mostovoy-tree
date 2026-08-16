@@ -612,7 +612,8 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','phone','email','social','bio','photo','missing','genitive'];
+                       'sex','rel','phone','email','social','bio','photo','missing','genitive',
+                       'family_note','other_note'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
@@ -696,6 +697,8 @@ export default {
         ...(body.bio         ? { bio:         body.bio }         : {}),
         ...(body.photo       ? { photo:       body.photo }       : {}),
         ...(body.genitive    ? { genitive:    body.genitive }    : {}),
+        ...(body.family_note ? { family_note: body.family_note } : {}),
+        ...(body.other_note  ? { other_note:  body.other_note }  : {}),
       };
 
       // Initialize empty relatives entry
