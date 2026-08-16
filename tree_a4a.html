@@ -2138,6 +2138,8 @@ function openModal(prefillId, mode){
     if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
     if(n.social)   lines.push(t('lbl_social')    + ': ' + n.social);
     if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
+    if(n.family_note) lines.push(t('fix_family') + ': ' + n.family_note);
+    if(n.other_note)  lines.push(t('fix_other')  + ': ' + n.other_note);
     if(n.gen !== undefined && n.gen !== null) lines.push(t('fix_gen') + ': ' + n.gen);
     if(n.genitive) lines.push(t('fix_genitive')  + ': ' + n.genitive);
 
@@ -2158,6 +2160,8 @@ function openModal(prefillId, mode){
     setVal('ff-email',     n.email);
     setVal('ff-social',    n.social);
     setVal('ff-rel',       trel(n.rel));
+    setVal('ff-family',    n.family_note);
+    setVal('ff-other',     n.other_note);
     setVal('ff-gen',       (n.gen !== undefined && n.gen !== null) ? n.gen : '');
 
     // Switch to fix tab
@@ -2613,12 +2617,14 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       return;
     }
 
-    if(isAdminFix && !familyNote && !otherNote){
+    if(isAdminFix){
       const patch = {};
       // val === '' here always means "user cleared this field" (see the
       // `changed` filter above) — send null so the server deletes the key,
       // instead of writing an empty string that still counts as "has data".
       for(const f of changed) patch[f.key] = f.val || null;
+      if(familyNote) patch.family_note = familyNote;
+      if(otherNote)  patch.other_note  = otherNote;
 
       if(Object.keys(patch).length === 0){
         showToast(currentLang==='he' ? '✓ אין שינויים לשמירה — הנתונים כבר עודכנו'
