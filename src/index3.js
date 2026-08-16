@@ -136,105 +136,6 @@ function checkGenOrder(IDX, parentId, childId) {
   return null;
 }
 
-// ── Auto-fill missing generation numbers ────────────────
-// A person created without an explicit `gen` gets `gen: null` (see
-// POST /api/person below) instead of silently defaulting to 0 — 0 is
-// a legitimate value for real eldest ancestors, so guessing 0 for
-// "unspecified" would be indistinguishable from a real great-grandparent
-// and slip past checkGenOrder undetected (exactly the bug that caused
-// the Sveta/Sasha Kulnitsky case).
-//
-// Instead, whenever a family gets a parent/child link established
-// (POST /api/family, addChild, addParent, setSlot), this fills in
-// any still-missing gen using whoever ELSE in that same family already
-// has a known gen: children = parents' gen + 1, parents = children's
-// gen - 1 (or match the other parent's gen if that's what's known).
-// If nobody in the family has a known gen yet, nothing is set — that
-// rare case still needs a human to specify it once, but doesn't
-// silently corrupt data with a fake 0.
-function autoFillGen(IDX, famId) {
-  const fam = IDX.families[famId];
-  if(!fam) return;
-  const parents  = [fam.husband, fam.wife].filter(Boolean);
-  const children = fam.children || [];
-
-  const knownParentGen = parents
-    .map(p => IDX.nodes[p]?.gen)
-    .find(g => g !== null && g !== undefined);
-  const knownChildGen = children
-    .map(c => IDX.nodes[c]?.gen)
-    .find(g => g !== null && g !== undefined);
-
-  let parentGen = knownParentGen;
-  if(parentGen === undefined && knownChildGen !== undefined) parentGen = knownChildGen - 1;
-
-  let childGen = knownChildGen;
-  if(childGen === undefined && parentGen !== undefined) childGen = parentGen + 1;
-
-  if(parentGen !== undefined){
-    for(const p of parents){
-      if(IDX.nodes[p] && (IDX.nodes[p].gen === null || IDX.nodes[p].gen === undefined)) {
-        IDX.nodes[p].gen = parentGen;
-      }
-    }
-  }
-  if(childGen !== undefined){
-    for(const c of children){
-      if(IDX.nodes[c] && (IDX.nodes[c].gen === null || IDX.nodes[c].gen === undefined)) {
-        IDX.nodes[c].gen = childGen;
-      }
-    }
-  }
-}
-
-// ── Name transliteration (RU → EN / HE) ─────────────────
-// Mechanical, offline transliteration for auto-populating IDX.names
-// when a new person is created without translations. Deliberately
-// simple (letter-by-letter mapping) rather than calling an external
-// translation API — no API key, no cost, no network dependency, at
-// the price of lower quality (especially for Hebrew, which doesn't
-// map cleanly from Cyrillic phonetics). Good enough for browsing;
-// can always be corrected by hand afterward like any other field.
-const TRANSLIT_EN = {
-  'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh',
-  'з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o',
-  'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts',
-  'ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
-};
-const TRANSLIT_HE = {
-  'а':'א','б':'ב','в':'ב','г':'ג','д':'ד','е':'ה','ё':'יו','ж':"ז'",
-  'з':'ז','и':'י','й':'י','к':'ק','л':'ל','м':'מ','н':'נ','о':'ו',
-  'п':'פ','р':'ר','с':'ס','т':'ט','у':'ו','ф':'פ','х':'ח','ц':'צ',
-  'ч':"צ'",'ш':'ש','щ':'שץ','ъ':'','ы':'י','ь':'','э':'א','ю':'יו','я':'יה',
-};
-// Hebrew final-letter forms, applied when the mapped letter ends a word
-const HE_FINALS = { 'מ':'ם', 'נ':'ן', 'צ':'ץ', 'פ':'ף', 'כ':'ך' };
-
-function transliterateWord(word, map) {
-  let out = '';
-  for(const ch of word.toLowerCase()) {
-    out += (map[ch] !== undefined) ? map[ch] : ch;
-  }
-  return out;
-}
-function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
-
-function transliterateToEn(fullName) {
-  return fullName.split(' ')
-    .map(w => capitalize(transliterateWord(w, TRANSLIT_EN)))
-    .join(' ');
-}
-function transliterateToHe(fullName) {
-  return fullName.split(' ')
-    .map(w => {
-      let t = transliterateWord(w, TRANSLIT_HE);
-      const last = t.slice(-1);
-      if(HE_FINALS[last]) t = t.slice(0, -1) + HE_FINALS[last];
-      return t;
-    })
-    .join(' ');
-}
-
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -624,21 +525,6 @@ export default {
         applied[field] = val;
       }
 
-      // 'gen' is structural, so it gets its own validated path rather than
-      // sitting in the free-form ALLOWED whitelist above.
-      if(Object.prototype.hasOwnProperty.call(updates, 'gen')){
-        const g = updates.gen;
-        if(g === null || g === undefined || g === ''){
-          IDX.nodes[personId].gen = null;
-          applied.gen = null;
-        } else if(Number.isInteger(g) || (typeof g === 'string' && /^-?\d+$/.test(g))){
-          IDX.nodes[personId].gen = parseInt(g, 10);
-          applied.gen = IDX.nodes[personId].gen;
-        } else {
-          return err('Поле gen должно быть целым числом или пустым');
-        }
-      }
-
       if(Object.keys(applied).length === 0) return err('Нет допустимых полей для обновления');
 
       // Save backup + updated tree
@@ -682,7 +568,7 @@ export default {
         id:      newId,
         name:    body.name,
         sex:     body.sex    || '',
-        gen:     body.gen    ?? null,
+        gen:     body.gen    ?? 0,
         birth:   body.birth  || '',
         death:   body.death  || '',
         rel:     body.rel    || '',
@@ -700,15 +586,6 @@ export default {
 
       // Initialize empty relatives entry
       IDX.relatives[newId] = { parents: [], siblings: [], spouses: [], children: [] };
-
-      // Auto-generate EN/HE display-name transliterations and store them
-      // in IDX.names (round-trips through GET/POST /api/tree just like
-      // everything else — no separate storage or endpoint needed).
-      if(!IDX.names) IDX.names = {};
-      IDX.names[newId] = {
-        en: transliterateToEn(body.name),
-        he: transliterateToHe(body.name),
-      };
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
@@ -730,6 +607,12 @@ export default {
 
       const IDX = JSON.parse(rawData);
       if(!IDX.nodes[personId]) return err('Персона не найдена: ' + personId, 404);
+
+      // Safety: refuse if this person is a parent of anyone
+      const rel = IDX.relatives[personId];
+      if(rel && rel.children && rel.children.length > 0) {
+        return err('Нельзя удалить персону с детьми. Сначала переназначьте детей.', 409);
+      }
 
       const name = IDX.nodes[personId].name;
 
@@ -856,10 +739,6 @@ export default {
         }
       }
 
-      // Fill in missing generation numbers for anyone in this new
-      // family who doesn't have one yet (see autoFillGen above)
-      autoFillGen(IDX, famId);
-
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
       await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
@@ -975,10 +854,6 @@ export default {
           if(IDX.relatives[cid] && !IDX.relatives[cid].parents.includes(pid)) IDX.relatives[cid].parents.push(pid);
         }
       }
-
-      // Fill in missing generation numbers for anyone newly linked
-      // into this family who doesn't have one yet (see autoFillGen above)
-      autoFillGen(IDX, famId);
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);

@@ -410,12 +410,6 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     </select>
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-      <label data-i="fix_gen" style="margin:10px 0 3px">Номер поколения (gen)</label>
-      <button type="button" onclick="quickClearField('ff-gen','gen','fix_gen')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
-    </div>
-    <input id="ff-gen" type="number" step="1" data-ph="ph_gen" placeholder="например: 3 (0 = самые старшие предки)">
-
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="fix_rel" style="margin:10px 0 3px">Степень родства</label>
       <button type="button" onclick="quickClearField('ff-rel','rel','fix_rel')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
     </div>
@@ -1339,7 +1333,8 @@ function showPanel(id){
 
   // ── Column 1: name, rel, dates ──
   const relForId = IDX.relatives[id];
-  const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+  const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL
+                     && relForId && (!relForId.children || relForId.children.length === 0));
   let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
     <span>${pname(id)}</span>
     <button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
@@ -1699,7 +1694,7 @@ const UI = {
     lbl_fix_field:'Что исправить',
     fix_name:'Имя', fix_birth:'Дата рождения', fix_death:'Дата смерти',
     fix_birth_he:'Дата рождения (евр.)', fix_death_he:'Дата смерти (евр.)',
-    fix_rel:'Степень родства', fix_gen:'Номер поколения (gen)', ph_gen:'например: 3 (0 = самые старшие предки)', fix_genitive:'Имя в родительном падеже', fix_family:'Семейная связь', fix_other:'Другое',
+    fix_rel:'Степень родства', fix_genitive:'Имя в родительном падеже', fix_family:'Семейная связь', fix_other:'Другое',
     ph_family:'например: добавить мужа / убрать связь / изменить родителя', ph_other:'всё что не вошло в поля выше',
     ph_birth_he:'например: יג ניסן תשל״א', ph_death_he:'например: יב שבט תשפ״א', ph_rel:'например: Зять',
     page_title:'🌳 Семейное дерево',
@@ -1783,7 +1778,7 @@ const UI = {
     lbl_fix_field:'Field to correct',
     fix_name:'Name', fix_birth:'Date of birth', fix_death:'Date of death',
     fix_birth_he:'Date of birth (Hebrew)', fix_death_he:'Date of death (Hebrew)',
-    fix_rel:'Relationship', fix_gen:'Generation number (gen)', ph_gen:'e.g.: 3 (0 = oldest ancestors)', fix_genitive:'Genitive-case name (RU grammar)', fix_family:'Family link', fix_other:'Other',
+    fix_rel:'Relationship', fix_genitive:'Genitive-case name (RU grammar)', fix_family:'Family link', fix_other:'Other',
     ph_family:'e.g.: add husband / remove link / change parent', ph_other:'anything not covered by the fields above',
     ph_birth_he:'e.g.: יג ניסן תשל״א', ph_death_he:'e.g.: יב שבט תשפ״א', ph_rel:'e.g.: Son-in-law',
     page_title:'🌳 Family Tree',
@@ -1867,7 +1862,7 @@ const UI = {
     lbl_fix_field:'שדה לתיקון',
     fix_name:'שם', fix_birth:'תאריך לידה', fix_death:'תאריך פטירה',
     fix_birth_he:'תאריך לידה (עברי)', fix_death_he:'תאריך פטירה (עברי)',
-    fix_rel:'קרבה', fix_gen:'מספר דור (gen)', ph_gen:'לדוגמה: 3 (0 = האבות הקדומים ביותר)', fix_genitive:'שם ביחסת הקניין (לתחביר רוסי)', fix_family:'קשר משפחתי', fix_other:'אחר',
+    fix_rel:'קרבה', fix_genitive:'שם ביחסת הקניין (לתחביר רוסי)', fix_family:'קשר משפחתי', fix_other:'אחר',
     ph_family:'לדוגמה: הוספת בעל / הסרת קשר / שינוי הורה', ph_other:'כל מה שלא נכלל בשדות למעלה',
     ph_birth_he:'לדוגמה: יג ניסן תשל״א', ph_death_he:'לדוגמה: יב שבט תשפ״א', ph_rel:'לדוגמה: חתן',
     page_title:'🌳 עץ משפחה',
@@ -2082,7 +2077,7 @@ function openModal(prefillId, mode){
    'f-bio-text','f-bio-url',
    'f-date-note','f-father','f-mother',
    'ff-name','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
-   'ff-phone','ff-email','ff-social','ff-rel','ff-gen','ff-family','ff-other',
+   'ff-phone','ff-email','ff-social','ff-rel','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
     const el = document.getElementById(fid);
     if(el) el.value = '';
@@ -2142,7 +2137,6 @@ function openModal(prefillId, mode){
     if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
     if(n.social)   lines.push(t('lbl_social')    + ': ' + n.social);
     if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
-    if(n.gen !== undefined && n.gen !== null) lines.push(t('fix_gen') + ': ' + n.gen);
     if(n.genitive) lines.push(t('fix_genitive')  + ': ' + n.genitive);
 
     if(card0 && lines.length){
@@ -2162,7 +2156,6 @@ function openModal(prefillId, mode){
     setVal('ff-email',     n.email);
     setVal('ff-social',    n.social);
     setVal('ff-rel',       trel(n.rel));
-    setVal('ff-gen',       (n.gen !== undefined && n.gen !== null) ? n.gen : '');
 
     // Switch to fix tab
     document.querySelectorAll('.mtype').forEach(b => b.classList.remove('active'));
@@ -2579,7 +2572,6 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       { key: 'email',    label: t('lbl_email'),       val: getV('ff-email'),    orig: orig.email || '' },
       { key: 'social',   label: t('lbl_social'),      val: getV('ff-social'),   orig: orig.social || '' },
       { key: 'rel',      label: t('fix_rel'),         val: getV('ff-rel'),      orig: orig.rel || '' },
-      { key: 'gen',      label: t('fix_gen'),         val: getV('ff-gen'),      orig: (orig.gen !== undefined && orig.gen !== null) ? String(orig.gen) : '' },
     ];
 
     const ffSex = document.getElementById('ff-sex');
@@ -3850,21 +3842,24 @@ async function confirmDeletePerson(id){
   const rel = IDX.relatives[id] || {};
   const hasChildren = rel.children && rel.children.length > 0;
 
-  let confirmMsg;
   if(hasChildren){
+    // Server will refuse — explain why instead of attempting the call
     const childNames = rel.children.map(cid => pname(cid)).join(', ');
-    confirmMsg = currentLang==='he'
-      ? `${pname(id)} — יש ילדים: ${childNames}.\nהמחיקה תסיר רק את הקישור הזה — הילדים יישארו בעץ (עם ההורה השני, אם קיים).\nלמחוק בכל זאת?`
-      : currentLang==='en'
-      ? `${pname(id)} has children: ${childNames}.\nDeleting only removes this parent link — the children stay in the tree (with their other parent, if any).\nDelete anyway?`
-      : `${pname(id)} — есть дети: ${childNames}.\nУдаление уберёт только эту связь — дети останутся в дереве (со вторым родителем, если есть).\nВсё равно удалить?`;
-  } else {
-    confirmMsg = currentLang==='he'
-      ? `למחוק את ${pname(id)}? פעולה זו אינה הפיכה.`
-      : currentLang==='en'
-      ? `Delete ${pname(id)}? This cannot be undone.`
-      : `Удалить ${pname(id)}? Это действие необратимо.`;
+    alert(
+      (currentLang==='he'
+        ? `לא ניתן למחוק את ${pname(id)} — יש ילדים: ${childNames}.\nיש לשייך את הילדים למשפחה אחרת לפני המחיקה.`
+        : currentLang==='en'
+        ? `Cannot delete ${pname(id)} — has children: ${childNames}.\nReassign the children to a different parent first.`
+        : `Нельзя удалить ${pname(id)} — есть дети: ${childNames}.\nСначала перепривяжите детей к другому родителю (через форму «Исправить» → «Семейная связь»).`)
+    );
+    return;
   }
+
+  const confirmMsg = currentLang==='he'
+    ? `למחוק את ${pname(id)}? פעולה זו אינה הפיכה.`
+    : currentLang==='en'
+    ? `Delete ${pname(id)}? This cannot be undone.`
+    : `Удалить ${pname(id)}? Это действие необратимо.`;
   if(!confirm(confirmMsg)) return;
 
   try {
@@ -3884,7 +3879,6 @@ async function confirmDeletePerson(id){
           r2.siblings = (r2.siblings||[]).filter(s=>s!==id);
           r2.spouses  = (r2.spouses ||[]).filter(s=>s!==id);
           r2.children = (r2.children||[]).filter(s=>s!==id);
-          r2.parents  = (r2.parents ||[]).filter(s=>s!==id);
         }
         for(const [, f] of Object.entries(IDX.families)){
           if(f.husband===id) f.husband=null;

@@ -624,21 +624,6 @@ export default {
         applied[field] = val;
       }
 
-      // 'gen' is structural, so it gets its own validated path rather than
-      // sitting in the free-form ALLOWED whitelist above.
-      if(Object.prototype.hasOwnProperty.call(updates, 'gen')){
-        const g = updates.gen;
-        if(g === null || g === undefined || g === ''){
-          IDX.nodes[personId].gen = null;
-          applied.gen = null;
-        } else if(Number.isInteger(g) || (typeof g === 'string' && /^-?\d+$/.test(g))){
-          IDX.nodes[personId].gen = parseInt(g, 10);
-          applied.gen = IDX.nodes[personId].gen;
-        } else {
-          return err('Поле gen должно быть целым числом или пустым');
-        }
-      }
-
       if(Object.keys(applied).length === 0) return err('Нет допустимых полей для обновления');
 
       // Save backup + updated tree
@@ -730,6 +715,12 @@ export default {
 
       const IDX = JSON.parse(rawData);
       if(!IDX.nodes[personId]) return err('Персона не найдена: ' + personId, 404);
+
+      // Safety: refuse if this person is a parent of anyone
+      const rel = IDX.relatives[personId];
+      if(rel && rel.children && rel.children.length > 0) {
+        return err('Нельзя удалить персону с детьми. Сначала переназначьте детей.', 409);
+      }
 
       const name = IDX.nodes[personId].name;
 
