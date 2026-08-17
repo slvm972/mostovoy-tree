@@ -871,13 +871,8 @@ function drawEdges(layout, parent, focalId){
   const LW   = '1.8';
   const OPACITY = '.72';
 
-  // Build position lookup from layout
   const pos = {};
   for(const n of layout.nodes) pos[n.id] = {x: n.x, y: n.y};
-
-  function cX(id){ return pos[id] ? pos[id].x + CW/2 : null; }  // centre X
-  function bY(id){ return pos[id] ? pos[id].y + CH   : null; }  // bottom Y
-  function tY(id){ return pos[id] ? pos[id].y        : null; }  // top Y
 
   function line(x1,y1,x2,y2){
     svgEl('line',{x1,y1,x2,y2,stroke:LCOL,'stroke-width':LW,
@@ -890,62 +885,96 @@ function drawEdges(layout, parent, focalId){
     t.textContent = '♥';
   }
 
-  // Iterate every family in the index; draw only if members are visible
+  // ── Pass 1: collect renderable family units ──────────
+  const units = [];
   for(const [, fam] of Object.entries(IDX.families)){
     const h = fam.husband, w = fam.wife;
     const hIn = h && pos[h], wIn = w && pos[w];
     const visCh = (fam.children || []).filter(c => pos[c]);
+    if(!hIn && !wIn) continue;
 
-    if(!hIn && !wIn) continue;  // no parents visible → skip
-
-    // ── couple connector ───────────────────────────────
     const parentRowY = Math.max(hIn ? pos[h].y : 0, wIn ? pos[w].y : 0);
-    const coupleLineY = parentRowY + CH / 2;  // mid-height of card
+    const coupleLineY = parentRowY + CH / 2;
 
     let anchorX;
     if(hIn && wIn){
-      // horizontal bar between inner edges of the two cards
-      const leftCX  = Math.min(pos[h].x, pos[w].x) + CW;   // right edge of left card
-      const rightCX = Math.max(pos[h].x, pos[w].x);         // left edge of right card
       anchorX = (pos[h].x + CW/2 + pos[w].x + CW/2) / 2;
-      if(rightCX > leftCX) line(leftCX, coupleLineY, rightCX, coupleLineY);
-      heart(anchorX, coupleLineY + 5);
     } else {
       anchorX = hIn ? pos[h].x + CW/2 : pos[w].x + CW/2;
     }
 
-    // ── stem + crossbar + drops to children ───────────
-    if(visCh.length === 0) continue;
+    units.push({h, w, hIn, wIn, visCh, parentRowY, coupleLineY, anchorX});
+  }
 
-    const junctionY = parentRowY + CH + 10;     // just below the couple
-    const childRowY = pos[visCh[0]].y;           // top of child cards
-    const crossbarY = childRowY - 12;            // just above child cards
-
-    const childXs = visCh.map(c => pos[c].x + CW/2);
-    const crossL  = Math.min(...childXs);
-    const crossR  = Math.max(...childXs);
-
-    // Stem meet-point: clamp anchorX to [crossL, crossR] so stem always hits crossbar
-    const stemX = Math.max(crossL, Math.min(crossR, anchorX));
-
-    // vertical stem: couple → crossbarY (using stemX so it lands on crossbar)
-    line(anchorX, junctionY, anchorX, crossbarY);
-
-    // bridge: if anchor is outside child range, draw horizontal to crossbar edge
-    if(anchorX < crossL){
-      line(anchorX, crossbarY, crossL, crossbarY);
-    } else if(anchorX > crossR){
-      line(crossR, crossbarY, anchorX, crossbarY);
+  // ── Pass 2: couple connectors (bars + hearts) — unaffected by lanes ──
+  for(const u of units){
+    if(u.hIn && u.wIn){
+      const leftCX  = Math.min(pos[u.h].x, pos[u.w].x) + CW;
+      const rightCX = Math.max(pos[u.h].x, pos[u.w].x);
+      if(rightCX > leftCX) line(leftCX, u.coupleLineY, rightCX, u.coupleLineY);
+      heart(u.anchorX, u.coupleLineY + 5);
     }
+  }
 
-    // horizontal crossbar connecting all visible children (only between children)
-    if(visCh.length > 1){
-      line(crossL, crossbarY, crossR, crossbarY);
+  // ── Pass 3: group families-with-children sharing the same
+  //    (parentRowY, childRowY) pair, so overlapping marriages of the
+  //    same focal person get separated onto vertical "lanes" instead
+  //    of drawing their crossbars at an identical height.
+  const withChildren = units.filter(u => u.visCh.length > 0);
+  const groups = {};
+  for(const u of withChildren){
+    const childRowY = pos[u.visCh[0]].y;
+    const key = u.parentRowY + '|' + childRowY;
+    (groups[key] = groups[key] || []).push({...u, childRowY});
+  }
+
+  const LANE_STEP   = 10;  // px vertical offset between overlapping crossbars
+  const LANE_GAP_PX = 6;   // min horizontal gap to treat footprints as non-overlapping
+
+  for(const key of Object.keys(groups)){
+    const group = groups[key].slice().sort((a,b) => {
+      const aMin = Math.min(a.anchorX, ...a.visCh.map(c=>pos[c].x+CW/2));
+      const bMin = Math.min(b.anchorX, ...b.visCh.map(c=>pos[c].x+CW/2));
+      return aMin - bMin;
+    });
+
+    const laneEnds = [];
+    for(const u of group){
+      const childXs = u.visCh.map(c => pos[c].x + CW/2);
+      const footL = Math.min(u.anchorX, ...childXs);
+      const footR = Math.max(u.anchorX, ...childXs);
+      let lane = laneEnds.findIndex(end => end + LANE_GAP_PX < footL);
+      if(lane === -1){ lane = laneEnds.length; laneEnds.push(footR); }
+      else laneEnds[lane] = footR;
+      u.lane = lane;
     }
+    const numLanes = laneEnds.length;
 
-    // vertical drop to each child
-    for(const cId of visCh){
-      line(pos[cId].x + CW/2, crossbarY, pos[cId].x + CW/2, childRowY);
+    for(const u of group){
+      const { visCh, anchorX, parentRowY, childRowY, lane } = u;
+      const junctionY     = parentRowY + CH + 10;
+      const baseCrossbarY = childRowY - 12;
+      const crossbarY = numLanes > 1 ? baseCrossbarY - lane * LANE_STEP : baseCrossbarY;
+
+      const childXs = visCh.map(c => pos[c].x + CW/2);
+      const crossL  = Math.min(...childXs);
+      const crossR  = Math.max(...childXs);
+
+      line(anchorX, junctionY, anchorX, crossbarY);
+
+      if(anchorX < crossL){
+        line(anchorX, crossbarY, crossL, crossbarY);
+      } else if(anchorX > crossR){
+        line(crossR, crossbarY, anchorX, crossbarY);
+      }
+
+      if(visCh.length > 1){
+        line(crossL, crossbarY, crossR, crossbarY);
+      }
+
+      for(const cId of visCh){
+        line(pos[cId].x + CW/2, crossbarY, pos[cId].x + CW/2, childRowY);
+      }
     }
   }
 }
