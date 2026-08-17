@@ -1250,25 +1250,6 @@ function pLink(id){
   </div>`;
 }
 
-// A2.4: like pLink, but for the "Родители" list — adds an admin-only ✕
-// to unlink this specific parent from THIS family (PATCH removeParent),
-// for cases where the child was correctly attached to the family but one
-// parent in it is wrong (e.g. after merging two duplicate persons and
-// discovering the merged person isn't actually this child's mother/father).
-// The other parent and all children in the family are left untouched.
-function pLinkParent(id, famId, isAdmin){
-  const n = IDX.nodes[id]; if(!n) return '';
-  const yr = pyear(n.birth);
-  const removeBtn = (isAdmin && famId)
-    ? `<button onclick="event.stopPropagation(); confirmRemoveParent('${famId}','${id}')"
-         title="${currentLang==='he'?'הסר קשר הורות זה':currentLang==='en'?'Remove this parent link':'Убрать эту родительскую связь'}"
-         style="font-size:.62rem;padding:0 5px;background:none;border:none;cursor:pointer;color:#A02020;opacity:.55">✕</button>`
-    : '';
-  return `<div class="p-lnk" style="display:flex;align-items:center;gap:2px" onclick="panelNavigate('${id}')">
-    <span style="flex:1">${pname(id)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}</span>${removeBtn}
-  </div>`;
-}
-
 // A2.3: like pLink, but for the "Дети" list specifically — adds an
 // admin-only ✕ to unlink this child from THIS family (PATCH removeChild),
 // for cases where a child was linked to the wrong parent/family by mistake.
@@ -1339,13 +1320,12 @@ function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
   const parents=[], spouses=[], children=[], marriages=[];
-  const parentFamOf = {}; // parentId -> famId (the family where THIS person is a child of that parent)
   const childFamOf = {}; // childId -> famId (which of this person's families it came from)
   const orphanChildren = {}; // famId -> [orphanIds...] (children refs without corresponding nodes)
   for(const [famId, f] of Object.entries(IDX.families)){
     if((f.children||[]).includes(id)){
-      if(f.husband && IDX.nodes[f.husband]) { parents.push(f.husband); parentFamOf[f.husband] = famId; }
-      if(f.wife    && IDX.nodes[f.wife])    { parents.push(f.wife);    parentFamOf[f.wife]    = famId; }
+      if(f.husband && IDX.nodes[f.husband]) parents.push(f.husband);
+      if(f.wife    && IDX.nodes[f.wife])    parents.push(f.wife);
     }
     if(f.husband===id || f.wife===id){
       const sp = f.husband===id ? f.wife : f.husband;
@@ -1419,7 +1399,7 @@ function showPanel(id){
   // ── Column 2: relatives ──
   let col2 = '';
   const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pId => pLinkParent(pId, parentFamOf[pId], isAdminForFamilies)).join('')}</div>`;
+  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
   if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
 
@@ -4157,69 +4137,6 @@ async function confirmRemoveChild(famId, childId){
         currentLang==='he' ? '✓ הוסר מהמשפחה'
         : currentLang==='en' ? '✓ Unlinked from family'
         : '✓ Отвязано от семьи', false);
-    } else {
-      showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
-    }
-  } catch(e){
-    showToast('⚠ Ошибка соединения: ' + e.message, true);
-  }
-}
-
-// A2.4: unlink ONE parent from a family via PATCH /api/family
-// { removeParent } — for the case where a child is correctly attached to
-// a family and one parent in it is right, but the other parent is wrong
-// (e.g. discovered after merging two duplicate persons). The other
-// parent, the family itself, and all children in it stay untouched.
-async function confirmRemoveParent(famId, parentId){
-  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
-  const fam = IDX.families[famId];
-  if(!fam) return;
-
-  const parentName = pname(parentId);
-  const otherParentId = fam.husband === parentId ? fam.wife : fam.husband;
-  const otherParentName = otherParentId ? pname(otherParentId) : null;
-  const famLabel = [fam.husband ? pname(fam.husband) : null, fam.wife ? pname(fam.wife) : null]
-    .filter(Boolean).join(' + ') || famId;
-
-  const confirmMsg = currentLang==='he'
-    ? `להסיר את ${parentName} כהורה במשפחה זו (${famLabel})?\n${otherParentName ? otherParentName + ' והילדים יישארו ללא שינוי.' : ''}`
-    : currentLang==='en'
-    ? `Remove ${parentName} as a parent in this family (${famLabel})?\n${otherParentName ? otherParentName + ' and the children stay unchanged.' : ''}`
-    : `Убрать ${parentName} как родителя в этой семье (${famLabel})?\n${otherParentName ? otherParentName + ' и дети останутся без изменений.' : ''}`;
-  if(!confirm(confirmMsg)) return;
-
-  try {
-    const r = await fetch(WORKER_URL + '/api/family/' + famId, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
-      body: JSON.stringify({ removeParent: parentId })
-    });
-    const d = await r.json();
-    if(d.ok){
-      // Mirror the server's own removeParent logic locally (see
-      // PATCH /api/family/:id in src/index.js) so the panel/tree update
-      // immediately without waiting on the next /api/tree fetch.
-      const wasHusband = fam.husband === parentId;
-      if(wasHusband) fam.husband = null; else fam.wife = null;
-      if(IDX.parent_in[parentId]) IDX.parent_in[parentId] = IDX.parent_in[parentId].filter(f => f !== famId);
-      const otherParent = fam.husband || fam.wife || null;
-      const stillMarried = otherParent && Object.values(IDX.families).some(f2 =>
-        f2.id !== famId &&
-        ((f2.husband === parentId && f2.wife === otherParent) || (f2.husband === otherParent && f2.wife === parentId)));
-      if(otherParent && !stillMarried){
-        if(IDX.relatives[parentId])   IDX.relatives[parentId].spouses   = (IDX.relatives[parentId].spouses||[]).filter(s => s !== otherParent);
-        if(IDX.relatives[otherParent]) IDX.relatives[otherParent].spouses = (IDX.relatives[otherParent].spouses||[]).filter(s => s !== parentId);
-      }
-      for(const cid of fam.children){
-        if(IDX.relatives[cid])      IDX.relatives[cid].parents  = (IDX.relatives[cid].parents||[]).filter(p => p !== parentId);
-        if(IDX.relatives[parentId]) IDX.relatives[parentId].children = (IDX.relatives[parentId].children||[]).filter(c => c !== cid);
-      }
-      if(typeof refreshCanvas === 'function') refreshCanvas();
-      if(typeof showPanel === 'function') showPanel(currentFocal);
-      showToast(
-        currentLang==='he' ? '✓ קשר ההורות הוסר'
-        : currentLang==='en' ? '✓ Parent link removed'
-        : '✓ Родительская связь убрана', false);
     } else {
       showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
     }
