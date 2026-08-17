@@ -1375,10 +1375,6 @@ function showPanel(id){
   if(!b&&!d&&!n.bp&&!n.dp) col1 += `<em style="color:#7A5828;font-size:.72rem">${t('no_dates')}</em>`;
   col1 += `</div>`;
   if(n.missing&&n.missing.length) col1 += `<p class="p-warn">${t('missing')} ${n.missing.join(', ')}</p>`;
-  const familyNoteText = noteText(n, 'family_note');
-  const otherNoteText  = noteText(n, 'other_note');
-  if(familyNoteText) col1 += `<div class="p-sec"><h3>${t('fix_family')}</h3><div class="p-block">${familyNoteText}</div></div>`;
-  if(otherNoteText)  col1 += `<div class="p-sec"><h3>${t('fix_other')}</h3><div class="p-block">${otherNoteText}</div></div>`;
   // Contacts: only shown to authenticated users (guest or admin)
   const isAuth = !!(_sessionPassword);
   const hasContacts = n.phone || n.email || n.social;
@@ -1941,15 +1937,6 @@ function relText(n){
     if(manual) return manual;
   }
   return trel(n.rel);
-}
-
-function noteText(n, field){
-  if(!n) return '';
-  if(currentLang !== 'ru'){
-    const manual = n[field + '_' + currentLang];
-    if(manual) return manual;
-  }
-  return n[field] || '';
 }
 
 // ════════════════════════════════════════════════════════
