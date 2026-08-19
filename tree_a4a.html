@@ -579,7 +579,11 @@ function splitName(name){
 // ── place a couple centered on anchorX at given y ─────────
 // returns [{id, x, y, role}]
 function placeCouple(husband, wife, anchorX, y, role){
-  const people = [husband, wife].filter(Boolean);
+  // Guard against ghost cards: only place IDs that actually exist in
+  // IDX.nodes. Stale entries in derived caches (grandparents/relatives)
+  // can point at persons removed via merge/delete — without this filter
+  // they'd render as grey "P47"-style placeholder cards.
+  const people = [husband, wife].filter(Boolean).filter(id => IDX.nodes[id]);
   const totalW = people.length * CW + (people.length - 1) * COUPLE_GAP;
   let x = anchorX - totalW / 2;
   return people.map(id => {
@@ -688,6 +692,7 @@ function getCenteredLayout(focalId){
     if(!parId || !(parId in parentCX)) continue;
     const anchor = parentCX[parId];
     const gpNodes = placeCouple(gp.husband, gp.wife, anchor, -2*LEVEL_H, 'grandparent');
+    if(!gpNodes.length) continue; // both grandparents missing from nodes — nothing to draw
     gpRaw.push({
       nodes: gpNodes,
       left:  gpNodes[0].x,

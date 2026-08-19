@@ -80,6 +80,7 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
     <button class="hbtn" onclick="showTab('proposals')">📋 Предложения</button>
     <button class="hbtn" onclick="showTab('upload')">⬆ Загрузить дерево</button>
     <button class="hbtn" onclick="showTab('backups')">💾 Резервные копии</button>
+    <button class="hbtn" onclick="showTab('maintenance')">🔧 Обслуживание</button>
     <button class="hbtn" onclick="logout()">Выйти</button>
   </header>
 
@@ -124,6 +125,23 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
     <!-- BACKUPS TAB -->
     <div id="tab-backups" style="display:none">
       <div id="backups-list"></div>
+    </div>
+
+    <!-- MAINTENANCE TAB -->
+    <div id="tab-maintenance" style="display:none">
+      <div class="info">
+        Пересчитывает <code>relatives</code>, <code>child_of</code>, <code>parent_in</code>
+        и <code>grandparents</code> заново — исключительно из <code>families</code> и
+        <code>nodes</code> (источник истины). Устраняет «призрачные» серые карточки в
+        дереве (например «P47»), которые остаются после объединения или удаления персон,
+        если производный кэш не был синхронизирован. Данные персон и семей не меняются —
+        затрагиваются только производные связи. Автоматически создаётся резервная копия
+        перед изменением.
+      </div>
+      <button class="hbtn" onclick="rebuildCache()" style="background:#C09828;color:#fff;padding:8px 18px">
+        🔄 Пересчитать кэш связей
+      </button>
+      <div id="rebuild-status" style="margin-top:14px"></div>
     </div>
 
   </div>
@@ -185,11 +203,27 @@ async function api(method, path, body) {
 
 // ── Tabs ─────────────────────────────────────────────────
 function showTab(tab) {
-  ['proposals','upload','backups'].forEach(t => {
+  ['proposals','upload','backups','maintenance'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
   });
   currentTab = tab;
   if(tab === 'backups') loadBackups();
+}
+
+// ── Maintenance: rebuild derived-cache fields ─────────────
+async function rebuildCache() {
+  const st = document.getElementById('rebuild-status');
+  st.innerHTML = '<div class="info">⏳ Пересчитываю...</div>';
+  try {
+    const data = await api('POST', '/api/rebuild-cache');
+    st.innerHTML = `<div class="info" style="background:#D4EDDA;color:#155724">
+      ✅ ${data.message}. Персон: ${data.persons}, семей: ${data.families}` +
+      (data.droppedFamilyRefs ? `, найдено и исправлено проблемных ссылок: ${data.droppedFamilyRefs}` : '') +
+      `</div>`;
+    toast('✅ Кэш пересчитан');
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+  }
 }
 
 // ── Proposals ────────────────────────────────────────────

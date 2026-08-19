@@ -1381,6 +1381,99 @@ export default {
       return json({ ok: true, primaryId, mergedFrom: duplicateId, node: primary, warnings });
     }
 
+    // ── POST /api/rebuild-cache ───────────────────────────
+    // Admin only: recompute relatives/child_of/parent_in/grandparents
+    // from scratch, using `families` (source of truth) + `nodes`.
+    // Fixes stale/orphaned entries left behind after merges, deletes,
+    // or manual data edits — e.g. grandparents cache pointing at a
+    // person ID that no longer exists in nodes (shows as grey "P47"
+    // cards in the tree).
+    if(path === '/api/rebuild-cache' && method === 'POST') {
+      const auth = await getRole(request, env);
+      if(auth !== 'admin') return err('Только для администратора', 403);
+
+      const rawData = await env.TREE_KV.get('tree_data');
+      if(!rawData) return err('Данные дерева не найдены', 404);
+      const IDX = JSON.parse(rawData);
+
+      const relatives = {};
+      const child_of  = {};
+      const parent_in = {};
+      for(const id of Object.keys(IDX.nodes)){
+        relatives[id] = { parents: [], siblings: [], spouses: [], children: [] };
+      }
+
+      let droppedFamilyRefs = 0;
+      for(const [fid, f] of Object.entries(IDX.families)){
+        const parents = [f.husband, f.wife].filter(p => p && IDX.nodes[p]);
+        if((f.husband && !IDX.nodes[f.husband]) || (f.wife && !IDX.nodes[f.wife])) droppedFamilyRefs++;
+
+        for(const pid of parents){
+          if(!parent_in[pid]) parent_in[pid] = [];
+          if(!parent_in[pid].includes(fid)) parent_in[pid].push(fid);
+          const other = parents.find(p => p !== pid);
+          if(other && !relatives[pid].spouses.includes(other)) relatives[pid].spouses.push(other);
+        }
+
+        const kids = (f.children || []).filter(c => IDX.nodes[c]);
+        if(kids.length !== (f.children || []).length) droppedFamilyRefs++;
+
+        for(const cid of kids){
+          child_of[cid] = fid;
+          for(const pid of parents){
+            if(!relatives[cid].parents.includes(pid)) relatives[cid].parents.push(pid);
+            if(!relatives[pid].children.includes(cid)) relatives[pid].children.push(cid);
+          }
+          for(const sib of kids){
+            if(sib !== cid && !relatives[cid].siblings.includes(sib)) relatives[cid].siblings.push(sib);
+          }
+        }
+      }
+
+      // grandparents — recomputed only from families that still resolve
+      // to real, existing nodes (this is what fixes the grey ghost cards)
+      const grandparents = {};
+      for(const id of Object.keys(IDX.nodes)){
+        grandparents[id] = [];
+        for(const pid of (relatives[id]?.parents || [])){
+          const gfam = child_of[pid];
+          if(!gfam) continue;
+          const f = IDX.families[gfam];
+          if(!f) continue;
+          const h = f.husband && IDX.nodes[f.husband] ? f.husband : null;
+          const w = f.wife    && IDX.nodes[f.wife]    ? f.wife    : null;
+          if(!h && !w) continue; // both sides gone — drop entirely instead of leaving ghosts
+          grandparents[id].push({ family: gfam, husband: h, wife: w });
+        }
+      }
+
+      IDX.relatives    = relatives;
+      IDX.child_of     = child_of;
+      IDX.parent_in    = parent_in;
+      IDX.grandparents = grandparents;
+
+      const ts = Date.now();
+      await env.TREE_KV.put('backup_' + ts, rawData);
+      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
+
+      // Trim old backups (keep last 10)
+      const list = await env.TREE_KV.list({ prefix: 'backup_' });
+      const keys = list.keys.map(k => k.name).sort();
+      if(keys.length > 10) {
+        for(const old of keys.slice(0, keys.length - 10)) {
+          await env.TREE_KV.delete(old);
+        }
+      }
+
+      return json({
+        ok: true,
+        message: 'Кэш связей пересчитан',
+        persons: Object.keys(IDX.nodes).length,
+        families: Object.keys(IDX.families).length,
+        droppedFamilyRefs,
+      });
+    }
+
     // ── 404 ──────────────────────────────────────────
     return err('Не найдено', 404);
   }
