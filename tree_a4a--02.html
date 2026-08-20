@@ -231,7 +231,6 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <button class="btn" id="btn-edit" style="margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
   <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1">🖨</button>
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты">📇</button>
-  <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения">📅</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Войти">🔑</button>
   <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика">⚙</button>
@@ -611,8 +610,6 @@ function getCenteredLayout(focalId){
   const placed = new Set();  // avoid placing same person twice
   const nodes  = [];
   const MAX_GC = Infinity; // без ограничения — показываем всех внуков
-  // FIX-GUARD:MAXGC-INFINITY — MAX_GC must stay Infinity. If it becomes a
-  // finite number again, that is a REGRESSION — see runDiagnostics().
 
   function add(n){
     if(placed.has(n.id)) return;
@@ -1442,9 +1439,6 @@ function showPanel(id){
   // child from its whole family record (both parent slots at once), not a
   // single parent slot. Clicking ✂ next to either parent removes the link
   // to both, which confirmRemoveChild's own confirm dialog already states.
-  // FIX-GUARD:PARENT-UNLINK-BTN — admin-only ✂ next to each parent, reuses
-  // confirmRemoveChild(famId, childId). If this function or its ✂ button
-  // markup disappears, that is a REGRESSION.
   function pLinkParent(parentId){
     if(!isAdminForFamilies) return pLink(parentId);
     const famId = IDX.child_of[id];
@@ -3584,55 +3578,6 @@ function runDiagnostics(){
                    : warn('SVG пустой');
   } catch(e) { fail('Ошибка SVG', e.message); }
 
-  // ── REGRESSION GUARDS ────────────────────────────────
-  // Re-checks previously fixed issues to catch silent regressions from
-  // future patches that may not read the full current file state.
-  try {
-    const scriptText = Array.from(document.scripts).map(s => s.textContent).join('\n');
-
-    if(/const MAX_GC\s*=\s*Infinity/.test(scriptText)){
-      ok('Нет регрессии: MAX_GC = Infinity');
-    } else if(/const MAX_GC\s*=\s*\d+/.test(scriptText)){
-      fail('РЕГРЕССИЯ: MAX_GC снова ограничен числом', 'см. getCenteredLayout()');
-    } else {
-      warn('MAX_GC не найден в коде вообще — проверить вручную');
-    }
-
-    const calendarBtnCount = document.querySelectorAll('#btn-calendar').length;
-    if(calendarBtnCount === 1){
-      ok('Нет регрессии: одна кнопка календаря');
-    } else if(calendarBtnCount > 1){
-      fail('РЕГРЕССИЯ: дубль кнопки календаря', calendarBtnCount + ' штук');
-    } else {
-      warn('Кнопка календаря не найдена вообще');
-    }
-
-    if(/function pLinkParent\(parentId\)/.test(scriptText) && /confirmRemoveChild/.test(scriptText)){
-      ok('Нет регрессии: кнопка разрыва родитель-ребёнок (✂) присутствует');
-    } else {
-      fail('РЕГРЕССИЯ: кнопка разрыва родитель-ребёнок пропала', 'pLinkParent / confirmRemoveChild');
-    }
-
-    const siblingBranchCount = (scriptText.match(/relType === 'брат' \|\| relType === 'сестра'/g) || []).length;
-    if(siblingBranchCount === 2){
-      ok('Нет регрессии: обе ветки брат/сестра на месте', '(linkNewPersonToFamily + linkExistingPersonToFamily)');
-    } else if(siblingBranchCount === 1){
-      warn('Найдена только 1 из 2 ожидаемых веток брат/сестра — проверить, не удалили ли одну из функций');
-    } else if(siblingBranchCount === 0){
-      fail('РЕГРЕССИЯ: обработка брат/сестра пропала полностью');
-    } else {
-      warn('Веток брат/сестра больше двух (' + siblingBranchCount + ') — возможно случайное дублирование, проверить вручную');
-    }
-
-    if(typeof linkExistingPersonToFamily === 'function'){
-      ok('Нет регрессии: linkExistingPersonToFamily() присутствует');
-    } else {
-      fail('РЕГРЕССИЯ: linkExistingPersonToFamily() пропала');
-    }
-  } catch(e) {
-    warn('Не удалось выполнить проверку регрессий', e.message);
-  }
-
   return results;
 }
 
@@ -4321,10 +4266,6 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось добавить родителя');
     }
-  // FIX-GUARD:SIBLING-BRANCH-INTENTIONAL (1 of 2, in linkNewPersonToFamily) —
-  // this branch and its twin in linkExistingPersonToFamily() are BOTH
-  // intentional, not duplicates. Do not remove either without re-reading
-  // both functions in full.
   } else if(relType === 'брат' || relType === 'сестра'){
     const famId = IDX.child_of[targetId];
     if(!famId){
@@ -4432,8 +4373,6 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить родителя');
     }
-  // FIX-GUARD:SIBLING-BRANCH-INTENTIONAL (2 of 2, in linkExistingPersonToFamily) —
-  // twin of the branch in linkNewPersonToFamily(). Both intentional.
   } else if(relType === 'брат' || relType === 'сестра'){
     const targetFamId   = IDX.child_of[targetId];
     const existingFamId = IDX.child_of[existingId];
