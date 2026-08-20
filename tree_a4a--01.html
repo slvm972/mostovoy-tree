@@ -1432,27 +1432,7 @@ function showPanel(id){
   // ── Column 2: relatives ──
   let col2 = '';
   const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  // Break parent-child link (✂): admin-only button next to each parent.
-  // Reuses the existing confirmRemoveChild(famId, childId) — the same
-  // PATCH /api/family/:id { removeChild } action already wired up for the
-  // "Дети" ✕ button (A2.3) — since the backend only supports detaching a
-  // child from its whole family record (both parent slots at once), not a
-  // single parent slot. Clicking ✂ next to either parent removes the link
-  // to both, which confirmRemoveChild's own confirm dialog already states.
-  function pLinkParent(parentId){
-    if(!isAdminForFamilies) return pLink(parentId);
-    const famId = IDX.child_of[id];
-    const removeBtn = famId
-      ? `<button onclick="event.stopPropagation(); confirmRemoveChild('${famId}','${id}')"
-           title="${currentLang==='he'?'הסר קשר הורה-ילד':currentLang==='en'?'Break parent-child link':'Разорвать связь родитель-ребёнок'}"
-           style="font-size:.62rem;padding:0 5px;background:none;border:none;cursor:pointer;color:#A02020;opacity:.55">✂</button>`
-      : '';
-    const yr = pyear(IDX.nodes[parentId]?.birth);
-    return `<div class="p-lnk" style="display:flex;align-items:center;gap:2px" onclick="panelNavigate('${parentId}')">
-      <span style="flex:1">${pname(parentId)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}</span>${removeBtn}
-    </div>`;
-  }
-  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLinkParent).join('')}</div>`;
+  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
   if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
 
