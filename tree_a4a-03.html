@@ -308,14 +308,6 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <option value="брат" data-i="rel_brother">Брат</option>
       <option value="сестра" data-i="rel_sister">Сестра</option>
     </select>
-    <div id="f-sibling-parent-wrap" style="display:none">
-      <label data-i="lbl_sibling_parent">Общий родитель</label>
-      <select id="f-sibling-parent">
-        <option value="both" data-i="sib_both">Оба родителя (родные)</option>
-        <option value="father">— отец —</option>
-        <option value="mother">— мать —</option>
-      </select>
-    </div>
     <label data-i="lbl_phone">Телефон</label>
     <input id="f-phone" type="tel" data-ph="ph_phone" placeholder="+972-50-000-0000">
     <label data-i="lbl_email">Email</label>
@@ -429,10 +421,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <input id="ff-rel-he" type="text" placeholder="עברית" dir="rtl" style="font-size:.72rem">
     </div>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-      <label data-i="fix_family" style="margin:10px 0 3px">Семейная связь (что изменить)</label>
-      <button type="button" onclick="openMoveChildDialog()" title="Переместить в другую семью/брак" style="font-size:.62rem;padding:1px 6px;background:rgba(184,144,48,.12);border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828;flex-shrink:0;white-space:nowrap" data-i="btn_move_child">🔀 Переместить</button>
-    </div>
+    <label data-i="fix_family">Семейная связь (что изменить)</label>
     <textarea id="ff-family" data-ph="ph_family" placeholder="например: добавить мужа / убрать связь / изменить родителя"></textarea>
     <div style="display:flex;gap:8px;margin-top:4px">
       <textarea id="ff-family-en" placeholder="EN" style="font-size:.72rem;min-height:44px"></textarea>
@@ -1760,7 +1749,6 @@ const UI = {
     lbl_attach_target:'К кому',
 	lbl_father:'Отец',
     lbl_mother:'Мать',
-    lbl_sibling_parent:'Общий родитель', btn_move_child:'🔀 Переместить',
     lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
     lbl_genitive:'Имя в родительном падеже (необязательно)', ph_genitive:'Например: Анны Ивановой',
     lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
@@ -1845,7 +1833,6 @@ const UI = {
     lbl_attach_target:'To whom',
 	lbl_father:'Father',
     lbl_mother:'Mother',
-    lbl_sibling_parent:'Shared parent', btn_move_child:'🔀 Move',
     lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
     lbl_genitive:'Genitive-case name (optional)', ph_genitive:'E.g.: Anny Ivanovoy',
     lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
@@ -1930,7 +1917,6 @@ const UI = {
     lbl_attach_target:'למי',
 	lbl_father:'אבא',
     lbl_mother:'אמא',
-    lbl_sibling_parent:'הורה משותף', btn_move_child:'🔀 העברה',
     lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
     lbl_genitive:'שם ביחסת הקניין (רשות)', ph_genitive:'לדוגמה: Анны Ивановой',
     lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
@@ -2215,10 +2201,6 @@ function openModal(prefillId, mode){
   if(fSex)   fSex.selectedIndex = 0;
   if(fRelType) fRelType.selectedIndex = 0;
   if(ffSex)  ffSex.selectedIndex = 0;
-  const sibParentWrap = document.getElementById('f-sibling-parent-wrap');
-  const sibParentSel  = document.getElementById('f-sibling-parent');
-  if(sibParentWrap) sibParentWrap.style.display = 'none';
-  if(sibParentSel)  sibParentSel.value = 'both';
   // Hide current data card
   const card0 = document.getElementById('fix-current-data');
   if(card0) { card0.style.display = 'none'; card0.textContent = ''; }
@@ -2359,47 +2341,6 @@ document.querySelectorAll('.mtype').forEach(btn => {
   });
 });
 
-// ── Сводные братья/сёстры: показать выбор общего родителя ──
-// Виден только когда тип связи = брат/сестра. Подписи "— отец —" / "— мать —"
-// заменяются на реальные имена родителей целевой персоны, когда они известны.
-function updateSiblingParentField(){
-  const relT  = document.getElementById('f-rel-type').value;
-  const wrap  = document.getElementById('f-sibling-parent-wrap');
-  const sel   = document.getElementById('f-sibling-parent');
-  if(!wrap || !sel) return;
-
-  if(relT !== 'брат' && relT !== 'сестра'){
-    wrap.style.display = 'none';
-    sel.value = 'both';
-    return;
-  }
-  wrap.style.display = '';
-
-  const relP = document.getElementById('f-rel-person').value.trim();
-  const m = relP.match(/\[(P\d+)\]\s*$/);
-  const targetId = m ? m[1] : null;
-  const famId = targetId ? IDX.child_of[targetId] : null;
-  const fam = famId ? IDX.families[famId] : null;
-
-  const fatherOpt = sel.querySelector('option[value="father"]');
-  const motherOpt = sel.querySelector('option[value="mother"]');
-  const fatherName = fam && fam.husband ? pname(fam.husband) : null;
-  const motherName = fam && fam.wife    ? pname(fam.wife)    : null;
-
-  if(fatherOpt) fatherOpt.textContent = fatherName
-    ? '— ' + (currentLang==='he'?'רק אבא':currentLang==='en'?'father only':'только отец') + ': ' + fatherName + ' —'
-    : (currentLang==='he'?'— אבא (לא ידוע) —':currentLang==='en'?'— father (unknown) —':'— отец (неизвестен) —');
-  fatherOpt && (fatherOpt.disabled = !fatherName);
-
-  if(motherOpt) motherOpt.textContent = motherName
-    ? '— ' + (currentLang==='he'?'רק אמא':currentLang==='en'?'mother only':'только мать') + ': ' + motherName + ' —'
-    : (currentLang==='he'?'— אמא (לא ידועה) —':currentLang==='en'?'— mother (unknown) —':'— мать (неизвестна) —');
-  motherOpt && (motherOpt.disabled = !motherName);
-}
-document.getElementById('f-rel-type').addEventListener('change', updateSiblingParentField);
-document.getElementById('f-rel-person').addEventListener('input', updateSiblingParentField);
-document.getElementById('f-rel-person').addEventListener('change', updateSiblingParentField);
-
 // P6.1c: Show correct button label depending on auth + form type
 function updateGenerateButtonLabel(){
   const btn = document.getElementById('modal-generate');
@@ -2484,11 +2425,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
           const relTargetId = relIdMatch ? relIdMatch[1] : null;
 
           if(relTargetId && relT){
-            const sibParentEl = document.getElementById('f-sibling-parent');
-            const sharedParent = (relT === 'брат' || relT === 'сестра') && sibParentEl
-              ? sibParentEl.value : 'both';
             try {
-              await linkNewPersonToFamily(newId, relTargetId, relT, sex, sharedParent);
+              await linkNewPersonToFamily(newId, relTargetId, relT, sex);
             } catch(linkErr){
               console.warn('[P5] Family link failed (person still created):', linkErr.message);
               showToast('✓ Персона создана, но связь не удалось установить автоматически', true);
@@ -4264,173 +4202,6 @@ async function quickClearField(inputId, apiKey, labelKey){
   }
 }
 
-// ── Этап B: «Переместить в другую семью/брак» ───────────────────────────
-// Решает случай из практики (Люда Журахинская): ребёнок был по ошибке
-// привязан к семье с НЕВЕРНЫМ вторым родителем (напр. муж сестры вместо
-// собственного мужа). Раньше единственный путь исправить это — текстовое
-// поле «Семейная связь», уходящее на email для ручной проверки. Теперь —
-// прямое структурированное действие: выбираем, какой родитель остаётся
-// «общим» (или оба — тогда просто ничего не делаем), указываем корректного
-// второго родителя, и функция сама найдёт подходящую существующую семью
-// или создаст новую, перенеся ребёнка одним PATCH removeChild + addChild.
-async function openMoveChildDialog(){
-  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL){
-    showToast(currentLang==='he' ? '⚠ פעולה זו זמינה למנהל בלבד' : currentLang==='en' ? '⚠ Admin only' : '⚠ Доступно только администратору', true);
-    return;
-  }
-
-  const personVal = document.getElementById('f-fix-person').value.trim();
-  const idMatch = personVal.match(/\[(P\d+)\]\s*$/);
-  const childId = idMatch ? idMatch[1] : null;
-  if(!childId){
-    showToast(currentLang==='he' ? '⚠ קודם בחר אדם' : currentLang==='en' ? '⚠ Select a person first' : '⚠ Сначала выберите персону (поле выше)', true);
-    return;
-  }
-
-  const oldFamId = IDX.child_of[childId];
-  if(!oldFamId){
-    showToast(currentLang==='he' ? '⚠ לאדם הזה אין כרגע קשר משפחתי כילד' : currentLang==='en' ? '⚠ This person has no current parent-family link' : '⚠ У этой персоны сейчас нет семейной связи как у ребёнка', true);
-    return;
-  }
-  const oldFam = IDX.families[oldFamId];
-  const childName = pname(childId);
-  const fatherId = oldFam.husband, motherId = oldFam.wife;
-  const fatherName = fatherId ? pname(fatherId) : null;
-  const motherName = motherId ? pname(motherId) : null;
-
-  const menuText = (currentLang==='he'
-    ? `${childName} משויך כרגע למשפחה: ${fatherName||'—'} + ${motherName||'—'}\n\nמי נשאר ההורה המשותף?\n1. אבא (${fatherName||'לא ידוע'}) — יש להזין הורה שני חדש\n2. אמא (${motherName||'לא ידועה'}) — יש להזין הורה שני חדש\n3. ביטול`
-    : currentLang==='en'
-    ? `${childName} is currently linked to family: ${fatherName||'—'} + ${motherName||'—'}\n\nWhich parent stays the same?\n1. Father (${fatherName||'unknown'}) — you'll enter the correct second parent\n2. Mother (${motherName||'unknown'}) — you'll enter the correct second parent\n3. Cancel`
-    : `${childName} сейчас привязан к семье: ${fatherName||'—'} + ${motherName||'—'}\n\nКакой родитель остаётся общим (правильным)?\n1. Отец (${fatherName||'неизвестен'}) — дальше укажете верного второго родителя\n2. Мать (${motherName||'неизвестна'}) — дальше укажете верного второго родителя\n3. Отмена`
-  );
-  const choice = window.prompt(menuText, '1');
-  if(choice === null || choice.trim() === '3') return;
-
-  let anchorId, anchorSlotIsHusband;
-  if(choice.trim() === '1'){
-    if(!fatherId){ showToast(currentLang==='he'?'⚠ אין אבא רשום':currentLang==='en'?'⚠ No father on record':'⚠ Отец не указан у этой семьи', true); return; }
-    anchorId = fatherId; anchorSlotIsHusband = true;
-  } else if(choice.trim() === '2'){
-    if(!motherId){ showToast(currentLang==='he'?'⚠ אין אמא רשומה':currentLang==='en'?'⚠ No mother on record':'⚠ Мать не указана у этой семьи', true); return; }
-    anchorId = motherId; anchorSlotIsHusband = false;
-  } else {
-    showToast(currentLang==='he'?'⚠ בחירה לא מובנת':currentLang==='en'?'⚠ Unrecognized choice':'⚠ Нераспознанный выбор', true);
-    return;
-  }
-
-  const newParentLabel = window.prompt(
-    currentLang==='he' ? 'הזן את שם/מזהה ההורה השני הנכון (העתק מרשימת ההשלמה, כולל [Pxx]).\nהשאר ריק אם ההורה השני אינו ידוע:'
-    : currentLang==='en' ? 'Enter the correct second parent — name or ID (paste from the autocomplete list, including [Pxx]).\nLeave empty if the second parent is unknown:'
-    : 'Введите имя/ID верного второго родителя (можно вставить строку из автокомплита, включая [Pxx]).\nОставьте пустым, если второй родитель неизвестен:',
-    ''
-  );
-  if(newParentLabel === null) return; // отменено (Cancel), а не пустой ввод
-
-  const unknownSecondParent = newParentLabel.trim() === '';
-  let newParentId = null;
-
-  if(!unknownSecondParent){
-    const pidMatch = newParentLabel.match(/\[(P\d+)\]\s*$/);
-    newParentId = pidMatch ? pidMatch[1] : null;
-    if(!newParentId){
-      // fallback: try matching by exact name (case-insensitive)
-      const lower = newParentLabel.trim().toLowerCase();
-      const found = Object.entries(IDX.nodes).find(([, nn]) => (nn.name||'').toLowerCase() === lower);
-      newParentId = found ? found[0] : null;
-    }
-    if(!newParentId || !IDX.nodes[newParentId]){
-      showToast(currentLang==='he'?'⚠ הורה לא נמצא — נא לבחור מרשימת ההשלמה':currentLang==='en'?'⚠ Person not found — pick from the autocomplete list':'⚠ Персона не найдена — выберите точно из автокомплита', true);
-      return;
-    }
-    if(newParentId === anchorId){
-      showToast(currentLang==='he'?'⚠ ההורה השני חייב להיות שונה מההורה הקבוע':currentLang==='en'?'⚠ Second parent must differ from the anchor parent':'⚠ Второй родитель должен отличаться от того, что остаётся общим', true);
-      return;
-    }
-  }
-
-  const husbandId = anchorSlotIsHusband ? anchorId : newParentId;
-  const wifeId    = anchorSlotIsHusband ? newParentId : anchorId;
-
-  const secondParentDisplay = unknownSecondParent
-    ? (currentLang==='he' ? '(לא ידוע)' : currentLang==='en' ? '(unknown)' : '(неизвестен)')
-    : pname(newParentId);
-  const confirmMsg = currentLang==='he'
-    ? `להעביר את ${childName} למשפחה: ${pname(anchorId)} + ${secondParentDisplay}?`
-    : currentLang==='en'
-    ? `Move ${childName} to family: ${pname(anchorId)} + ${secondParentDisplay}?`
-    : `Переместить ${childName} в семью: ${pname(anchorId)} + ${secondParentDisplay}?`;
-  if(!confirm(confirmMsg)) return;
-
-  const headers = {'Content-Type':'application/json','X-Password':_sessionPassword};
-  try {
-    // Найти существующую семью: точное совпадение пары родителей, ИЛИ, если
-    // второй родитель неизвестен — семью где anchorId стоит один (второй слот пуст).
-    let targetFamId;
-    if(unknownSecondParent){
-      targetFamId = Object.entries(IDX.families).find(([, f]) =>
-        (anchorSlotIsHusband ? (f.husband === anchorId && !f.wife) : (f.wife === anchorId && !f.husband))
-      )?.[0];
-    } else {
-      targetFamId = Object.entries(IDX.families).find(([, f]) =>
-        f.husband === husbandId && f.wife === wifeId
-      )?.[0];
-    }
-
-    if(!targetFamId){
-      const createRes = await fetch(WORKER_URL + '/api/family', {
-        method: 'POST', headers,
-        body: JSON.stringify({ parent1: husbandId || null, parent2: wifeId || null, children: [] })
-      });
-      const createData = await createRes.json();
-      if(!createData.ok) throw new Error(createData.error || 'Не удалось создать целевую семью');
-      targetFamId = createData.familyId;
-    }
-
-    if(targetFamId === oldFamId){
-      showToast(currentLang==='he'?'זהו כבר המשפחה הנוכחית':currentLang==='en'?'That is already the current family':'Это и есть текущая семья — перемещать некуда', true);
-      return;
-    }
-
-    // Отвязать от старой семьи
-    const rmRes = await fetch(WORKER_URL + '/api/family/' + oldFamId, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ removeChild: childId })
-    });
-    const rmData = await rmRes.json();
-    if(!rmData.ok) throw new Error(rmData.error || 'Не удалось отвязать от старой семьи');
-
-    // Привязать к новой/найденной семье
-    const addRes = await fetch(WORKER_URL + '/api/family/' + targetFamId, {
-      method: 'PATCH', headers,
-      body: JSON.stringify({ addChild: childId })
-    });
-    const addData = await addRes.json();
-    if(!addData.ok) throw new Error(addData.error || 'Не удалось привязать к новой семье');
-
-    // Обновляем локальный IDX, чтобы не ждать перезагрузки
-    if(typeof loadTree === 'function'){
-      const savedPwd = sessionStorage.getItem('tree_pwd') || _sessionPassword;
-      const res = await fetch(WORKER_URL + '/api/tree', { headers: { 'X-Password': savedPwd } });
-      if(res.ok){
-        const data = await res.json();
-        IDX = data;
-        if(typeof buildDatalist === 'function') buildDatalist();
-      }
-    }
-
-    if(typeof refreshCanvas === 'function') refreshCanvas();
-    if(typeof showPanel === 'function') showPanel(childId);
-    document.getElementById('modal-overlay').classList.remove('open');
-    showToast(
-      currentLang==='he' ? `✓ ${childName} הועבר למשפחה החדשה`
-      : currentLang==='en' ? `✓ ${childName} moved to the new family`
-      : `✓ ${childName} перемещён(а) в новую семью`, false);
-  } catch(e){
-    showToast('⚠ ' + e.message, true);
-  }
-}
-
 async function confirmRemoveChild(famId, childId){
   if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
   const fam = IDX.families[famId];
@@ -4482,36 +4253,7 @@ async function confirmRemoveChild(famId, childId){
   }
 }
 
-// Этап A: если у родителя несколько браков, не берём первый попавшийся
-// молча — спрашиваем администратора, в какую именно семью привязать ребёнка.
-// Возвращает famId или null (если пользователь отменил выбор).
-function pickMarriageFamily(famIds, aroundPersonId){
-  if(famIds.length <= 1) return famIds[0] || null;
-
-  const lines = famIds.map((fid, i) => {
-    const fam = IDX.families[fid];
-    const spouseId = fam.husband === aroundPersonId ? fam.wife : fam.husband;
-    const spouseName = spouseId ? pname(spouseId) : (currentLang==='he'?'(супруг неизвестен)':currentLang==='en'?'(spouse unknown)':'(супруг неизвестен)');
-    const kidsCount = (fam.children||[]).length;
-    return (i+1) + '. ' + spouseName + ' — ' +
-      (currentLang==='he' ? 'ילדים: '+kidsCount : currentLang==='en' ? 'children: '+kidsCount : 'детей: '+kidsCount);
-  }).join('\n');
-
-  const promptText = (currentLang==='he'
-    ? 'לאדם הזה יש כמה נישואים. לאיזה מהם לשייך את הילד?\n\n'
-    : currentLang==='en'
-    ? 'This person has more than one marriage. Which one should the child belong to?\n\n'
-    : 'У этой персоны несколько браков. В какой из них добавить ребёнка?\n\n'
-  ) + lines;
-
-  const answer = window.prompt(promptText, '1');
-  if(answer === null) return null; // отменено пользователем
-  const idx = parseInt(answer, 10) - 1;
-  if(isNaN(idx) || idx < 0 || idx >= famIds.length) return famIds[0]; // некорректный ввод — берём первый как раньше
-  return famIds[idx];
-}
-
-async function linkNewPersonToFamily(newId, targetId, relType, newSex, sharedParent){
+async function linkNewPersonToFamily(newId, targetId, relType, newSex){
   const targetNode = IDX.nodes[targetId];
   if(!targetNode) throw new Error('Целевая персона не найдена: ' + targetId);
 
@@ -4521,13 +4263,8 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex, sharedPar
     // New person is a CHILD of targetId.
     // Find an existing family where targetId is a parent; add child there.
     // If no family exists yet, create one with targetId as sole parent.
-    // FIX-GUARD:MULTI-MARRIAGE-CHOICE — do not silently take famIds[0] when
-    // targetId has more than one marriage; ask which one via pickMarriageFamily().
     const famIds = IDX.parent_in[targetId] || [];
-    let famId = famIds.length > 1 ? pickMarriageFamily(famIds, targetId) : famIds[0];
-    if(famIds.length > 1 && famId === null){
-      throw new Error(currentLang==='he' ? 'בחירת נישואים בוטלה' : currentLang==='en' ? 'Marriage selection cancelled' : 'Выбор брака отменён — ребёнок не привязан');
-    }
+    let famId = famIds[0]; // use first existing marriage if present
 
     if(!famId){
       const isFemale = targetNode.sex === 'F';
@@ -4590,62 +4327,20 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex, sharedPar
   // both functions in full.
   } else if(relType === 'брат' || relType === 'сестра'){
     const famId = IDX.child_of[targetId];
-    const shared = sharedParent || 'both';
-
-    if(shared === 'both' || !famId){
-      // Родные братья/сёстры (оба родителя общие) — прежнее поведение:
-      // добавляем нового человека в ту же семью, что и целевую персону.
-      if(!famId){
-        const r = await fetch(WORKER_URL + '/api/family', {
-          method: 'POST', headers,
-          body: JSON.stringify({parent1:null, parent2:null, children:[targetId, newId]})
-        });
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
-      } else {
-        const r = await fetch(WORKER_URL + '/api/family/' + famId, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({addChild: newId})
-        });
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
-      }
-    } else {
-      // FIX-GUARD:HALF-SIBLING-SINGLE-PARENT — сводный брат/сестра: общий
-      // только ОДИН родитель (отец или мать целевой персоны). Ищем среди
-      // всех браков этого одного родителя семью, где второй супруг null
-      // или где новый человек логично встанет отдельным браком; если такой
-      // однородительской семьи ещё нет — создаём её отдельно от famId, а НЕ
-      // добавляем ребёнка в семью targetId (там сидит другой, не общий, родитель).
-      const fam = IDX.families[famId];
-      const sharedParentId = shared === 'father' ? fam.husband : fam.wife;
-      if(!sharedParentId) throw new Error('У целевой персоны не указан ' + (shared==='father'?'отец':'мать') + ' — сводную связь установить нельзя');
-
-      // Ищем семью, где sharedParentId — единственный родитель (второй слот пуст)
-      const candidateFamIds = (IDX.parent_in[sharedParentId] || []).filter(fid => {
-        const f = IDX.families[fid];
-        return (f.husband === sharedParentId && !f.wife) || (f.wife === sharedParentId && !f.husband);
+    if(!famId){
+      const r = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify({parent1:null, parent2:null, children:[targetId, newId]})
       });
-      let soloFamId = candidateFamIds[0];
-
-      if(!soloFamId){
-        const isFemale = IDX.nodes[sharedParentId]?.sex === 'F';
-        const r = await fetch(WORKER_URL + '/api/family', {
-          method: 'POST', headers,
-          body: JSON.stringify(isFemale
-            ? {parent1:null, parent2:sharedParentId, children:[newId]}
-            : {parent1:sharedParentId, parent2:null, children:[newId]})
-        });
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'Не удалось создать семью для сводного брата/сестры');
-      } else {
-        const r = await fetch(WORKER_URL + '/api/family/' + soloFamId, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({addChild: newId})
-        });
-        const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'Не удалось добавить сводного брата/сестру в семью');
-      }
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    } else {
+      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({addChild: newId})
+      });
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
     }
   }
   // else: relType empty or unrecognized — silently skip linking
