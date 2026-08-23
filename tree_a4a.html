@@ -212,6 +212,26 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 #help-bubble b{display:block;margin-bottom:4px;font-size:.8rem}
 #help-bubble ol{padding-left:16px;margin-top:4px}
 #help-bubble li{margin-bottom:3px}
+
+/* ── MOBILE RESPONSIVE (added — see chat audit) ── */
+@media (max-width: 640px) {
+  #tb {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  #tb::-webkit-scrollbar { height: 3px; }
+  #tb > * { flex-shrink: 0; }
+
+  .lang-btns { flex-shrink: 0; }
+  #info { min-width: 0; }
+
+  #panel { height: 160px; bottom: -160px; }
+  #panel.open { bottom: 32px; }
+  #vp.panel-open { bottom: 192px; }
+  #panel-col1, #panel-col2 { padding: 8px 10px; }
+}
 </style>
 </head>
 <body>
