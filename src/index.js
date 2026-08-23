@@ -31,12 +31,22 @@ async function checkPassword(provided, storedHash) {
 }
 
 // ── Cycle guard ─────────────────────────────────────────
-// Prevents a person from becoming their own ancestor or descendant
-// (e.g. "add my father as my child") when linking family relations.
-// Walks IDX.relatives in both directions from `candidateId` and
-// returns true if `targetId` is found among its ancestors or
-// descendants (which would make targetId<->candidateId a cycle).
-function isAncestorOrDescendant(IDX, targetId, candidateId) {
+// Prevents a person from becoming their own descendant (e.g. "add my
+// father as my child") when linking family relations. Walks IDX.relatives
+// downward through descendants of `candidateId` and returns true if
+// `targetId` is found among them.
+//
+// NOTE: this deliberately checks ONLY the descendant direction, not the
+// ancestor direction. An earlier version also walked upward through
+// candidateId's ancestors, but that direction is not a cycle check at
+// all — finding targetId among candidateId's existing ancestors just
+// means targetId is already a parent/ancestor of candidateId through an
+// existing link, which is a perfectly normal, non-cyclic state (e.g. it
+// falsely fired when re-attaching a child to a parent it already has,
+// such as during detachSingleParent's addChild step before the old
+// family link was removed). Only the descendant-direction walk can
+// actually detect a cycle.
+function isDescendantOf(IDX, targetId, candidateId) {
   if(!targetId || !candidateId) return false;
   if(targetId === candidateId) return true;
 
@@ -52,30 +62,21 @@ function isAncestorOrDescendant(IDX, targetId, candidateId) {
     if(rel && rel.children) for(const c of rel.children) stack.push(c);
   }
 
-  visited.clear();
-  stack.push(candidateId);
-  // Walk ancestors of candidateId
-  while(stack.length) {
-    const cur = stack.pop();
-    if(visited.has(cur)) continue;
-    visited.add(cur);
-    if(cur === targetId) return true;
-    const rel = IDX.relatives[cur];
-    if(rel && rel.parents) for(const p of rel.parents) stack.push(p);
-  }
-
   return false;
 }
 
-// Checks whether making `childId` a child of `parentId` would create
-// a cycle (parentId is already a descendant of childId, or they're
-// the same person). Returns an error message string, or null if safe.
+// Checks whether making `childId` a child of `parentId` would create a
+// cycle. The real cycle case is: childId is already an ancestor of
+// parentId — in which case parentId will inevitably show up among
+// childId's descendants when walking downward, which is exactly what
+// isDescendantOf(IDX, parentId, childId) checks. Returns an error
+// message string, or null if safe.
 function checkParentChildCycle(IDX, parentId, childId) {
   if(!parentId || !childId) return null;
   if(parentId === childId) {
     return 'Персона не может быть собственным родителем/ребёнком';
   }
-  if(isAncestorOrDescendant(IDX, parentId, childId)) {
+  if(isDescendantOf(IDX, parentId, childId)) {
     return 'Эта связь создала бы цикл: ' + (IDX.nodes[parentId]?.name || parentId) +
       ' уже является потомком ' + (IDX.nodes[childId]?.name || childId);
   }
