@@ -1,0 +1,11 @@
+name = "mostovoy-tree"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "TREE_KV"
+id = "fc83f0c432a848f09698d09af25ba6f0"
+
+[vars]
+GUEST_PASSWORD_HASH = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
+ADMIN_PASSWORD_HASH = "a4ba90196e2165f296db9f2285ce1ccd6159bd4750ca3809f152787d53bfab23"
