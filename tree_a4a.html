@@ -232,6 +232,40 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   #vp.panel-open { bottom: 192px; }
   #panel-col1, #panel-col2 { padding: 8px 10px; }
 }
+
+/* ── SCROLL INDICATORS (toolbar + canvas, mobile only) ── */
+#tb-hscroll, #canvas-hscroll, #canvas-vscroll { display: none; }
+#tb-hscroll {
+  position: fixed; top: 44px; left: 0; right: 0; height: 4px;
+  background: rgba(28,18,8,.5); z-index: 99; pointer-events: none;
+}
+#tb-hscroll-thumb {
+  position: absolute; top: 0; height: 4px;
+  background: #C09828; border-radius: 2px; opacity: .85;
+}
+#canvas-hscroll {
+  position: fixed; left: 0; right: 8px; bottom: 32px; height: 8px;
+  background: rgba(28,18,8,.12); z-index: 90;
+}
+#canvas-hscroll-thumb {
+  position: absolute; top: 1px; height: 6px;
+  background: rgba(192,152,40,.75); border-radius: 3px;
+  touch-action: none; cursor: pointer;
+}
+#canvas-vscroll {
+  position: fixed; top: 44px; bottom: 40px; right: 0; width: 8px;
+  background: rgba(28,18,8,.12); z-index: 90;
+}
+#canvas-vscroll-thumb {
+  position: absolute; left: 1px; width: 6px;
+  background: rgba(192,152,40,.75); border-radius: 3px;
+  touch-action: none; cursor: pointer;
+}
+#canvas-hscroll-thumb.dragging, #canvas-vscroll-thumb.dragging { background: #C09828; }
+
+@media (max-width: 640px) {
+  #tb-hscroll, #canvas-hscroll, #canvas-vscroll { display: block; }
+}
 </style>
 </head>
 <body>
@@ -266,6 +300,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <button class="lbtn" data-lang="he">עב</button>
   </div>
 </div>
+<!-- ── SCROLL INDICATORS (mobile: toolbar + canvas position/scale gauges) ── -->
+<div id="tb-hscroll"><div id="tb-hscroll-thumb"></div></div>
+<div id="canvas-hscroll"><div id="canvas-hscroll-thumb"></div></div>
+<div id="canvas-vscroll"><div id="canvas-vscroll-thumb"></div></div>
 <!-- ── BOTTOM INFO PANEL ── -->
 <div id="panel" class="open">
   <button id="panel-close">×</button>
@@ -1740,6 +1778,177 @@ document.addEventListener('keydown', e => {
 
   // Cursor hint
   vp.style.cursor = 'grab';
+})();
+
+// ════════════════════════════════════════════════════════
+//  SCROLL INDICATORS (mobile) — toolbar (visual only, native
+//  scroll already works via touch) + canvas (visual + draggable,
+//  gauges position/zoom relative to fixed top/bottom bars).
+// ════════════════════════════════════════════════════════
+
+// ── Toolbar horizontal indicator — synced to native #tb scroll ──
+(function initToolbarScrollIndicator(){
+  const tb    = document.getElementById('tb');
+  const track = document.getElementById('tb-hscroll');
+  const thumb = document.getElementById('tb-hscroll-thumb');
+  if(!tb || !track || !thumb) return;
+
+  function update(){
+    const trackW   = track.clientWidth;
+    const contentW = tb.scrollWidth;
+    const visibleW = tb.clientWidth;
+    if(contentW <= visibleW + 1){
+      thumb.style.width = trackW + 'px';
+      thumb.style.left  = '0px';
+      return;
+    }
+    const ratio  = visibleW / contentW;
+    const thumbW = Math.max(24, trackW * ratio);
+    const maxScroll  = contentW - visibleW;
+    const scrollFrac = Math.max(0, Math.min(1, tb.scrollLeft / maxScroll));
+    thumb.style.width = thumbW + 'px';
+    thumb.style.left  = (scrollFrac * (trackW - thumbW)) + 'px';
+  }
+
+  tb.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
+
+// ── Canvas (tree) indicators — position/zoom gauge + draggable thumbs ──
+// Content bounds come from the rendered SVG's width/height (set in render()).
+// World transform is read directly from #world's inline style, so this stays
+// in sync with ANY transform change — existing pan/zoom (wheel/drag/pinch),
+// navigateTo()'s animated recenter, AND the new thumb-drag below — via a
+// single MutationObserver, without touching the existing pan/zoom code.
+(function initCanvasScrollIndicators(){
+  const vp      = document.getElementById('vp');
+  const world   = document.getElementById('world');
+  const hTrack  = document.getElementById('canvas-hscroll');
+  const hThumb  = document.getElementById('canvas-hscroll-thumb');
+  const vTrack  = document.getElementById('canvas-vscroll');
+  const vThumb  = document.getElementById('canvas-vscroll-thumb');
+  if(!vp || !world || !hTrack || !hThumb || !vTrack || !vThumb) return;
+
+  function readTransform(){
+    const t = world.style.transform || '';
+    const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/);
+    return m ? { tx: +m[1], ty: +m[2], s: +m[3] } : null;
+  }
+  function contentSize(){
+    const svg = document.getElementById('svg');
+    if(!svg) return null;
+    const w = parseFloat(svg.getAttribute('width'))  || 0;
+    const h = parseFloat(svg.getAttribute('height')) || 0;
+    return (w && h) ? { w, h } : null;
+  }
+  function setWorldTransform(tx, ty, s){
+    world.style.transition = 'none';
+    world.style.transform  = `translate(${tx}px,${ty}px) scale(${s})`;
+  }
+
+  function update(){
+    const xf = readTransform();
+    const cs = contentSize();
+    if(!xf || !cs) return;
+    const { tx, ty, s } = xf;
+    const vpRect = vp.getBoundingClientRect();
+    const vw = vpRect.width, vh = vpRect.height;
+    const scaledW = cs.w * s, scaledH = cs.h * s;
+
+    // Horizontal thumb
+    const hTrackW = hTrack.clientWidth;
+    if(scaledW <= vw + 1){
+      hThumb.style.width = hTrackW + 'px';
+      hThumb.style.left  = '0px';
+    } else {
+      const ratio  = vw / scaledW;
+      const thumbW = Math.max(20, hTrackW * ratio);
+      const maxScroll  = scaledW - vw;
+      const scrollFrac = Math.max(0, Math.min(1, -tx / maxScroll));
+      hThumb.style.width = thumbW + 'px';
+      hThumb.style.left  = (scrollFrac * (hTrackW - thumbW)) + 'px';
+    }
+
+    // Vertical thumb
+    const vTrackH = vTrack.clientHeight;
+    if(scaledH <= vh + 1){
+      vThumb.style.height = vTrackH + 'px';
+      vThumb.style.top    = '0px';
+    } else {
+      const ratio  = vh / scaledH;
+      const thumbH = Math.max(20, vTrackH * ratio);
+      const maxScroll  = scaledH - vh;
+      const scrollFrac = Math.max(0, Math.min(1, -ty / maxScroll));
+      vThumb.style.height = thumbH + 'px';
+      vThumb.style.top    = (scrollFrac * (vTrackH - thumbH)) + 'px';
+    }
+  }
+
+  // Any change to #world's inline style (pan, zoom, pinch, navigateTo,
+  // thumb-drag below) recomputes both indicators automatically.
+  new MutationObserver(update).observe(world, { attributes: true, attributeFilter: ['style'] });
+  window.addEventListener('resize', update);
+  update();
+
+  // ── Draggable thumbs (pointer events — unify mouse + touch) ──
+  function dragThumb(thumb, axis){
+    let dragging = false, startClient = 0, startPos = 0, startXf = null, cs = null;
+    let trackLen = 0, thumbLen = 0, maxScroll = 0;
+
+    thumb.addEventListener('pointerdown', e => {
+      const xf = readTransform();
+      cs = contentSize();
+      if(!xf || !cs) return;
+      dragging = true;
+      thumb.classList.add('dragging');
+      startXf = xf;
+      startClient = axis === 'x' ? e.clientX : e.clientY;
+
+      if(axis === 'x'){
+        trackLen  = hTrack.clientWidth;
+        thumbLen  = hThumb.getBoundingClientRect().width;
+        startPos  = parseFloat(hThumb.style.left) || 0;
+        maxScroll = Math.max(0, cs.w * xf.s - vp.getBoundingClientRect().width);
+      } else {
+        trackLen  = vTrack.clientHeight;
+        thumbLen  = vThumb.getBoundingClientRect().height;
+        startPos  = parseFloat(vThumb.style.top) || 0;
+        maxScroll = Math.max(0, cs.h * xf.s - vp.getBoundingClientRect().height);
+      }
+      thumb.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    thumb.addEventListener('pointermove', e => {
+      if(!dragging || !startXf) return;
+      const delta = (axis === 'x' ? e.clientX : e.clientY) - startClient;
+      const travel = Math.max(1, trackLen - thumbLen);
+      const newPos = Math.max(0, Math.min(travel, startPos + delta));
+      const scrollFrac = newPos / travel;
+
+      if(axis === 'x'){
+        const newTx = -scrollFrac * maxScroll;
+        setWorldTransform(newTx, startXf.ty, startXf.s);
+      } else {
+        const newTy = -scrollFrac * maxScroll;
+        setWorldTransform(startXf.tx, newTy, startXf.s);
+      }
+      e.preventDefault();
+    });
+
+    function endDrag(e){
+      if(!dragging) return;
+      dragging = false;
+      thumb.classList.remove('dragging');
+      try { thumb.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+    thumb.addEventListener('pointerup', endDrag);
+    thumb.addEventListener('pointercancel', endDrag);
+  }
+
+  dragThumb(hThumb, 'x');
+  dragThumb(vThumb, 'y');
 })();
 
 // ════════════════════════════════════════════════════════
