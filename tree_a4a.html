@@ -1355,6 +1355,26 @@ function pLink(id){
   </div>`;
 }
 
+// Parent link in the "Родители" section — admin-only ✂ next to a parent
+// detaches the child from THAT ONE parent only (via detachSingleParent),
+// leaving the other parent intact. The ✂ only renders when otherParentId
+// is truthy (i.e. the child actually has a second parent to keep) —
+// nothing to "detach to single" if there's only one parent already.
+function pLinkParent(id, childId, otherParentId){
+  const n = IDX.nodes[id]; if(!n) return '';
+  const yr = pyear(n.birth);
+  const showScissors = !!otherParentId && !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+  return `<div class="p-lnk" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+    <span onclick="panelNavigate('${id}')" style="cursor:pointer;flex:1">
+      ${pname(id)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}
+    </span>
+    ${showScissors ? `<span onclick="event.stopPropagation();detachSingleParent('${childId}','${id}','${otherParentId}')"
+      title="${currentLang==='he'?'הסר קשר להורה זה בלבד':currentLang==='en'?'Detach from this parent only':'Отвязать только от этого родителя'}"
+      style="cursor:pointer;opacity:.5;font-size:.75rem;padding:2px 4px"
+      onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">✂</span>` : ''}
+  </div>`;
+}
+
 // A2.3: like pLink, but for the "Дети" list specifically — adds an
 // admin-only ✕ to unlink this child from THIS family (PATCH removeChild),
 // for cases where a child was linked to the wrong parent/family by mistake.
@@ -1504,30 +1524,18 @@ function showPanel(id){
   // ── Column 2: relatives ──
   let col2 = '';
   const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  // Break parent-child link (✂): admin-only button next to each parent.
-  // Reuses the existing confirmRemoveChild(famId, childId) — the same
-  // PATCH /api/family/:id { removeChild } action already wired up for the
-  // "Дети" ✕ button (A2.3) — since the backend only supports detaching a
-  // child from its whole family record (both parent slots at once), not a
-  // single parent slot. Clicking ✂ next to either parent removes the link
-  // to both, which confirmRemoveChild's own confirm dialog already states.
-  // FIX-GUARD:PARENT-UNLINK-BTN — admin-only ✂ next to each parent, reuses
-  // confirmRemoveChild(famId, childId). If this function or its ✂ button
-  // markup disappears, that is a REGRESSION.
-  function pLinkParent(parentId){
-    if(!isAdminForFamilies) return pLink(parentId);
-    const famId = IDX.child_of[id];
-    const removeBtn = famId
-      ? `<button onclick="event.stopPropagation(); confirmRemoveChild('${famId}','${id}')"
-           title="${currentLang==='he'?'הסר קשר הורה-ילד':currentLang==='en'?'Break parent-child link':'Разорвать связь родитель-ребёнок'}"
-           style="font-size:.62rem;padding:0 5px;background:none;border:none;cursor:pointer;color:#A02020;opacity:.55">✂</button>`
-      : '';
-    const yr = pyear(IDX.nodes[parentId]?.birth);
-    return `<div class="p-lnk" style="display:flex;align-items:center;gap:2px" onclick="panelNavigate('${parentId}')">
-      <span style="flex:1">${pname(parentId)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}</span>${removeBtn}
-    </div>`;
+  // Break parent-child link (✂): admin-only button next to each parent,
+  // via pLinkParent() (top-level, defined near pLink) — detaches the child
+  // from ONLY that one parent (detachSingleParent), leaving the other
+  // parent's link intact when present.
+  if(parents.length){
+    col2 += `<div class="p-sec"><h3>${t('parents')}</h3>`;
+    col2 += parents.map(pid => {
+      const other = parents.find(p => p !== pid) || null;
+      return pLinkParent(pid, id, other);
+    }).join('');
+    col2 += `</div>`;
   }
-  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLinkParent).join('')}</div>`;
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
   if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
 
@@ -3898,10 +3906,10 @@ function runDiagnostics(){
       warn('Кнопка календаря не найдена вообще');
     }
 
-    if(/function pLinkParent\(parentId\)/.test(scriptText) && /confirmRemoveChild/.test(scriptText)){
-      ok('Нет регрессии: кнопка разрыва родитель-ребёнок (✂) присутствует');
+    if(/function pLinkParent\(id, childId, otherParentId\)/.test(scriptText) && /function detachSingleParent/.test(scriptText)){
+      ok('Нет регрессии: кнопка отвязки от одного родителя (✂) присутствует');
     } else {
-      fail('РЕГРЕССИЯ: кнопка разрыва родитель-ребёнок пропала', 'pLinkParent / confirmRemoveChild');
+      fail('РЕГРЕССИЯ: кнопка отвязки от одного родителя пропала', 'pLinkParent / detachSingleParent');
     }
 
     const siblingBranchCount = (scriptText.match(/relType === 'брат' \|\| relType === 'сестра'/g) || []).length;
@@ -4706,6 +4714,95 @@ async function confirmRemoveChild(famId, childId){
     } else {
       showToast('⚠ ' + (d.error || 'Ошибка сервера'), true);
     }
+  } catch(e){
+    showToast('⚠ Ошибка соединения: ' + e.message, true);
+  }
+}
+
+// Detach a child from ONLY ONE of its two parents, leaving the link to the
+// other parent (keepParentId) intact. Unlike confirmRemoveChild (which
+// detaches from the whole family record / both parent slots at once), this
+// moves the child into a family where keepParentId is the sole parent —
+// reusing an existing single-parent family if one already exists, or
+// creating one via POST /api/family otherwise — then removes the child
+// from the old (both-parents) family.
+async function detachSingleParent(childId, parentIdToRemove, keepParentId){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
+
+  const oldFamId = IDX.child_of[childId];
+  if(!oldFamId || !IDX.families[oldFamId]){
+    showToast(currentLang==='he' ? '⚠ לא נמצאה משפחה נוכחית'
+            : currentLang==='en' ? '⚠ Current family not found'
+            : '⚠ Текущая семья не найдена', true);
+    return;
+  }
+
+  const confirmMsg = currentLang==='he'
+    ? `להסיר את ${pname(childId)} רק מ${pname(parentIdToRemove)}?\n${pname(keepParentId)} יישאר הורה.`
+    : currentLang==='en'
+    ? `Detach ${pname(childId)} only from ${pname(parentIdToRemove)}?\n${pname(keepParentId)} will remain a parent.`
+    : `Отвязать ${pname(childId)} только от ${pname(parentIdToRemove)}?\n${pname(keepParentId)} останется родителем.`;
+  if(!confirm(confirmMsg)) return;
+
+  try {
+    const oldFam = IDX.families[oldFamId];
+
+    // Find an existing family where keepParentId is the sole parent
+    // (the other slot is empty) and childId isn't already in it.
+    let targetFamId = null;
+    for(const [fid, f] of Object.entries(IDX.families)){
+      const isSoleParent =
+        (f.husband === keepParentId && !f.wife) ||
+        (f.wife === keepParentId && !f.husband);
+      if(isSoleParent && !(f.children||[]).includes(childId)){
+        targetFamId = fid;
+        break;
+      }
+    }
+
+    // No such family — create one, keeping keepParentId in the same
+    // husband/wife slot it occupied in the old family.
+    if(!targetFamId){
+      const keepIsHusband = oldFam.husband === keepParentId;
+      const createBody = keepIsHusband
+        ? { parent1: keepParentId, parent2: null, children: [] }
+        : { parent1: null, parent2: keepParentId, children: [] };
+      const createRes = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+        body: JSON.stringify(createBody)
+      });
+      const createData = await createRes.json();
+      if(!createData.ok) throw new Error(createData.error || 'Не удалось создать семью');
+      targetFamId = createData.familyId;
+    }
+
+    const addRes = await fetch(WORKER_URL + '/api/family/' + targetFamId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({ addChild: childId })
+    });
+    const addData = await addRes.json();
+    if(!addData.ok) throw new Error(addData.error || 'Не удалось добавить ребёнка в семью');
+
+    const removeRes = await fetch(WORKER_URL + '/api/family/' + oldFamId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({ removeChild: childId })
+    });
+    const removeData = await removeRes.json();
+    if(!removeData.ok) throw new Error(removeData.error || 'Не удалось отвязать от старой семьи');
+
+    // Rely on a full reload for consistency (relatives caches etc.) rather
+    // than hand-patching every derived structure — same approach used by
+    // the person-create flow.
+    if(typeof loadTree === 'function') await loadTree();
+    if(typeof showPanel === 'function') showPanel(childId);
+
+    showToast(
+      currentLang==='he' ? '✓ הוסר מההורה הזה בלבד'
+      : currentLang==='en' ? '✓ Detached from that parent only'
+      : '✓ Отвязано только от этого родителя', false);
   } catch(e){
     showToast('⚠ Ошибка соединения: ' + e.message, true);
   }
