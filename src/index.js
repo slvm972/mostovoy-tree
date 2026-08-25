@@ -30,212 +30,6 @@ async function checkPassword(provided, storedHash) {
   return h === storedHash;
 }
 
-// ── Cycle guard ─────────────────────────────────────────
-// Prevents a person from becoming their own descendant (e.g. "add my
-// father as my child") when linking family relations. Walks IDX.relatives
-// downward through descendants of `candidateId` and returns true if
-// `targetId` is found among them.
-//
-// NOTE: this deliberately checks ONLY the descendant direction, not the
-// ancestor direction. An earlier version also walked upward through
-// candidateId's ancestors, but that direction is not a cycle check at
-// all — finding targetId among candidateId's existing ancestors just
-// means targetId is already a parent/ancestor of candidateId through an
-// existing link, which is a perfectly normal, non-cyclic state (e.g. it
-// falsely fired when re-attaching a child to a parent it already has,
-// such as during detachSingleParent's addChild step before the old
-// family link was removed). Only the descendant-direction walk can
-// actually detect a cycle.
-function isDescendantOf(IDX, targetId, candidateId) {
-  if(!targetId || !candidateId) return false;
-  if(targetId === candidateId) return true;
-
-  const visited = new Set();
-  const stack = [candidateId];
-  // Walk descendants of candidateId
-  while(stack.length) {
-    const cur = stack.pop();
-    if(visited.has(cur)) continue;
-    visited.add(cur);
-    if(cur === targetId) return true;
-    const rel = IDX.relatives[cur];
-    if(rel && rel.children) for(const c of rel.children) stack.push(c);
-  }
-
-  return false;
-}
-
-// Checks whether making `childId` a child of `parentId` would create a
-// cycle. The real cycle case is: childId is already an ancestor of
-// parentId — in which case parentId will inevitably show up among
-// childId's descendants when walking downward, which is exactly what
-// isDescendantOf(IDX, parentId, childId) checks. Returns an error
-// message string, or null if safe.
-function checkParentChildCycle(IDX, parentId, childId) {
-  if(!parentId || !childId) return null;
-  if(parentId === childId) {
-    return 'Персона не может быть собственным родителем/ребёнком';
-  }
-  if(isDescendantOf(IDX, parentId, childId)) {
-    return 'Эта связь создала бы цикл: ' + (IDX.nodes[parentId]?.name || parentId) +
-      ' уже является потомком ' + (IDX.nodes[childId]?.name || childId);
-  }
-  return null;
-}
-
-// ── Additional data-integrity guards ────────────────────
-// These catch corruption that is NOT a graph cycle (so
-// checkParentChildCycle wouldn't see it) but is still
-// biologically/structurally impossible.
-
-// A person may only be a "child" (have parents) in ONE family.
-// Catches the case where the same person gets attached as a child
-// in two different families (e.g. once by mistake, once correctly).
-function checkAlreadyHasFamily(IDX, childId, famId) {
-  const existing = IDX.child_of[childId];
-  if(existing && existing !== famId) {
-    const existingFam = IDX.families[existing];
-    const existingParents = existingFam
-      ? [existingFam.husband, existingFam.wife].filter(Boolean).map(pid => IDX.nodes[pid]?.name || pid).join(' и ')
-      : existing;
-    return (IDX.nodes[childId]?.name || childId) +
-      ' уже привязан(а) как ребёнок в другой семье (родители: ' + (existingParents || existing) +
-      '). Сначала отвяжите (✕) от старой семьи, прежде чем привязывать к новой.';
-  }
-  return null;
-}
-
-// A child cannot be born before (or in the same year as) their parent.
-// Only fires when BOTH birth years are known — absence of a date is
-// not itself an error, just means this check can't confirm either way.
-function parseBirthYear(str) {
-  const m = str && String(str).match(/\d{4}/);
-  return m ? parseInt(m[0], 10) : null;
-}
-function checkBirthYearOrder(IDX, parentId, childId) {
-  const py = parseBirthYear(IDX.nodes[parentId]?.birth);
-  const cy = parseBirthYear(IDX.nodes[childId]?.birth);
-  if(py != null && cy != null && cy <= py) {
-    return (IDX.nodes[childId]?.name || childId) + ' (' + cy + ') не может быть ребёнком ' +
-      (IDX.nodes[parentId]?.name || parentId) + ' (' + py + ') — родился(ась) раньше или в тот же год';
-  }
-  return null;
-}
-
-// A child's generation number must be strictly greater than their
-// parent's (gen: 0 = eldest ancestors, increases downward). Unlike
-// birth years, `gen` is set on almost every person, so this catches
-// cases where birth dates are missing (e.g. a spouse with no known
-// birth date) but still forms an impossible generation order.
-function checkGenOrder(IDX, parentId, childId) {
-  const pg = IDX.nodes[parentId]?.gen;
-  const cg = IDX.nodes[childId]?.gen;
-  if(pg != null && cg != null && cg <= pg) {
-    return (IDX.nodes[childId]?.name || childId) + ' (поколение ' + cg + ') не может быть ребёнком ' +
-      (IDX.nodes[parentId]?.name || parentId) + ' (поколение ' + pg + ') — поколение ребёнка должно быть больше';
-  }
-  return null;
-}
-
-// ── Auto-fill missing generation numbers ────────────────
-// A person created without an explicit `gen` gets `gen: null` (see
-// POST /api/person below) instead of silently defaulting to 0 — 0 is
-// a legitimate value for real eldest ancestors, so guessing 0 for
-// "unspecified" would be indistinguishable from a real great-grandparent
-// and slip past checkGenOrder undetected (exactly the bug that caused
-// the Sveta/Sasha Kulnitsky case).
-//
-// Instead, whenever a family gets a parent/child link established
-// (POST /api/family, addChild, addParent, setSlot), this fills in
-// any still-missing gen using whoever ELSE in that same family already
-// has a known gen: children = parents' gen + 1, parents = children's
-// gen - 1 (or match the other parent's gen if that's what's known).
-// If nobody in the family has a known gen yet, nothing is set — that
-// rare case still needs a human to specify it once, but doesn't
-// silently corrupt data with a fake 0.
-function autoFillGen(IDX, famId) {
-  const fam = IDX.families[famId];
-  if(!fam) return;
-  const parents  = [fam.husband, fam.wife].filter(Boolean);
-  const children = fam.children || [];
-
-  const knownParentGen = parents
-    .map(p => IDX.nodes[p]?.gen)
-    .find(g => g !== null && g !== undefined);
-  const knownChildGen = children
-    .map(c => IDX.nodes[c]?.gen)
-    .find(g => g !== null && g !== undefined);
-
-  let parentGen = knownParentGen;
-  if(parentGen === undefined && knownChildGen !== undefined) parentGen = knownChildGen - 1;
-
-  let childGen = knownChildGen;
-  if(childGen === undefined && parentGen !== undefined) childGen = parentGen + 1;
-
-  if(parentGen !== undefined){
-    for(const p of parents){
-      if(IDX.nodes[p] && (IDX.nodes[p].gen === null || IDX.nodes[p].gen === undefined)) {
-        IDX.nodes[p].gen = parentGen;
-      }
-    }
-  }
-  if(childGen !== undefined){
-    for(const c of children){
-      if(IDX.nodes[c] && (IDX.nodes[c].gen === null || IDX.nodes[c].gen === undefined)) {
-        IDX.nodes[c].gen = childGen;
-      }
-    }
-  }
-}
-
-// ── Name transliteration (RU → EN / HE) ─────────────────
-// Mechanical, offline transliteration for auto-populating IDX.names
-// when a new person is created without translations. Deliberately
-// simple (letter-by-letter mapping) rather than calling an external
-// translation API — no API key, no cost, no network dependency, at
-// the price of lower quality (especially for Hebrew, which doesn't
-// map cleanly from Cyrillic phonetics). Good enough for browsing;
-// can always be corrected by hand afterward like any other field.
-const TRANSLIT_EN = {
-  'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh',
-  'з':'z','и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o',
-  'п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts',
-  'ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
-};
-const TRANSLIT_HE = {
-  'а':'א','б':'ב','в':'ב','г':'ג','д':'ד','е':'ה','ё':'יו','ж':"ז'",
-  'з':'ז','и':'י','й':'י','к':'ק','л':'ל','м':'מ','н':'נ','о':'ו',
-  'п':'פ','р':'ר','с':'ס','т':'ט','у':'ו','ф':'פ','х':'ח','ц':'צ',
-  'ч':"צ'",'ш':'ש','щ':'שץ','ъ':'','ы':'י','ь':'','э':'א','ю':'יו','я':'יה',
-};
-// Hebrew final-letter forms, applied when the mapped letter ends a word
-const HE_FINALS = { 'מ':'ם', 'נ':'ן', 'צ':'ץ', 'פ':'ף', 'כ':'ך' };
-
-function transliterateWord(word, map) {
-  let out = '';
-  for(const ch of word.toLowerCase()) {
-    out += (map[ch] !== undefined) ? map[ch] : ch;
-  }
-  return out;
-}
-function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
-
-function transliterateToEn(fullName) {
-  return fullName.split(' ')
-    .map(w => capitalize(transliterateWord(w, TRANSLIT_EN)))
-    .join(' ');
-}
-function transliterateToHe(fullName) {
-  return fullName.split(' ')
-    .map(w => {
-      let t = transliterateWord(w, TRANSLIT_HE);
-      const last = t.slice(-1);
-      if(HE_FINALS[last]) t = t.slice(0, -1) + HE_FINALS[last];
-      return t;
-    })
-    .join(' ');
-}
-
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -263,30 +57,6 @@ export default {
       return err('Неверный пароль', 401);
     }
 
-    // ── GET /api/tree/public ─────────────────────────
-    // No auth required — public read-only view of the live tree with
-    // sensitive contact fields (phone/email/social) stripped server-side.
-    // This lets anonymous visitors (who never logged in) see current
-    // data instead of the frozen FALLBACK_DATA snapshot baked into the
-    // deployed HTML file at last build time.
-    if(path === '/api/tree/public' && method === 'GET') {
-      const data = await env.TREE_KV.get('tree_data');
-      if(!data) return err('Данные дерева не найдены. Загрузите начальный файл.', 404);
-
-      const IDX = JSON.parse(data);
-      const sanitizedNodes = {};
-      for(const [id, n] of Object.entries(IDX.nodes || {})){
-        const { phone, email, social, ...safe } = n;
-        sanitizedNodes[id] = safe;
-      }
-
-      const sanitized = { ...IDX, nodes: sanitizedNodes };
-
-      return new Response(JSON.stringify(sanitized), {
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
     // ── GET /api/tree ────────────────────────────────
     // Returns current IDX JSON (the family tree data)
     if(path === '/api/tree' && method === 'GET') {
@@ -309,15 +79,11 @@ export default {
       const body = await request.text();
       try { JSON.parse(body); } catch(e) { return err('Невалидный JSON'); }
 
-      // Back up the PREVIOUS tree_data before overwriting — backups exist
-      // to allow rollback, so they must capture what was there before this
-      // upload, not a duplicate of what's being uploaded now.
-      const oldData = await env.TREE_KV.get('tree_data');
-      if(oldData) {
-        await env.TREE_KV.put('backup_' + Date.now(), oldData);
-      }
-
       await env.TREE_KV.put('tree_data', body);
+
+      // Save timestamped backup (keep last 10)
+      const ts = Date.now();
+      await env.TREE_KV.put('backup_' + ts, body);
 
       // Trim old backups (keep last 10)
       const list = await env.TREE_KV.list({ prefix: 'backup_' });
@@ -613,9 +379,7 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','phone','email','social','bio','photo','missing','genitive',
-                       'family_note','other_note',
-                       'rel_en','rel_he','family_note_en','family_note_he','other_note_en','other_note_he'];
+                       'sex','rel','phone','email','social','bio','photo','missing'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
@@ -625,21 +389,6 @@ export default {
           IDX.nodes[personId][field] = val;
         }
         applied[field] = val;
-      }
-
-      // 'gen' is structural, so it gets its own validated path rather than
-      // sitting in the free-form ALLOWED whitelist above.
-      if(Object.prototype.hasOwnProperty.call(updates, 'gen')){
-        const g = updates.gen;
-        if(g === null || g === undefined || g === ''){
-          IDX.nodes[personId].gen = null;
-          applied.gen = null;
-        } else if(Number.isInteger(g) || (typeof g === 'string' && /^-?\d+$/.test(g))){
-          IDX.nodes[personId].gen = parseInt(g, 10);
-          applied.gen = IDX.nodes[personId].gen;
-        } else {
-          return err('Поле gen должно быть целым числом или пустым');
-        }
       }
 
       if(Object.keys(applied).length === 0) return err('Нет допустимых полей для обновления');
@@ -685,7 +434,7 @@ export default {
         id:      newId,
         name:    body.name,
         sex:     body.sex    || '',
-        gen:     body.gen    ?? null,
+        gen:     body.gen    ?? 0,
         birth:   body.birth  || '',
         death:   body.death  || '',
         rel:     body.rel    || '',
@@ -698,28 +447,10 @@ export default {
         ...(body.social      ? { social:      body.social }      : {}),
         ...(body.bio         ? { bio:         body.bio }         : {}),
         ...(body.photo       ? { photo:       body.photo }       : {}),
-        ...(body.genitive    ? { genitive:    body.genitive }    : {}),
-        ...(body.family_note ? { family_note: body.family_note } : {}),
-        ...(body.other_note  ? { other_note:  body.other_note }  : {}),
-        ...(body.rel_en          ? { rel_en:          body.rel_en }          : {}),
-        ...(body.rel_he          ? { rel_he:          body.rel_he }          : {}),
-        ...(body.family_note_en  ? { family_note_en:  body.family_note_en }  : {}),
-        ...(body.family_note_he  ? { family_note_he:  body.family_note_he }  : {}),
-        ...(body.other_note_en   ? { other_note_en:   body.other_note_en }   : {}),
-        ...(body.other_note_he   ? { other_note_he:   body.other_note_he }   : {}),
       };
 
       // Initialize empty relatives entry
       IDX.relatives[newId] = { parents: [], siblings: [], spouses: [], children: [] };
-
-      // Auto-generate EN/HE display-name transliterations and store them
-      // in IDX.names (round-trips through GET/POST /api/tree just like
-      // everything else — no separate storage or endpoint needed).
-      if(!IDX.names) IDX.names = {};
-      IDX.names[newId] = {
-        en: transliterateToEn(body.name),
-        he: transliterateToHe(body.name),
-      };
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
@@ -742,6 +473,12 @@ export default {
       const IDX = JSON.parse(rawData);
       if(!IDX.nodes[personId]) return err('Персона не найдена: ' + personId, 404);
 
+      // Safety: refuse if this person is a parent of anyone
+      const rel = IDX.relatives[personId];
+      if(rel && rel.children && rel.children.length > 0) {
+        return err('Нельзя удалить персону с детьми. Сначала переназначьте детей.', 409);
+      }
+
       const name = IDX.nodes[personId].name;
 
       // Remove from nodes and relatives
@@ -755,7 +492,6 @@ export default {
         r.siblings = (r.siblings||[]).filter(s => s !== personId);
         r.spouses  = (r.spouses ||[]).filter(s => s !== personId);
         r.parents  = (r.parents ||[]).filter(s => s !== personId);
-        r.children = (r.children||[]).filter(s => s !== personId);
       }
 
       // Remove from all family references
@@ -789,32 +525,9 @@ export default {
 
       const p1 = body.parent1 || null;
       const p2 = body.parent2 || null;
-      const children = (body.children || []).filter(c => IDX.nodes[c]);
-      if(!p1 && !p2 && children.length === 0) {
-        return err('Нужен хотя бы один родитель или хотя бы один ребёнок');
-      }
+      if(!p1 && !p2) return err('Нужен хотя бы один родитель');
       if(p1 && !IDX.nodes[p1]) return err('Персона не найдена: ' + p1, 404);
       if(p2 && !IDX.nodes[p2]) return err('Персона не найдена: ' + p2, 404);
-
-      // Cycle guard: no parent may already be an ancestor/descendant of
-      // any listed child (e.g. "add my father as my child")
-      // Duplicate-family guard: none of the children may already belong
-      // to a different family (a person has only one set of parents)
-      // Birth-order guard: a child cannot be born before/with a parent
-      for(const parentId of [p1, p2].filter(Boolean)){
-        for(const cid of children){
-          const cycleErr = checkParentChildCycle(IDX, parentId, cid);
-          if(cycleErr) return err(cycleErr, 409);
-          const birthErr = checkBirthYearOrder(IDX, parentId, cid);
-          if(birthErr) return err(birthErr, 409);
-          const genErr = checkGenOrder(IDX, parentId, cid);
-          if(genErr) return err(genErr, 409);
-        }
-      }
-      for(const cid of children){
-        const dupErr = checkAlreadyHasFamily(IDX, cid, null);
-        if(dupErr) return err(dupErr, 409);
-      }
 
       // Generate next family ID
       const maxF = Math.max(0, ...Object.keys(IDX.families)
@@ -835,6 +548,7 @@ export default {
         wife    = p2 || null;
       }
 
+      const children = (body.children || []).filter(c => IDX.nodes[c]);
       IDX.families[famId] = { id: famId, husband, wife, children };
 
       // Update parent_in and relatives for both parents
@@ -866,10 +580,6 @@ export default {
           }
         }
       }
-
-      // Fill in missing generation numbers for anyone in this new
-      // family who doesn't have one yet (see autoFillGen above)
-      autoFillGen(IDX, famId);
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
@@ -903,23 +613,6 @@ export default {
       if(body.addChild) {
         const cid = body.addChild;
         if(!IDX.nodes[cid]) return err('Персона не найдена: ' + cid, 404);
-
-        // Cycle guard: cid must not already be an ancestor of either
-        // parent in this family (e.g. "add my father as my child")
-        // Duplicate-family guard: cid must not already be a child in
-        // a DIFFERENT family (a person has only one set of parents)
-        // Birth-order guard: cid cannot be born before/with a parent
-        for(const pid of parents){
-          const cycleErr = checkParentChildCycle(IDX, pid, cid);
-          if(cycleErr) return err(cycleErr, 409);
-          const birthErr = checkBirthYearOrder(IDX, pid, cid);
-          if(birthErr) return err(birthErr, 409);
-          const genErr = checkGenOrder(IDX, pid, cid);
-          if(genErr) return err(genErr, 409);
-        }
-        const dupErr = checkAlreadyHasFamily(IDX, cid, famId);
-        if(dupErr) return err(dupErr, 409);
-
         if(!fam.children.includes(cid)) fam.children.push(cid);
 
         IDX.child_of[cid] = famId;
@@ -957,19 +650,6 @@ export default {
       if(body.addParent) {
         const pid = body.addParent;
         if(!IDX.nodes[pid]) return err('Персона не найдена: ' + pid, 404);
-
-        // Cycle guard: pid must not already be a descendant of any
-        // child in this family (e.g. "add my child as my parent")
-        // Birth-order guard: pid must not be born after/with a child
-        for(const cid of fam.children){
-          const cycleErr = checkParentChildCycle(IDX, pid, cid);
-          if(cycleErr) return err(cycleErr, 409);
-          const birthErr = checkBirthYearOrder(IDX, pid, cid);
-          if(birthErr) return err(birthErr, 409);
-          const genErr = checkGenOrder(IDX, pid, cid);
-          if(genErr) return err(genErr, 409);
-        }
-
         const sex = IDX.nodes[pid].sex;
         if(!fam.husband && sex !== 'F') fam.husband = pid;
         else if(!fam.wife && sex !== 'M') fam.wife = pid;
@@ -987,9 +667,38 @@ export default {
         }
       }
 
-      // Fill in missing generation numbers for anyone newly linked
-      // into this family who doesn't have one yet (see autoFillGen above)
-      autoFillGen(IDX, famId);
+      // Fill a specific parent slot directly (frontend sends this when it
+      // already knows which slot — husband/parent1 or wife/parent2 — is
+      // empty, e.g. linkNewPersonToFamily() adding a parent to an existing
+      // single-parent family). Reuses the same relatives-sync logic as
+      // addParent above, just with an explicit target slot instead of
+      // inferring it from sex.
+      if(body.parent1 !== undefined || body.parent2 !== undefined){
+        const setSlot = (slotKey, pid) => {
+          if(pid === null){ fam[slotKey] = null; return; }
+          if(!IDX.nodes[pid]) throw new Error('Персона не найдена: ' + pid);
+          fam[slotKey] = pid;
+
+          if(!IDX.parent_in[pid]) IDX.parent_in[pid] = [];
+          if(!IDX.parent_in[pid].includes(famId)) IDX.parent_in[pid].push(famId);
+          if(!IDX.relatives[pid]) IDX.relatives[pid] = { parents:[], siblings:[], spouses:[], children:[] };
+
+          const otherP = slotKey === 'husband' ? fam.wife : fam.husband;
+          if(otherP){
+            if(!IDX.relatives[pid].spouses.includes(otherP)) IDX.relatives[pid].spouses.push(otherP);
+            if(!IDX.relatives[otherP]) IDX.relatives[otherP] = { parents:[], siblings:[], spouses:[], children:[] };
+            if(!IDX.relatives[otherP].spouses.includes(pid)) IDX.relatives[otherP].spouses.push(pid);
+          }
+          for(const cid of fam.children){
+            if(!IDX.relatives[pid].children.includes(cid)) IDX.relatives[pid].children.push(cid);
+            if(IDX.relatives[cid] && !IDX.relatives[cid].parents.includes(pid)) IDX.relatives[cid].parents.push(pid);
+          }
+        };
+        try {
+          if(body.parent1 !== undefined) setSlot('husband', body.parent1);
+          if(body.parent2 !== undefined) setSlot('wife',    body.parent2);
+        } catch(e){ return err(e.message, 404); }
+      }
 
       const ts = Date.now();
       await env.TREE_KV.put('backup_' + ts, rawData);
@@ -1020,216 +729,22 @@ export default {
       const parents = [fam.husband, fam.wife].filter(Boolean);
       delete IDX.families[famId];
 
-      // Remove from parent_in and relatives.spouses
-      for(const pid of parents){
-        if(IDX.parent_in[pid]) IDX.parent_in[pid] = IDX.parent_in[pid].filter(f => f !== famId);
-        if(IDX.relatives[pid]){
-          const otherP = parents.find(p => p !== pid);
-          if(otherP) IDX.relatives[pid].spouses = IDX.relatives[pid].spouses.filter(s => s !== otherP);
-        }
-      }
-
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, rawData);
-      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
-
-      return json({ ok: true, deleted: famId });
-    }
-
-    // ── POST /api/family ─────────────────────────────────
-    // Admin only: create a new marriage/family unit
-    // Body: { parent1?, parent2?, children?: [] }
-    // Returns: { ok, familyId }
-    if(path === '/api/family' && method === 'POST') {
-      const auth = await getRole(request, env);
-      if(auth !== 'admin') return err('Только для администратора', 403);
-
-      const rawData = await env.TREE_KV.get('tree_data');
-      if(!rawData) return err('Данные дерева не найдены', 404);
-
-      const IDX  = JSON.parse(rawData);
-      const body = await request.json().catch(() => ({}));
-
-      // Validate referenced persons exist
-      const toCheck = [body.parent1, body.parent2, ...(body.children||[])].filter(Boolean);
-      for(const pid of toCheck){
-        if(!IDX.nodes[pid]) return err('Персона не найдена: ' + pid, 404);
-      }
-
-      // Generate next family ID
-      const maxF = Math.max(0, ...Object.keys(IDX.families)
-        .filter(k => k.startsWith('F'))
-        .map(k => parseInt(k.slice(1))));
-      const newFid = 'F' + (maxF + 1);
-
-      // Create family (keep husband/wife for compatibility with current renderer)
-      const p1 = body.parent1 || null;
-      const p2 = body.parent2 || null;
-      IDX.families[newFid] = {
-        id: newFid,
-        husband: p1,
-        wife:    p2,
-        children: (body.children || []).filter(c => IDX.nodes[c])
-      };
-
-      // Update parent_in for both parents
-      if(p1){ IDX.parent_in[p1] = [...(IDX.parent_in[p1]||[]), newFid]; }
-      if(p2){ IDX.parent_in[p2] = [...(IDX.parent_in[p2]||[]), newFid]; }
-
-      // Update relatives.spouses (mutual)
-      if(p1 && p2){
-        if(IDX.relatives[p1] && !IDX.relatives[p1].spouses.includes(p2))
-          IDX.relatives[p1].spouses.push(p2);
-        if(IDX.relatives[p2] && !IDX.relatives[p2].spouses.includes(p1))
-          IDX.relatives[p2].spouses.push(p1);
-      }
-
-      // Update child_of and relatives for each child
-      for(const cid of IDX.families[newFid].children){
-        IDX.child_of[cid] = newFid;
-        if(p1 && IDX.relatives[cid] && !IDX.relatives[cid].parents.includes(p1))
-          IDX.relatives[cid].parents.push(p1);
-        if(p2 && IDX.relatives[cid] && !IDX.relatives[cid].parents.includes(p2))
-          IDX.relatives[cid].parents.push(p2);
-        if(p1 && IDX.relatives[p1] && !IDX.relatives[p1].children.includes(cid))
-          IDX.relatives[p1].children.push(cid);
-        if(p2 && IDX.relatives[p2] && !IDX.relatives[p2].children.includes(cid))
-          IDX.relatives[p2].children.push(cid);
-      }
-
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, rawData);
-      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
-
-      return json({ ok: true, familyId: newFid, family: IDX.families[newFid] });
-    }
-
-    // ── PATCH /api/family/:id ────────────────────────────
-    // Admin only: add a child to existing family, or update parents
-    // Body: { addChild?, removeChild?, parent1?, parent2? }
-    const patchFamMatch = path.match(/^\/api\/family\/([^/]+)$/);
-    if(patchFamMatch && method === 'PATCH') {
-      const auth = await getRole(request, env);
-      if(auth !== 'admin') return err('Только для администратора', 403);
-
-      const famId   = patchFamMatch[1];
-      const rawData = await env.TREE_KV.get('tree_data');
-      if(!rawData) return err('Данные дерева не найдены', 404);
-
-      const IDX = JSON.parse(rawData);
-      if(!IDX.families[famId]) return err('Семья не найдена: ' + famId, 404);
-
-      const body = await request.json().catch(() => ({}));
-      const fam  = IDX.families[famId];
-      const changes = [];
-
-      // Add child
-      if(body.addChild){
-        const cid = body.addChild;
-        if(!IDX.nodes[cid]) return err('Персона не найдена: ' + cid, 404);
-        if(!fam.children.includes(cid)){
-          fam.children.push(cid);
-          IDX.child_of[cid] = famId;
-          if(IDX.relatives[cid]){
-            if(fam.husband && !IDX.relatives[cid].parents.includes(fam.husband))
-              IDX.relatives[cid].parents.push(fam.husband);
-            if(fam.wife && !IDX.relatives[cid].parents.includes(fam.wife))
-              IDX.relatives[cid].parents.push(fam.wife);
-          }
-          if(fam.husband && IDX.relatives[fam.husband] && !IDX.relatives[fam.husband].children.includes(cid))
-            IDX.relatives[fam.husband].children.push(cid);
-          if(fam.wife && IDX.relatives[fam.wife] && !IDX.relatives[fam.wife].children.includes(cid))
-            IDX.relatives[fam.wife].children.push(cid);
-          // Update siblings
-          for(const sib of fam.children.filter(id => id !== cid)){
-            if(IDX.relatives[cid]  && !IDX.relatives[cid].siblings.includes(sib))
-              IDX.relatives[cid].siblings.push(sib);
-            if(IDX.relatives[sib]  && !IDX.relatives[sib].siblings.includes(cid))
-              IDX.relatives[sib].siblings.push(cid);
-          }
-          changes.push('addChild:' + cid);
-        }
-      }
-
-      // Remove child
-      if(body.removeChild){
-        const cid = body.removeChild;
-        fam.children = fam.children.filter(c => c !== cid);
-        if(IDX.child_of[cid] === famId) delete IDX.child_of[cid];
-        if(IDX.relatives[cid]){
-          IDX.relatives[cid].parents  = IDX.relatives[cid].parents.filter(p => p!==fam.husband && p!==fam.wife);
-          IDX.relatives[cid].siblings = [];
-        }
-        if(fam.husband && IDX.relatives[fam.husband])
-          IDX.relatives[fam.husband].children = IDX.relatives[fam.husband].children.filter(c=>c!==cid);
-        if(fam.wife && IDX.relatives[fam.wife])
-          IDX.relatives[fam.wife].children = IDX.relatives[fam.wife].children.filter(c=>c!==cid);
-        changes.push('removeChild:' + cid);
-      }
-
-      // Update parent1/parent2
-      if(body.parent1 !== undefined){
-        if(body.parent1 && !IDX.nodes[body.parent1]) return err('Персона не найдена: ' + body.parent1, 404);
-        fam.husband = body.parent1 || null;
-        if(fam.husband){
-          IDX.parent_in[fam.husband] = [...new Set([...(IDX.parent_in[fam.husband]||[]), famId])];
-        }
-        changes.push('parent1:' + body.parent1);
-      }
-      if(body.parent2 !== undefined){
-        if(body.parent2 && !IDX.nodes[body.parent2]) return err('Персона не найдена: ' + body.parent2, 404);
-        fam.wife = body.parent2 || null;
-        if(fam.wife){
-          IDX.parent_in[fam.wife] = [...new Set([...(IDX.parent_in[fam.wife]||[]), famId])];
-        }
-        changes.push('parent2:' + body.parent2);
-      }
-
-      if(changes.length === 0) return err('Нечего обновлять');
-
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, rawData);
-      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
-
-      return json({ ok: true, familyId: famId, changes, family: IDX.families[famId] });
-    }
-
-    // ── DELETE /api/family/:id ───────────────────────────
-    // Admin only: delete a family (only if it has no children)
-    const deleteFamMatch = path.match(/^\/api\/family\/([^/]+)$/);
-    if(deleteFamMatch && method === 'DELETE') {
-      const auth = await getRole(request, env);
-      if(auth !== 'admin') return err('Только для администратора', 403);
-
-      const famId   = deleteFamMatch[1];
-      const rawData = await env.TREE_KV.get('tree_data');
-      if(!rawData) return err('Данные дерева не найдены', 404);
-
-      const IDX = JSON.parse(rawData);
-      if(!IDX.families[famId]) return err('Семья не найдена: ' + famId, 404);
-
-      const fam = IDX.families[famId];
-      if(fam.children && fam.children.length > 0)
-        return err('Нельзя удалить семью с детьми. Сначала переназначьте детей.', 409);
-
-      const p1 = fam.husband, p2 = fam.wife;
-
-      // Remove family
-      delete IDX.families[famId];
-
-      // Clean up parent_in
-      if(p1) IDX.parent_in[p1] = (IDX.parent_in[p1]||[]).filter(f => f !== famId);
-      if(p2) IDX.parent_in[p2] = (IDX.parent_in[p2]||[]).filter(f => f !== famId);
-
-      // Clean up spouses in relatives (only if no other family links them)
+      // Remove from parent_in; only clear the spouse link if no OTHER
+      // family record still connects the same two people (e.g. duplicate
+      // marriage entries, or remarriage after a recorded divorce).
       const stillMarried = (pid1, pid2) =>
         Object.values(IDX.families).some(f =>
           (f.husband === pid1 && f.wife === pid2) ||
           (f.husband === pid2 && f.wife === pid1));
 
-      if(p1 && p2 && !stillMarried(p1, p2)){
-        if(IDX.relatives[p1]) IDX.relatives[p1].spouses = IDX.relatives[p1].spouses.filter(s => s !== p2);
-        if(IDX.relatives[p2]) IDX.relatives[p2].spouses = IDX.relatives[p2].spouses.filter(s => s !== p1);
+      for(const pid of parents){
+        if(IDX.parent_in[pid]) IDX.parent_in[pid] = IDX.parent_in[pid].filter(f => f !== famId);
+        if(IDX.relatives[pid]){
+          const otherP = parents.find(p => p !== pid);
+          if(otherP && !stillMarried(pid, otherP)){
+            IDX.relatives[pid].spouses = IDX.relatives[pid].spouses.filter(s => s !== otherP);
+          }
+        }
       }
 
       const ts = Date.now();
@@ -1237,242 +752,6 @@ export default {
       await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
 
       return json({ ok: true, deleted: famId });
-    }
-
-    // ── POST /api/person/merge ───────────────────────────
-    // Admin only: merge two duplicate person records into one.
-    // Body: { primaryId: "P218", duplicateId: "P45" }
-    // The duplicate is absorbed into the primary and then removed:
-    //  - node fields: primary's non-empty values win; empty/missing
-    //    primary fields are filled from the duplicate. phone/email/social
-    //    are concatenated (deduped) if both have differing values.
-    //  - families: every husband/wife/children reference to duplicateId
-    //    is rewritten to primaryId (deduping children arrays).
-    //  - child_of / parent_in / relatives: merged onto the primary,
-    //    self-references removed, all other persons' relative lists that
-    //    pointed at duplicateId are repointed to primaryId.
-    //  - grandparents cache: any husband/wife slot equal to duplicateId
-    //    is rewritten to primaryId (best-effort — this is a derived cache).
-    // Returns: { ok, primaryId, mergedFrom, node, warnings: [] }
-    if(path === '/api/person/merge' && method === 'POST') {
-      const auth = await getRole(request, env);
-      if(auth !== 'admin') return err('Только для администратора', 403);
-
-      const rawData = await env.TREE_KV.get('tree_data');
-      if(!rawData) return err('Данные дерева не найдены', 404);
-
-      const IDX  = JSON.parse(rawData);
-      const body = await request.json().catch(() => null);
-      if(!body) return err('Неверный формат данных');
-
-      const primaryId   = body.primaryId;
-      const duplicateId = body.duplicateId;
-      if(!primaryId || !duplicateId) return err('Нужны оба поля: primaryId и duplicateId');
-      if(primaryId === duplicateId) return err('primaryId и duplicateId должны отличаться');
-      if(!IDX.nodes[primaryId])   return err('Персона не найдена: ' + primaryId, 404);
-      if(!IDX.nodes[duplicateId]) return err('Персона не найдена: ' + duplicateId, 404);
-
-      const warnings = [];
-      const primary = IDX.nodes[primaryId];
-      const dup     = IDX.nodes[duplicateId];
-
-      // ── 1. Merge simple scalar fields (primary wins if non-empty) ──
-      const SCALAR_FIELDS = ['name','birth','death','birth_he','death_he','hebrew_name','rel','bio','photo'];
-      for(const f of SCALAR_FIELDS){
-        if((primary[f] === undefined || primary[f] === '') && dup[f]) primary[f] = dup[f];
-      }
-      if(!primary.sex && dup.sex) primary.sex = dup.sex;
-
-      // ── 2. Merge concatenable contact fields (dedupe comma-separated) ──
-      const LIST_FIELDS = ['phone','email','social'];
-      for(const f of LIST_FIELDS){
-        const a = (primary[f] || '').split(',').map(s => s.trim()).filter(Boolean);
-        const b = (dup[f]     || '').split(',').map(s => s.trim()).filter(Boolean);
-        const merged = [...new Set([...a, ...b])];
-        if(merged.length) primary[f] = merged.join(', ');
-      }
-
-      // ── 3. Merge "missing" arrays, dropping fields now filled ──
-      const missA = primary.missing || [];
-      const missB = dup.missing || [];
-      primary.missing = [...new Set([...missA, ...missB])];
-
-      // ── 4. Rewrite families: husband/wife + children references ──
-      for(const fam of Object.values(IDX.families)){
-        if(fam.husband === duplicateId) fam.husband = primaryId;
-        if(fam.wife    === duplicateId) fam.wife    = primaryId;
-        if(fam.children && fam.children.includes(duplicateId)){
-          fam.children = [...new Set(fam.children.map(c => c === duplicateId ? primaryId : c))];
-        }
-      }
-      // A person shouldn't be their own parent — guard against a family
-      // where primary+duplicate were spouses of each other (self-marriage
-      // after rewrite); flag it instead of silently corrupting data.
-      for(const [fid, fam] of Object.entries(IDX.families)){
-        if(fam.husband === primaryId && fam.wife === primaryId){
-          warnings.push('Семья ' + fid + ': оба супруга схлопнулись в одну персону после слияния — проверьте вручную.');
-        }
-      }
-
-      // ── 5. child_of: primary's existing value wins; else take duplicate's ──
-      if(IDX.child_of[duplicateId]){
-        if(IDX.child_of[primaryId] && IDX.child_of[primaryId] !== IDX.child_of[duplicateId]){
-          warnings.push('У обеих персон разные родительские семьи (child_of): оставлена семья ' + primaryId + ' — ' + IDX.child_of[primaryId] + ', отброшена ' + IDX.child_of[duplicateId] + '. Проверьте вручную.');
-        } else {
-          IDX.child_of[primaryId] = IDX.child_of[duplicateId];
-        }
-        delete IDX.child_of[duplicateId];
-      }
-
-      // ── 6. parent_in: union of family memberships ──
-      const parentInMerged = [...new Set([...(IDX.parent_in[primaryId]||[]), ...(IDX.parent_in[duplicateId]||[])])];
-      if(parentInMerged.length) IDX.parent_in[primaryId] = parentInMerged;
-      delete IDX.parent_in[duplicateId];
-
-      // ── 7. relatives: merge duplicate's lists into primary, then
-      //      repoint every other person's relative lists at primaryId ──
-      const relDup = IDX.relatives[duplicateId] || { parents:[], siblings:[], spouses:[], children:[] };
-      const relPri = IDX.relatives[primaryId]   || { parents:[], siblings:[], spouses:[], children:[] };
-      const mergeIds = (a, b) => [...new Set([...(a||[]), ...(b||[])])].filter(id => id !== primaryId);
-      IDX.relatives[primaryId] = {
-        parents:  mergeIds(relPri.parents,  relDup.parents),
-        siblings: mergeIds(relPri.siblings, relDup.siblings),
-        spouses:  mergeIds(relPri.spouses,  relDup.spouses),
-        children: mergeIds(relPri.children, relDup.children),
-      };
-      delete IDX.relatives[duplicateId];
-
-      for(const [pid, r] of Object.entries(IDX.relatives)){
-        if(pid === primaryId) continue;
-        for(const key of ['parents','siblings','spouses','children']){
-          if(r[key] && r[key].includes(duplicateId)){
-            r[key] = [...new Set(r[key].map(id => id === duplicateId ? primaryId : id))]
-              .filter(id => id !== pid); // drop accidental self-reference
-          }
-        }
-      }
-
-      // ── 8. grandparents cache: best-effort repoint (derived cache) ──
-      if(IDX.grandparents){
-        delete IDX.grandparents[duplicateId];
-        for(const list of Object.values(IDX.grandparents)){
-          for(const gp of (list || [])){
-            if(gp.husband === duplicateId) gp.husband = primaryId;
-            if(gp.wife    === duplicateId) gp.wife    = primaryId;
-          }
-        }
-      }
-
-      // ── 9. finally remove the duplicate node ──
-      delete IDX.nodes[duplicateId];
-
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, rawData);
-      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
-
-      // Trim old backups (keep last 10)
-      const list = await env.TREE_KV.list({ prefix: 'backup_' });
-      const keys = list.keys.map(k => k.name).sort();
-      if(keys.length > 10) {
-        for(const old of keys.slice(0, keys.length - 10)) {
-          await env.TREE_KV.delete(old);
-        }
-      }
-
-      return json({ ok: true, primaryId, mergedFrom: duplicateId, node: primary, warnings });
-    }
-
-    // ── POST /api/rebuild-cache ───────────────────────────
-    // Admin only: recompute relatives/child_of/parent_in/grandparents
-    // from scratch, using `families` (source of truth) + `nodes`.
-    // Fixes stale/orphaned entries left behind after merges, deletes,
-    // or manual data edits — e.g. grandparents cache pointing at a
-    // person ID that no longer exists in nodes (shows as grey "P47"
-    // cards in the tree).
-    if(path === '/api/rebuild-cache' && method === 'POST') {
-      const auth = await getRole(request, env);
-      if(auth !== 'admin') return err('Только для администратора', 403);
-
-      const rawData = await env.TREE_KV.get('tree_data');
-      if(!rawData) return err('Данные дерева не найдены', 404);
-      const IDX = JSON.parse(rawData);
-
-      const relatives = {};
-      const child_of  = {};
-      const parent_in = {};
-      for(const id of Object.keys(IDX.nodes)){
-        relatives[id] = { parents: [], siblings: [], spouses: [], children: [] };
-      }
-
-      let droppedFamilyRefs = 0;
-      for(const [fid, f] of Object.entries(IDX.families)){
-        const parents = [f.husband, f.wife].filter(p => p && IDX.nodes[p]);
-        if((f.husband && !IDX.nodes[f.husband]) || (f.wife && !IDX.nodes[f.wife])) droppedFamilyRefs++;
-
-        for(const pid of parents){
-          if(!parent_in[pid]) parent_in[pid] = [];
-          if(!parent_in[pid].includes(fid)) parent_in[pid].push(fid);
-          const other = parents.find(p => p !== pid);
-          if(other && !relatives[pid].spouses.includes(other)) relatives[pid].spouses.push(other);
-        }
-
-        const kids = (f.children || []).filter(c => IDX.nodes[c]);
-        if(kids.length !== (f.children || []).length) droppedFamilyRefs++;
-
-        for(const cid of kids){
-          child_of[cid] = fid;
-          for(const pid of parents){
-            if(!relatives[cid].parents.includes(pid)) relatives[cid].parents.push(pid);
-            if(!relatives[pid].children.includes(cid)) relatives[pid].children.push(cid);
-          }
-          for(const sib of kids){
-            if(sib !== cid && !relatives[cid].siblings.includes(sib)) relatives[cid].siblings.push(sib);
-          }
-        }
-      }
-
-      // grandparents — recomputed only from families that still resolve
-      // to real, existing nodes (this is what fixes the grey ghost cards)
-      const grandparents = {};
-      for(const id of Object.keys(IDX.nodes)){
-        grandparents[id] = [];
-        for(const pid of (relatives[id]?.parents || [])){
-          const gfam = child_of[pid];
-          if(!gfam) continue;
-          const f = IDX.families[gfam];
-          if(!f) continue;
-          const h = f.husband && IDX.nodes[f.husband] ? f.husband : null;
-          const w = f.wife    && IDX.nodes[f.wife]    ? f.wife    : null;
-          if(!h && !w) continue; // both sides gone — drop entirely instead of leaving ghosts
-          grandparents[id].push({ family: gfam, husband: h, wife: w });
-        }
-      }
-
-      IDX.relatives    = relatives;
-      IDX.child_of     = child_of;
-      IDX.parent_in    = parent_in;
-      IDX.grandparents = grandparents;
-
-      const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, rawData);
-      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
-
-      // Trim old backups (keep last 10)
-      const list = await env.TREE_KV.list({ prefix: 'backup_' });
-      const keys = list.keys.map(k => k.name).sort();
-      if(keys.length > 10) {
-        for(const old of keys.slice(0, keys.length - 10)) {
-          await env.TREE_KV.delete(old);
-        }
-      }
-
-      return json({
-        ok: true,
-        message: 'Кэш связей пересчитан',
-        persons: Object.keys(IDX.nodes).length,
-        families: Object.keys(IDX.families).length,
-        droppedFamilyRefs,
-      });
     }
 
     // ── 404 ──────────────────────────────────────────

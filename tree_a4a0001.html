@@ -212,6 +212,60 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 #help-bubble b{display:block;margin-bottom:4px;font-size:.8rem}
 #help-bubble ol{padding-left:16px;margin-top:4px}
 #help-bubble li{margin-bottom:3px}
+
+/* ── MOBILE RESPONSIVE (added — see chat audit) ── */
+@media (max-width: 640px) {
+  #tb {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+  #tb::-webkit-scrollbar { height: 3px; }
+  #tb > * { flex-shrink: 0; }
+
+  .lang-btns { flex-shrink: 0; }
+  #info { min-width: 0; }
+
+  #panel { height: 160px; bottom: -160px; }
+  #panel.open { bottom: 32px; }
+  #vp.panel-open { bottom: 192px; }
+  #panel-col1, #panel-col2 { padding: 8px 10px; }
+}
+
+/* ── SCROLL INDICATORS (toolbar + canvas, mobile only) ── */
+#tb-hscroll, #canvas-hscroll, #canvas-vscroll { display: none; }
+#tb-hscroll {
+  position: fixed; top: 44px; left: 0; right: 0; height: 4px;
+  background: rgba(28,18,8,.5); z-index: 99; pointer-events: none;
+}
+#tb-hscroll-thumb {
+  position: absolute; top: 0; height: 4px;
+  background: #C09828; border-radius: 2px; opacity: .85;
+}
+#canvas-hscroll {
+  position: fixed; left: 0; right: 8px; bottom: 32px; height: 8px;
+  background: rgba(28,18,8,.12); z-index: 90;
+}
+#canvas-hscroll-thumb {
+  position: absolute; top: 1px; height: 6px;
+  background: rgba(192,152,40,.75); border-radius: 3px;
+  touch-action: none; cursor: pointer;
+}
+#canvas-vscroll {
+  position: fixed; top: 44px; bottom: 40px; right: 0; width: 8px;
+  background: rgba(28,18,8,.12); z-index: 90;
+}
+#canvas-vscroll-thumb {
+  position: absolute; left: 1px; width: 6px;
+  background: rgba(192,152,40,.75); border-radius: 3px;
+  touch-action: none; cursor: pointer;
+}
+#canvas-hscroll-thumb.dragging, #canvas-vscroll-thumb.dragging { background: #C09828; }
+
+@media (max-width: 640px) {
+  #tb-hscroll, #canvas-hscroll, #canvas-vscroll { display: block; }
+}
 </style>
 </head>
 <body>
@@ -231,6 +285,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <button class="btn" id="btn-edit" style="margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
   <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1">🖨</button>
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты">📇</button>
+  <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения">📅</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Войти">🔑</button>
   <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика">⚙</button>
@@ -245,6 +300,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <button class="lbtn" data-lang="he">עב</button>
   </div>
 </div>
+<!-- ── SCROLL INDICATORS (mobile: toolbar + canvas position/scale gauges) ── -->
+<div id="tb-hscroll"><div id="tb-hscroll-thumb"></div></div>
+<div id="canvas-hscroll"><div id="canvas-hscroll-thumb"></div></div>
+<div id="canvas-vscroll"><div id="canvas-vscroll-thumb"></div></div>
 <!-- ── BOTTOM INFO PANEL ── -->
 <div id="panel" class="open">
   <button id="panel-close">×</button>
@@ -307,6 +366,14 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <option value="брат" data-i="rel_brother">Брат</option>
       <option value="сестра" data-i="rel_sister">Сестра</option>
     </select>
+    <div id="f-sibling-parent-wrap" style="display:none">
+      <label data-i="lbl_sibling_parent">Общий родитель</label>
+      <select id="f-sibling-parent">
+        <option value="both" data-i="sib_both">Оба родителя (родные)</option>
+        <option value="father">— отец —</option>
+        <option value="mother">— мать —</option>
+      </select>
+    </div>
     <label data-i="lbl_phone">Телефон</label>
     <input id="f-phone" type="tel" data-ph="ph_phone" placeholder="+972-50-000-0000">
     <label data-i="lbl_email">Email</label>
@@ -420,7 +487,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <input id="ff-rel-he" type="text" placeholder="עברית" dir="rtl" style="font-size:.72rem">
     </div>
 
-    <label data-i="fix_family">Семейная связь (что изменить)</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <label data-i="fix_family" style="margin:10px 0 3px">Семейная связь (что изменить)</label>
+      <button type="button" onclick="openMoveChildDialog()" title="Переместить в другую семью/брак" style="font-size:.62rem;padding:1px 6px;background:rgba(184,144,48,.12);border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828;flex-shrink:0;white-space:nowrap" data-i="btn_move_child">🔀 Переместить</button>
+    </div>
     <textarea id="ff-family" data-ph="ph_family" placeholder="например: добавить мужа / убрать связь / изменить родителя"></textarea>
     <div style="display:flex;gap:8px;margin-top:4px">
       <textarea id="ff-family-en" placeholder="EN" style="font-size:.72rem;min-height:44px"></textarea>
@@ -610,6 +680,8 @@ function getCenteredLayout(focalId){
   const placed = new Set();  // avoid placing same person twice
   const nodes  = [];
   const MAX_GC = Infinity; // без ограничения — показываем всех внуков
+  // FIX-GUARD:MAXGC-INFINITY — MAX_GC must stay Infinity. If it becomes a
+  // finite number again, that is a REGRESSION — see runDiagnostics().
 
   function add(n){
     if(placed.has(n.id)) return;
@@ -1283,6 +1355,26 @@ function pLink(id){
   </div>`;
 }
 
+// Parent link in the "Родители" section — admin-only ✂ next to a parent
+// detaches the child from THAT ONE parent only (via detachSingleParent),
+// leaving the other parent intact. The ✂ only renders when otherParentId
+// is truthy (i.e. the child actually has a second parent to keep) —
+// nothing to "detach to single" if there's only one parent already.
+function pLinkParent(id, childId, otherParentId){
+  const n = IDX.nodes[id]; if(!n) return '';
+  const yr = pyear(n.birth);
+  const showScissors = !!otherParentId && !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+  return `<div class="p-lnk" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+    <span onclick="panelNavigate('${id}')" style="cursor:pointer;flex:1">
+      ${pname(id)}${yr?` <span style="color:#7A5828;font-size:.64rem">(${yr})</span>`:''}
+    </span>
+    ${showScissors ? `<span onclick="event.stopPropagation();detachSingleParent('${childId}','${id}','${otherParentId}')"
+      title="${currentLang==='he'?'הסר קשר להורה זה בלבד':currentLang==='en'?'Detach from this parent only':'Отвязать только от этого родителя'}"
+      style="cursor:pointer;opacity:.5;font-size:.75rem;padding:2px 4px"
+      onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">✂</span>` : ''}
+  </div>`;
+}
+
 // A2.3: like pLink, but for the "Дети" list specifically — adds an
 // admin-only ✕ to unlink this child from THIS family (PATCH removeChild),
 // for cases where a child was linked to the wrong parent/family by mistake.
@@ -1432,7 +1524,18 @@ function showPanel(id){
   // ── Column 2: relatives ──
   let col2 = '';
   const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  if(parents.length)  col2 += `<div class="p-sec"><h3>${t('parents')}</h3>${parents.map(pLink).join('')}</div>`;
+  // Break parent-child link (✂): admin-only button next to each parent,
+  // via pLinkParent() (top-level, defined near pLink) — detaches the child
+  // from ONLY that one parent (detachSingleParent), leaving the other
+  // parent's link intact when present.
+  if(parents.length){
+    col2 += `<div class="p-sec"><h3>${t('parents')}</h3>`;
+    col2 += parents.map(pid => {
+      const other = parents.find(p => p !== pid) || null;
+      return pLinkParent(pid, id, other);
+    }).join('');
+    col2 += `</div>`;
+  }
   if(spouses.length)  col2 += `<div class="p-sec"><h3>${spouses.length>1?t('spouses'):t('spouse')}</h3>${spouses.map(pLink).join('')}</div>`;
   if(children.length) col2 += `<div class="p-sec"><h3>${t('children')} (${children.length})</h3>${children.map(cId => pLinkChild(cId, childFamOf[cId], isAdminForFamilies)).join('')}</div>`;
 
@@ -1686,6 +1789,177 @@ document.addEventListener('keydown', e => {
 })();
 
 // ════════════════════════════════════════════════════════
+//  SCROLL INDICATORS (mobile) — toolbar (visual only, native
+//  scroll already works via touch) + canvas (visual + draggable,
+//  gauges position/zoom relative to fixed top/bottom bars).
+// ════════════════════════════════════════════════════════
+
+// ── Toolbar horizontal indicator — synced to native #tb scroll ──
+(function initToolbarScrollIndicator(){
+  const tb    = document.getElementById('tb');
+  const track = document.getElementById('tb-hscroll');
+  const thumb = document.getElementById('tb-hscroll-thumb');
+  if(!tb || !track || !thumb) return;
+
+  function update(){
+    const trackW   = track.clientWidth;
+    const contentW = tb.scrollWidth;
+    const visibleW = tb.clientWidth;
+    if(contentW <= visibleW + 1){
+      thumb.style.width = trackW + 'px';
+      thumb.style.left  = '0px';
+      return;
+    }
+    const ratio  = visibleW / contentW;
+    const thumbW = Math.max(24, trackW * ratio);
+    const maxScroll  = contentW - visibleW;
+    const scrollFrac = Math.max(0, Math.min(1, tb.scrollLeft / maxScroll));
+    thumb.style.width = thumbW + 'px';
+    thumb.style.left  = (scrollFrac * (trackW - thumbW)) + 'px';
+  }
+
+  tb.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
+
+// ── Canvas (tree) indicators — position/zoom gauge + draggable thumbs ──
+// Content bounds come from the rendered SVG's width/height (set in render()).
+// World transform is read directly from #world's inline style, so this stays
+// in sync with ANY transform change — existing pan/zoom (wheel/drag/pinch),
+// navigateTo()'s animated recenter, AND the new thumb-drag below — via a
+// single MutationObserver, without touching the existing pan/zoom code.
+(function initCanvasScrollIndicators(){
+  const vp      = document.getElementById('vp');
+  const world   = document.getElementById('world');
+  const hTrack  = document.getElementById('canvas-hscroll');
+  const hThumb  = document.getElementById('canvas-hscroll-thumb');
+  const vTrack  = document.getElementById('canvas-vscroll');
+  const vThumb  = document.getElementById('canvas-vscroll-thumb');
+  if(!vp || !world || !hTrack || !hThumb || !vTrack || !vThumb) return;
+
+  function readTransform(){
+    const t = world.style.transform || '';
+    const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/);
+    return m ? { tx: +m[1], ty: +m[2], s: +m[3] } : null;
+  }
+  function contentSize(){
+    const svg = document.getElementById('svg');
+    if(!svg) return null;
+    const w = parseFloat(svg.getAttribute('width'))  || 0;
+    const h = parseFloat(svg.getAttribute('height')) || 0;
+    return (w && h) ? { w, h } : null;
+  }
+  function setWorldTransform(tx, ty, s){
+    world.style.transition = 'none';
+    world.style.transform  = `translate(${tx}px,${ty}px) scale(${s})`;
+  }
+
+  function update(){
+    const xf = readTransform();
+    const cs = contentSize();
+    if(!xf || !cs) return;
+    const { tx, ty, s } = xf;
+    const vpRect = vp.getBoundingClientRect();
+    const vw = vpRect.width, vh = vpRect.height;
+    const scaledW = cs.w * s, scaledH = cs.h * s;
+
+    // Horizontal thumb
+    const hTrackW = hTrack.clientWidth;
+    if(scaledW <= vw + 1){
+      hThumb.style.width = hTrackW + 'px';
+      hThumb.style.left  = '0px';
+    } else {
+      const ratio  = vw / scaledW;
+      const thumbW = Math.max(20, hTrackW * ratio);
+      const maxScroll  = scaledW - vw;
+      const scrollFrac = Math.max(0, Math.min(1, -tx / maxScroll));
+      hThumb.style.width = thumbW + 'px';
+      hThumb.style.left  = (scrollFrac * (hTrackW - thumbW)) + 'px';
+    }
+
+    // Vertical thumb
+    const vTrackH = vTrack.clientHeight;
+    if(scaledH <= vh + 1){
+      vThumb.style.height = vTrackH + 'px';
+      vThumb.style.top    = '0px';
+    } else {
+      const ratio  = vh / scaledH;
+      const thumbH = Math.max(20, vTrackH * ratio);
+      const maxScroll  = scaledH - vh;
+      const scrollFrac = Math.max(0, Math.min(1, -ty / maxScroll));
+      vThumb.style.height = thumbH + 'px';
+      vThumb.style.top    = (scrollFrac * (vTrackH - thumbH)) + 'px';
+    }
+  }
+
+  // Any change to #world's inline style (pan, zoom, pinch, navigateTo,
+  // thumb-drag below) recomputes both indicators automatically.
+  new MutationObserver(update).observe(world, { attributes: true, attributeFilter: ['style'] });
+  window.addEventListener('resize', update);
+  update();
+
+  // ── Draggable thumbs (pointer events — unify mouse + touch) ──
+  function dragThumb(thumb, axis){
+    let dragging = false, startClient = 0, startPos = 0, startXf = null, cs = null;
+    let trackLen = 0, thumbLen = 0, maxScroll = 0;
+
+    thumb.addEventListener('pointerdown', e => {
+      const xf = readTransform();
+      cs = contentSize();
+      if(!xf || !cs) return;
+      dragging = true;
+      thumb.classList.add('dragging');
+      startXf = xf;
+      startClient = axis === 'x' ? e.clientX : e.clientY;
+
+      if(axis === 'x'){
+        trackLen  = hTrack.clientWidth;
+        thumbLen  = hThumb.getBoundingClientRect().width;
+        startPos  = parseFloat(hThumb.style.left) || 0;
+        maxScroll = Math.max(0, cs.w * xf.s - vp.getBoundingClientRect().width);
+      } else {
+        trackLen  = vTrack.clientHeight;
+        thumbLen  = vThumb.getBoundingClientRect().height;
+        startPos  = parseFloat(vThumb.style.top) || 0;
+        maxScroll = Math.max(0, cs.h * xf.s - vp.getBoundingClientRect().height);
+      }
+      thumb.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    thumb.addEventListener('pointermove', e => {
+      if(!dragging || !startXf) return;
+      const delta = (axis === 'x' ? e.clientX : e.clientY) - startClient;
+      const travel = Math.max(1, trackLen - thumbLen);
+      const newPos = Math.max(0, Math.min(travel, startPos + delta));
+      const scrollFrac = newPos / travel;
+
+      if(axis === 'x'){
+        const newTx = -scrollFrac * maxScroll;
+        setWorldTransform(newTx, startXf.ty, startXf.s);
+      } else {
+        const newTy = -scrollFrac * maxScroll;
+        setWorldTransform(startXf.tx, newTy, startXf.s);
+      }
+      e.preventDefault();
+    });
+
+    function endDrag(e){
+      if(!dragging) return;
+      dragging = false;
+      thumb.classList.remove('dragging');
+      try { thumb.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+    thumb.addEventListener('pointerup', endDrag);
+    thumb.addEventListener('pointercancel', endDrag);
+  }
+
+  dragThumb(hThumb, 'x');
+  dragThumb(vThumb, 'y');
+})();
+
+// ════════════════════════════════════════════════════════
 //  LANGUAGE — detect browser lang, switcher buttons
 // ════════════════════════════════════════════════════════
 //  UI STRINGS — dictionary + t() helpers
@@ -1723,6 +1997,7 @@ const UI = {
     lbl_attach_target:'К кому',
 	lbl_father:'Отец',
     lbl_mother:'Мать',
+    lbl_sibling_parent:'Общий родитель', btn_move_child:'🔀 Переместить',
     lbl_name:'Имя (полное)',         ph_name:'Например: Анна Иванова',
     lbl_genitive:'Имя в родительном падеже (необязательно)', ph_genitive:'Например: Анны Ивановой',
     lbl_sex:'Пол', sex_choose:'— выбрать —', sex_f:'Женский', sex_m:'Мужской',
@@ -1807,6 +2082,7 @@ const UI = {
     lbl_attach_target:'To whom',
 	lbl_father:'Father',
     lbl_mother:'Mother',
+    lbl_sibling_parent:'Shared parent', btn_move_child:'🔀 Move',
     lbl_name:'Full name',         ph_name:'E.g.: Anna Ivanova',
     lbl_genitive:'Genitive-case name (optional)', ph_genitive:'E.g.: Anny Ivanovoy',
     lbl_sex:'Gender', sex_choose:'— select —', sex_f:'Female', sex_m:'Male',
@@ -1891,6 +2167,7 @@ const UI = {
     lbl_attach_target:'למי',
 	lbl_father:'אבא',
     lbl_mother:'אמא',
+    lbl_sibling_parent:'הורה משותף', btn_move_child:'🔀 העברה',
     lbl_name:'שם מלא',         ph_name:'לדוגמה: אנה איבנובה',
     lbl_genitive:'שם ביחסת הקניין (רשות)', ph_genitive:'לדוגמה: Анны Ивановой',
     lbl_sex:'מין', sex_choose:'— בחר —', sex_f:'נקבה', sex_m:'זכר',
@@ -2175,6 +2452,10 @@ function openModal(prefillId, mode){
   if(fSex)   fSex.selectedIndex = 0;
   if(fRelType) fRelType.selectedIndex = 0;
   if(ffSex)  ffSex.selectedIndex = 0;
+  const sibParentWrap = document.getElementById('f-sibling-parent-wrap');
+  const sibParentSel  = document.getElementById('f-sibling-parent');
+  if(sibParentWrap) sibParentWrap.style.display = 'none';
+  if(sibParentSel)  sibParentSel.value = 'both';
   // Hide current data card
   const card0 = document.getElementById('fix-current-data');
   if(card0) { card0.style.display = 'none'; card0.textContent = ''; }
@@ -2315,6 +2596,47 @@ document.querySelectorAll('.mtype').forEach(btn => {
   });
 });
 
+// ── Сводные братья/сёстры: показать выбор общего родителя ──
+// Виден только когда тип связи = брат/сестра. Подписи "— отец —" / "— мать —"
+// заменяются на реальные имена родителей целевой персоны, когда они известны.
+function updateSiblingParentField(){
+  const relT  = document.getElementById('f-rel-type').value;
+  const wrap  = document.getElementById('f-sibling-parent-wrap');
+  const sel   = document.getElementById('f-sibling-parent');
+  if(!wrap || !sel) return;
+
+  if(relT !== 'брат' && relT !== 'сестра'){
+    wrap.style.display = 'none';
+    sel.value = 'both';
+    return;
+  }
+  wrap.style.display = '';
+
+  const relP = document.getElementById('f-rel-person').value.trim();
+  const m = relP.match(/\[(P\d+)\]\s*$/);
+  const targetId = m ? m[1] : null;
+  const famId = targetId ? IDX.child_of[targetId] : null;
+  const fam = famId ? IDX.families[famId] : null;
+
+  const fatherOpt = sel.querySelector('option[value="father"]');
+  const motherOpt = sel.querySelector('option[value="mother"]');
+  const fatherName = fam && fam.husband ? pname(fam.husband) : null;
+  const motherName = fam && fam.wife    ? pname(fam.wife)    : null;
+
+  if(fatherOpt) fatherOpt.textContent = fatherName
+    ? '— ' + (currentLang==='he'?'רק אבא':currentLang==='en'?'father only':'только отец') + ': ' + fatherName + ' —'
+    : (currentLang==='he'?'— אבא (לא ידוע) —':currentLang==='en'?'— father (unknown) —':'— отец (неизвестен) —');
+  fatherOpt && (fatherOpt.disabled = !fatherName);
+
+  if(motherOpt) motherOpt.textContent = motherName
+    ? '— ' + (currentLang==='he'?'רק אמא':currentLang==='en'?'mother only':'только мать') + ': ' + motherName + ' —'
+    : (currentLang==='he'?'— אמא (לא ידועה) —':currentLang==='en'?'— mother (unknown) —':'— мать (неизвестна) —');
+  motherOpt && (motherOpt.disabled = !motherName);
+}
+document.getElementById('f-rel-type').addEventListener('change', updateSiblingParentField);
+document.getElementById('f-rel-person').addEventListener('input', updateSiblingParentField);
+document.getElementById('f-rel-person').addEventListener('change', updateSiblingParentField);
+
 // P6.1c: Show correct button label depending on auth + form type
 function updateGenerateButtonLabel(){
   const btn = document.getElementById('modal-generate');
@@ -2399,8 +2721,11 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
           const relTargetId = relIdMatch ? relIdMatch[1] : null;
 
           if(relTargetId && relT){
+            const sibParentEl = document.getElementById('f-sibling-parent');
+            const sharedParent = (relT === 'брат' || relT === 'сестра') && sibParentEl
+              ? sibParentEl.value : 'both';
             try {
-              await linkNewPersonToFamily(newId, relTargetId, relT, sex);
+              await linkNewPersonToFamily(newId, relTargetId, relT, sex, sharedParent);
             } catch(linkErr){
               console.warn('[P5] Family link failed (person still created):', linkErr.message);
               showToast('✓ Персона создана, но связь не удалось установить автоматически', true);
@@ -3558,6 +3883,55 @@ function runDiagnostics(){
                    : warn('SVG пустой');
   } catch(e) { fail('Ошибка SVG', e.message); }
 
+  // ── REGRESSION GUARDS ────────────────────────────────
+  // Re-checks previously fixed issues to catch silent regressions from
+  // future patches that may not read the full current file state.
+  try {
+    const scriptText = Array.from(document.scripts).map(s => s.textContent).join('\n');
+
+    if(/const MAX_GC\s*=\s*Infinity/.test(scriptText)){
+      ok('Нет регрессии: MAX_GC = Infinity');
+    } else if(/const MAX_GC\s*=\s*\d+/.test(scriptText)){
+      fail('РЕГРЕССИЯ: MAX_GC снова ограничен числом', 'см. getCenteredLayout()');
+    } else {
+      warn('MAX_GC не найден в коде вообще — проверить вручную');
+    }
+
+    const calendarBtnCount = document.querySelectorAll('#btn-calendar').length;
+    if(calendarBtnCount === 1){
+      ok('Нет регрессии: одна кнопка календаря');
+    } else if(calendarBtnCount > 1){
+      fail('РЕГРЕССИЯ: дубль кнопки календаря', calendarBtnCount + ' штук');
+    } else {
+      warn('Кнопка календаря не найдена вообще');
+    }
+
+    if(/function pLinkParent\(id, childId, otherParentId\)/.test(scriptText) && /function detachSingleParent/.test(scriptText)){
+      ok('Нет регрессии: кнопка отвязки от одного родителя (✂) присутствует');
+    } else {
+      fail('РЕГРЕССИЯ: кнопка отвязки от одного родителя пропала', 'pLinkParent / detachSingleParent');
+    }
+
+    const siblingBranchCount = (scriptText.match(/relType === 'брат' \|\| relType === 'сестра'/g) || []).length;
+    if(siblingBranchCount === 2){
+      ok('Нет регрессии: обе ветки брат/сестра на месте', '(linkNewPersonToFamily + linkExistingPersonToFamily)');
+    } else if(siblingBranchCount === 1){
+      warn('Найдена только 1 из 2 ожидаемых веток брат/сестра — проверить, не удалили ли одну из функций');
+    } else if(siblingBranchCount === 0){
+      fail('РЕГРЕССИЯ: обработка брат/сестра пропала полностью');
+    } else {
+      warn('Веток брат/сестра больше двух (' + siblingBranchCount + ') — возможно случайное дублирование, проверить вручную');
+    }
+
+    if(typeof linkExistingPersonToFamily === 'function'){
+      ok('Нет регрессии: linkExistingPersonToFamily() присутствует');
+    } else {
+      fail('РЕГРЕССИЯ: linkExistingPersonToFamily() пропала');
+    }
+  } catch(e) {
+    warn('Не удалось выполнить проверку регрессий', e.message);
+  }
+
   return results;
 }
 
@@ -4127,6 +4501,173 @@ async function quickClearField(inputId, apiKey, labelKey){
   }
 }
 
+// ── Этап B: «Переместить в другую семью/брак» ───────────────────────────
+// Решает случай из практики (Люда Журахинская): ребёнок был по ошибке
+// привязан к семье с НЕВЕРНЫМ вторым родителем (напр. муж сестры вместо
+// собственного мужа). Раньше единственный путь исправить это — текстовое
+// поле «Семейная связь», уходящее на email для ручной проверки. Теперь —
+// прямое структурированное действие: выбираем, какой родитель остаётся
+// «общим» (или оба — тогда просто ничего не делаем), указываем корректного
+// второго родителя, и функция сама найдёт подходящую существующую семью
+// или создаст новую, перенеся ребёнка одним PATCH removeChild + addChild.
+async function openMoveChildDialog(){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL){
+    showToast(currentLang==='he' ? '⚠ פעולה זו זמינה למנהל בלבד' : currentLang==='en' ? '⚠ Admin only' : '⚠ Доступно только администратору', true);
+    return;
+  }
+
+  const personVal = document.getElementById('f-fix-person').value.trim();
+  const idMatch = personVal.match(/\[(P\d+)\]\s*$/);
+  const childId = idMatch ? idMatch[1] : null;
+  if(!childId){
+    showToast(currentLang==='he' ? '⚠ קודם בחר אדם' : currentLang==='en' ? '⚠ Select a person first' : '⚠ Сначала выберите персону (поле выше)', true);
+    return;
+  }
+
+  const oldFamId = IDX.child_of[childId];
+  if(!oldFamId){
+    showToast(currentLang==='he' ? '⚠ לאדם הזה אין כרגע קשר משפחתי כילד' : currentLang==='en' ? '⚠ This person has no current parent-family link' : '⚠ У этой персоны сейчас нет семейной связи как у ребёнка', true);
+    return;
+  }
+  const oldFam = IDX.families[oldFamId];
+  const childName = pname(childId);
+  const fatherId = oldFam.husband, motherId = oldFam.wife;
+  const fatherName = fatherId ? pname(fatherId) : null;
+  const motherName = motherId ? pname(motherId) : null;
+
+  const menuText = (currentLang==='he'
+    ? `${childName} משויך כרגע למשפחה: ${fatherName||'—'} + ${motherName||'—'}\n\nמי נשאר ההורה המשותף?\n1. אבא (${fatherName||'לא ידוע'}) — יש להזין הורה שני חדש\n2. אמא (${motherName||'לא ידועה'}) — יש להזין הורה שני חדש\n3. ביטול`
+    : currentLang==='en'
+    ? `${childName} is currently linked to family: ${fatherName||'—'} + ${motherName||'—'}\n\nWhich parent stays the same?\n1. Father (${fatherName||'unknown'}) — you'll enter the correct second parent\n2. Mother (${motherName||'unknown'}) — you'll enter the correct second parent\n3. Cancel`
+    : `${childName} сейчас привязан к семье: ${fatherName||'—'} + ${motherName||'—'}\n\nКакой родитель остаётся общим (правильным)?\n1. Отец (${fatherName||'неизвестен'}) — дальше укажете верного второго родителя\n2. Мать (${motherName||'неизвестна'}) — дальше укажете верного второго родителя\n3. Отмена`
+  );
+  const choice = window.prompt(menuText, '1');
+  if(choice === null || choice.trim() === '3') return;
+
+  let anchorId, anchorSlotIsHusband;
+  if(choice.trim() === '1'){
+    if(!fatherId){ showToast(currentLang==='he'?'⚠ אין אבא רשום':currentLang==='en'?'⚠ No father on record':'⚠ Отец не указан у этой семьи', true); return; }
+    anchorId = fatherId; anchorSlotIsHusband = true;
+  } else if(choice.trim() === '2'){
+    if(!motherId){ showToast(currentLang==='he'?'⚠ אין אמא רשומה':currentLang==='en'?'⚠ No mother on record':'⚠ Мать не указана у этой семьи', true); return; }
+    anchorId = motherId; anchorSlotIsHusband = false;
+  } else {
+    showToast(currentLang==='he'?'⚠ בחירה לא מובנת':currentLang==='en'?'⚠ Unrecognized choice':'⚠ Нераспознанный выбор', true);
+    return;
+  }
+
+  const newParentLabel = window.prompt(
+    currentLang==='he' ? 'הזן את שם/מזהה ההורה השני הנכון (העתק מרשימת ההשלמה, כולל [Pxx]).\nהשאר ריק אם ההורה השני אינו ידוע:'
+    : currentLang==='en' ? 'Enter the correct second parent — name or ID (paste from the autocomplete list, including [Pxx]).\nLeave empty if the second parent is unknown:'
+    : 'Введите имя/ID верного второго родителя (можно вставить строку из автокомплита, включая [Pxx]).\nОставьте пустым, если второй родитель неизвестен:',
+    ''
+  );
+  if(newParentLabel === null) return; // отменено (Cancel), а не пустой ввод
+
+  const unknownSecondParent = newParentLabel.trim() === '';
+  let newParentId = null;
+
+  if(!unknownSecondParent){
+    const pidMatch = newParentLabel.match(/\[(P\d+)\]\s*$/);
+    newParentId = pidMatch ? pidMatch[1] : null;
+    if(!newParentId){
+      // fallback: try matching by exact name (case-insensitive)
+      const lower = newParentLabel.trim().toLowerCase();
+      const found = Object.entries(IDX.nodes).find(([, nn]) => (nn.name||'').toLowerCase() === lower);
+      newParentId = found ? found[0] : null;
+    }
+    if(!newParentId || !IDX.nodes[newParentId]){
+      showToast(currentLang==='he'?'⚠ הורה לא נמצא — נא לבחור מרשימת ההשלמה':currentLang==='en'?'⚠ Person not found — pick from the autocomplete list':'⚠ Персона не найдена — выберите точно из автокомплита', true);
+      return;
+    }
+    if(newParentId === anchorId){
+      showToast(currentLang==='he'?'⚠ ההורה השני חייב להיות שונה מההורה הקבוע':currentLang==='en'?'⚠ Second parent must differ from the anchor parent':'⚠ Второй родитель должен отличаться от того, что остаётся общим', true);
+      return;
+    }
+  }
+
+  const husbandId = anchorSlotIsHusband ? anchorId : newParentId;
+  const wifeId    = anchorSlotIsHusband ? newParentId : anchorId;
+
+  const secondParentDisplay = unknownSecondParent
+    ? (currentLang==='he' ? '(לא ידוע)' : currentLang==='en' ? '(unknown)' : '(неизвестен)')
+    : pname(newParentId);
+  const confirmMsg = currentLang==='he'
+    ? `להעביר את ${childName} למשפחה: ${pname(anchorId)} + ${secondParentDisplay}?`
+    : currentLang==='en'
+    ? `Move ${childName} to family: ${pname(anchorId)} + ${secondParentDisplay}?`
+    : `Переместить ${childName} в семью: ${pname(anchorId)} + ${secondParentDisplay}?`;
+  if(!confirm(confirmMsg)) return;
+
+  const headers = {'Content-Type':'application/json','X-Password':_sessionPassword};
+  try {
+    // Найти существующую семью: точное совпадение пары родителей, ИЛИ, если
+    // второй родитель неизвестен — семью где anchorId стоит один (второй слот пуст).
+    let targetFamId;
+    if(unknownSecondParent){
+      targetFamId = Object.entries(IDX.families).find(([, f]) =>
+        (anchorSlotIsHusband ? (f.husband === anchorId && !f.wife) : (f.wife === anchorId && !f.husband))
+      )?.[0];
+    } else {
+      targetFamId = Object.entries(IDX.families).find(([, f]) =>
+        f.husband === husbandId && f.wife === wifeId
+      )?.[0];
+    }
+
+    if(!targetFamId){
+      const createRes = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify({ parent1: husbandId || null, parent2: wifeId || null, children: [] })
+      });
+      const createData = await createRes.json();
+      if(!createData.ok) throw new Error(createData.error || 'Не удалось создать целевую семью');
+      targetFamId = createData.familyId;
+    }
+
+    if(targetFamId === oldFamId){
+      showToast(currentLang==='he'?'זהו כבר המשפחה הנוכחית':currentLang==='en'?'That is already the current family':'Это и есть текущая семья — перемещать некуда', true);
+      return;
+    }
+
+    // Отвязать от старой семьи
+    const rmRes = await fetch(WORKER_URL + '/api/family/' + oldFamId, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ removeChild: childId })
+    });
+    const rmData = await rmRes.json();
+    if(!rmData.ok) throw new Error(rmData.error || 'Не удалось отвязать от старой семьи');
+
+    // Привязать к новой/найденной семье
+    const addRes = await fetch(WORKER_URL + '/api/family/' + targetFamId, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ addChild: childId })
+    });
+    const addData = await addRes.json();
+    if(!addData.ok) throw new Error(addData.error || 'Не удалось привязать к новой семье');
+
+    // Обновляем локальный IDX, чтобы не ждать перезагрузки
+    if(typeof loadTree === 'function'){
+      const savedPwd = sessionStorage.getItem('tree_pwd') || _sessionPassword;
+      const res = await fetch(WORKER_URL + '/api/tree', { headers: { 'X-Password': savedPwd } });
+      if(res.ok){
+        const data = await res.json();
+        IDX = data;
+        if(typeof buildDatalist === 'function') buildDatalist();
+      }
+    }
+
+    if(typeof refreshCanvas === 'function') refreshCanvas();
+    if(typeof showPanel === 'function') showPanel(childId);
+    document.getElementById('modal-overlay').classList.remove('open');
+    showToast(
+      currentLang==='he' ? `✓ ${childName} הועבר למשפחה החדשה`
+      : currentLang==='en' ? `✓ ${childName} moved to the new family`
+      : `✓ ${childName} перемещён(а) в новую семью`, false);
+  } catch(e){
+    showToast('⚠ ' + e.message, true);
+  }
+}
+
 async function confirmRemoveChild(famId, childId){
   if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
   const fam = IDX.families[famId];
@@ -4178,7 +4719,136 @@ async function confirmRemoveChild(famId, childId){
   }
 }
 
-async function linkNewPersonToFamily(newId, targetId, relType, newSex){
+// Detach a child from ONLY ONE of its two parents, leaving the link to the
+// other parent (keepParentId) intact. Unlike confirmRemoveChild (which
+// detaches from the whole family record / both parent slots at once), this
+// moves the child into a family where keepParentId is the sole parent —
+// reusing an existing single-parent family if one already exists, or
+// creating one via POST /api/family otherwise — then removes the child
+// from the old (both-parents) family.
+//
+// Order of operations: removeChild from the OLD family MUST happen before
+// addChild to the target family. This mirrors openMoveChildDialog()'s
+// proven order — doing addChild first fails, because checkAlreadyHasFamily()
+// on the backend sees IDX.child_of[childId] still pointing at the old
+// family and rejects the add ("уже привязан(а) как ребёнок в другой
+// семье"). Removing first clears child_of, so the following addChild
+// passes cleanly.
+async function detachSingleParent(childId, parentIdToRemove, keepParentId){
+  if(!_sessionPassword || window._userRole !== 'admin' || !WORKER_URL) return;
+
+  const oldFamId = IDX.child_of[childId];
+  if(!oldFamId || !IDX.families[oldFamId]){
+    showToast(currentLang==='he' ? '⚠ לא נמצאה משפחה נוכחית'
+            : currentLang==='en' ? '⚠ Current family not found'
+            : '⚠ Текущая семья не найдена', true);
+    return;
+  }
+
+  const confirmMsg = currentLang==='he'
+    ? `להסיר את ${pname(childId)} רק מ${pname(parentIdToRemove)}?\n${pname(keepParentId)} יישאר הורה.`
+    : currentLang==='en'
+    ? `Detach ${pname(childId)} only from ${pname(parentIdToRemove)}?\n${pname(keepParentId)} will remain a parent.`
+    : `Отвязать ${pname(childId)} только от ${pname(parentIdToRemove)}?\n${pname(keepParentId)} останется родителем.`;
+  if(!confirm(confirmMsg)) return;
+
+  try {
+    const oldFam = IDX.families[oldFamId];
+
+    // Find an existing family where keepParentId is the sole parent
+    // (the other slot is empty) and childId isn't already in it.
+    let targetFamId = null;
+    for(const [fid, f] of Object.entries(IDX.families)){
+      const isSoleParent =
+        (f.husband === keepParentId && !f.wife) ||
+        (f.wife === keepParentId && !f.husband);
+      if(isSoleParent && !(f.children||[]).includes(childId)){
+        targetFamId = fid;
+        break;
+      }
+    }
+
+    // No such family — create one, keeping keepParentId in the same
+    // husband/wife slot it occupied in the old family.
+    if(!targetFamId){
+      const keepIsHusband = oldFam.husband === keepParentId;
+      const createBody = keepIsHusband
+        ? { parent1: keepParentId, parent2: null, children: [] }
+        : { parent1: null, parent2: keepParentId, children: [] };
+      const createRes = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+        body: JSON.stringify(createBody)
+      });
+      const createData = await createRes.json();
+      if(!createData.ok) throw new Error(createData.error || 'Не удалось создать семью');
+      targetFamId = createData.familyId;
+    }
+
+    // Отвязать от старой семьи ПЕРЕД привязкой к новой — иначе
+    // checkAlreadyHasFamily() на сервере отклонит addChild, видя что
+    // ребёнок всё ещё числится в oldFamId (см. openMoveChildDialog).
+    const removeRes = await fetch(WORKER_URL + '/api/family/' + oldFamId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({ removeChild: childId })
+    });
+    const removeData = await removeRes.json();
+    if(!removeData.ok) throw new Error(removeData.error || 'Не удалось отвязать от старой семьи');
+
+    const addRes = await fetch(WORKER_URL + '/api/family/' + targetFamId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-Password': _sessionPassword },
+      body: JSON.stringify({ addChild: childId })
+    });
+    const addData = await addRes.json();
+    if(!addData.ok) throw new Error(addData.error || 'Не удалось добавить ребёнка в семью');
+
+    // Rely on a full reload for consistency (relatives caches etc.) rather
+    // than hand-patching every derived structure — same approach used by
+    // the person-create flow.
+    if(typeof loadTree === 'function') await loadTree();
+    if(typeof showPanel === 'function') showPanel(childId);
+
+    showToast(
+      currentLang==='he' ? '✓ הוסר מההורה הזה בלבד'
+      : currentLang==='en' ? '✓ Detached from that parent only'
+      : '✓ Отвязано только от этого родителя', false);
+  } catch(e){
+    showToast('⚠ Ошибка соединения: ' + e.message, true);
+  }
+}
+
+// Этап A: если у родителя несколько браков, не берём первый попавшийся
+// молча — спрашиваем администратора, в какую именно семью привязать ребёнка.
+// Возвращает famId или null (если пользователь отменил выбор).
+function pickMarriageFamily(famIds, aroundPersonId){
+  if(famIds.length <= 1) return famIds[0] || null;
+
+  const lines = famIds.map((fid, i) => {
+    const fam = IDX.families[fid];
+    const spouseId = fam.husband === aroundPersonId ? fam.wife : fam.husband;
+    const spouseName = spouseId ? pname(spouseId) : (currentLang==='he'?'(супруг неизвестен)':currentLang==='en'?'(spouse unknown)':'(супруг неизвестен)');
+    const kidsCount = (fam.children||[]).length;
+    return (i+1) + '. ' + spouseName + ' — ' +
+      (currentLang==='he' ? 'ילדים: '+kidsCount : currentLang==='en' ? 'children: '+kidsCount : 'детей: '+kidsCount);
+  }).join('\n');
+
+  const promptText = (currentLang==='he'
+    ? 'לאדם הזה יש כמה נישואים. לאיזה מהם לשייך את הילד?\n\n'
+    : currentLang==='en'
+    ? 'This person has more than one marriage. Which one should the child belong to?\n\n'
+    : 'У этой персоны несколько браков. В какой из них добавить ребёнка?\n\n'
+  ) + lines;
+
+  const answer = window.prompt(promptText, '1');
+  if(answer === null) return null; // отменено пользователем
+  const idx = parseInt(answer, 10) - 1;
+  if(isNaN(idx) || idx < 0 || idx >= famIds.length) return famIds[0]; // некорректный ввод — берём первый как раньше
+  return famIds[idx];
+}
+
+async function linkNewPersonToFamily(newId, targetId, relType, newSex, sharedParent){
   const targetNode = IDX.nodes[targetId];
   if(!targetNode) throw new Error('Целевая персона не найдена: ' + targetId);
 
@@ -4188,8 +4858,13 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
     // New person is a CHILD of targetId.
     // Find an existing family where targetId is a parent; add child there.
     // If no family exists yet, create one with targetId as sole parent.
+    // FIX-GUARD:MULTI-MARRIAGE-CHOICE — do not silently take famIds[0] when
+    // targetId has more than one marriage; ask which one via pickMarriageFamily().
     const famIds = IDX.parent_in[targetId] || [];
-    let famId = famIds[0]; // use first existing marriage if present
+    let famId = famIds.length > 1 ? pickMarriageFamily(famIds, targetId) : famIds[0];
+    if(famIds.length > 1 && famId === null){
+      throw new Error(currentLang==='he' ? 'בחירת נישואים בוטלה' : currentLang==='en' ? 'Marriage selection cancelled' : 'Выбор брака отменён — ребёнок не привязан');
+    }
 
     if(!famId){
       const isFemale = targetNode.sex === 'F';
@@ -4246,22 +4921,68 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось добавить родителя');
     }
+  // FIX-GUARD:SIBLING-BRANCH-INTENTIONAL (1 of 2, in linkNewPersonToFamily) —
+  // this branch and its twin in linkExistingPersonToFamily() are BOTH
+  // intentional, not duplicates. Do not remove either without re-reading
+  // both functions in full.
   } else if(relType === 'брат' || relType === 'сестра'){
     const famId = IDX.child_of[targetId];
-    if(!famId){
-      const r = await fetch(WORKER_URL + '/api/family', {
-        method: 'POST', headers,
-        body: JSON.stringify({parent1:null, parent2:null, children:[targetId, newId]})
-      });
-      const d = await r.json();
-      if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+    const shared = sharedParent || 'both';
+
+    if(shared === 'both' || !famId){
+      // Родные братья/сёстры (оба родителя общие) — прежнее поведение:
+      // добавляем нового человека в ту же семью, что и целевую персону.
+      if(!famId){
+        const r = await fetch(WORKER_URL + '/api/family', {
+          method: 'POST', headers,
+          body: JSON.stringify({parent1:null, parent2:null, children:[targetId, newId]})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
+      } else {
+        const r = await fetch(WORKER_URL + '/api/family/' + famId, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({addChild: newId})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
+      }
     } else {
-      const r = await fetch(WORKER_URL + '/api/family/' + famId, {
-        method: 'PATCH', headers,
-        body: JSON.stringify({addChild: newId})
+      // FIX-GUARD:HALF-SIBLING-SINGLE-PARENT — сводный брат/сестра: общий
+      // только ОДИН родитель (отец или мать целевой персоны). Ищем среди
+      // всех браков этого одного родителя семью, где второй супруг null
+      // или где новый человек логично встанет отдельным браком; если такой
+      // однородительской семьи ещё нет — создаём её отдельно от famId, а НЕ
+      // добавляем ребёнка в семью targetId (там сидит другой, не общий, родитель).
+      const fam = IDX.families[famId];
+      const sharedParentId = shared === 'father' ? fam.husband : fam.wife;
+      if(!sharedParentId) throw new Error('У целевой персоны не указан ' + (shared==='father'?'отец':'мать') + ' — сводную связь установить нельзя');
+
+      // Ищем семью, где sharedParentId — единственный родитель (второй слот пуст)
+      const candidateFamIds = (IDX.parent_in[sharedParentId] || []).filter(fid => {
+        const f = IDX.families[fid];
+        return (f.husband === sharedParentId && !f.wife) || (f.wife === sharedParentId && !f.husband);
       });
-      const d = await r.json();
-      if(!d.ok) throw new Error(d.error || 'Не удалось добавить брата/сестру в семью');
+      let soloFamId = candidateFamIds[0];
+
+      if(!soloFamId){
+        const isFemale = IDX.nodes[sharedParentId]?.sex === 'F';
+        const r = await fetch(WORKER_URL + '/api/family', {
+          method: 'POST', headers,
+          body: JSON.stringify(isFemale
+            ? {parent1:null, parent2:sharedParentId, children:[newId]}
+            : {parent1:sharedParentId, parent2:null, children:[newId]})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось создать семью для сводного брата/сестры');
+      } else {
+        const r = await fetch(WORKER_URL + '/api/family/' + soloFamId, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({addChild: newId})
+        });
+        const d = await r.json();
+        if(!d.ok) throw new Error(d.error || 'Не удалось добавить сводного брата/сестру в семью');
+      }
     }
   }
   // else: relType empty or unrecognized — silently skip linking
@@ -4353,6 +5074,8 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось прикрепить родителя');
     }
+  // FIX-GUARD:SIBLING-BRANCH-INTENTIONAL (2 of 2, in linkExistingPersonToFamily) —
+  // twin of the branch in linkNewPersonToFamily(). Both intentional.
   } else if(relType === 'брат' || relType === 'сестра'){
     const targetFamId   = IDX.child_of[targetId];
     const existingFamId = IDX.child_of[existingId];
