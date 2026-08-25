@@ -314,8 +314,13 @@ export default {
     }
 
     // ── GET /contacts.vcf ─────────────────────────────
-    // Public: returns VCF with all living persons who have contact data
+    // Requires auth (guest or admin): returns VCF with all living
+    // persons who have contact data. Was public — fixed to prevent
+    // unauthenticated leakage of phone/email/social data.
     if(path === '/contacts.vcf' && method === 'GET') {
+      const auth = await getRole(request, env);
+      if(!auth) return err('Требуется авторизация', 401);
+
       const data = await env.TREE_KV.get('tree_data');
       if(!data) return new Response('No tree data', { status: 404, headers: CORS });
 

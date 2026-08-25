@@ -283,7 +283,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
                 background:rgba(255,255,255,.06);color:#EDD890;font-family:inherit;font-size:.78rem;
                 width:160px;outline:none">
   <button class="btn" id="btn-search-go" style="padding:5px 10px" title="Перейти">→</button>
-  <button class="btn" id="btn-edit" style="margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
+  <button class="btn" id="btn-edit" style="display:none;margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
   <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1">🖨</button>
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты">📇</button>
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
@@ -1473,15 +1473,16 @@ function showPanel(id){
 
   // ── Column 1: name, rel, dates ──
   const relForId = IDX.relatives[id];
+  const canEdit = !!_sessionPassword;
   const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
   let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
     <span>${pname(id)}</span>
-    <button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
+    ${canEdit ? `<button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
       border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#7A5828;
-      white-space:nowrap;flex-shrink:0">${t('btn_fix')}</button>
-    <button onclick="openAddRelativeModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
+      white-space:nowrap;flex-shrink:0">${t('btn_fix')}</button>` : ''}
+    ${canEdit ? `<button onclick="openAddRelativeModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
       border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#7A5828;
-      white-space:nowrap;flex-shrink:0">${t('btn_add_relative')}</button>
+      white-space:nowrap;flex-shrink:0">${t('btn_add_relative')}</button>` : ''}
     ${canDelete ? `<button onclick="confirmDeletePerson('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(192,48,48,.1);
       border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;
       white-space:nowrap;flex-shrink:0">🗑 ${currentLang==='he'?'מחק':currentLang==='en'?'Delete':'Удалить'}</button>` : ''}
@@ -4087,6 +4088,8 @@ document.getElementById('btn-login').addEventListener('click', e => {
       window._userRole = null;
       sessionStorage.removeItem('tree_pwd');
       document.getElementById('btn-login').textContent = '🔑';
+      const editBtnOut = document.getElementById('btn-edit');
+      if(editBtnOut) editBtnOut.style.display = 'none';
       showToast(currentLang==='he' ? 'יצאת' : currentLang==='en' ? 'Logged out' : 'Вы вышли', false);
     }
     return;
@@ -4096,6 +4099,13 @@ document.getElementById('btn-login').addEventListener('click', e => {
 });
 
 document.getElementById('btn-contacts').addEventListener('click', () => {
+  if(!_sessionPassword){
+    document.getElementById('btn-login').click();
+    showToast(currentLang==='he' ? '🔒 התחבר כדי להוריד אנשי קשר'
+             : currentLang==='en' ? '🔒 Login to download contacts'
+             : '🔒 Войдите чтобы скачать контакты', true);
+    return;
+  }
   const { vcf, count } = generateVCF();
 
   if(count === 0){
@@ -5165,6 +5175,8 @@ function initTree(data, pwd) {
   navigateTo(keepFocal);
   if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
   hideLoader();
+  const editBtn = document.getElementById('btn-edit');
+  if(editBtn) editBtn.style.display = _sessionPassword ? '' : 'none';
 }
 
 // Главная функция загрузки
