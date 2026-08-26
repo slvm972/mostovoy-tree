@@ -1475,7 +1475,6 @@ function showPanel(id){
   const relForId = IDX.relatives[id];
   const canEdit = !!_sessionPassword;
   const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
-  const isAuth = !!(_sessionPassword);
   let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
     <span>${pname(id)}</span>
     ${canEdit ? `<button onclick="openModal('${id}')" style="font-size:.65rem;padding:2px 8px;background:rgba(184,144,48,.15);
@@ -1495,20 +1494,6 @@ function showPanel(id){
       ${relLabelLines.map(l => `<div>${l}</div>`).join('')}
     </div>`;
   }
-  // Photo: only shown to authenticated users (guest or admin) — same gate as contacts
-  if(n.photo){
-    if(isAuth){
-      const safePhotoUrl = String(n.photo).replace(/"/g, '&quot;');
-      col1 += `<div style="margin:6px 0 10px"><img src="${safePhotoUrl}" alt=""
-        style="max-width:100%;max-height:170px;border-radius:6px;display:block;object-fit:cover"
-        onerror="this.parentElement.style.display='none'"></div>`;
-    } else {
-      col1 += `<div style="margin:6px 0 10px;font-size:.72rem;color:#7A5828;cursor:pointer"
-        onclick="document.getElementById('btn-login').click()">
-        🔒 ${currentLang==='he'?'כניסה לצפייה בתמונה':currentLang==='en'?'Login to view photo':'Войдите чтобы увидеть фото'}
-      </div>`;
-    }
-  }
   col1 += `<div class="p-block">`;
   if(b) col1 += `<div><span class="p-lbl">${t('birth')}</span> <strong>${b}</strong>${n.birth_he?` <span class="p-hw" dir="rtl">${n.birth_he}</span>`:''}</div>`;
   if(d) col1 += `<div style="margin-top:3px"><span class="p-lbl">${t('death')}</span> <strong>${d}</strong>${n.death_he?` <span class="p-hw" dir="rtl">${n.death_he}</span>`:''}</div>`;
@@ -1522,6 +1507,7 @@ function showPanel(id){
   if(familyNoteText) col1 += `<div class="p-sec"><h3>${t('fix_family')}</h3><div class="p-block">${familyNoteText}</div></div>`;
   if(otherNoteText)  col1 += `<div class="p-sec"><h3>${t('fix_other')}</h3><div class="p-block">${otherNoteText}</div></div>`;
   // Contacts: only shown to authenticated users (guest or admin)
+  const isAuth = !!(_sessionPassword);
   const hasContacts = n.phone || n.email || n.social;
   if(hasContacts){
     if(isAuth){
