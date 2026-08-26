@@ -218,9 +218,14 @@ export default {
     }
 
     // ── GET /calendar.ics ────────────────────────────
-    // Public: returns ICS calendar with all birthdays
-    // No auth required — shareable subscription link
+    // Requires auth (guest or admin): returns ICS calendar with
+    // birthdays. Was public — fixed to prevent unauthenticated
+    // leakage of full names + exact birth dates (same reasoning
+    // as the /contacts.vcf fix).
     if(path === '/calendar.ics' && method === 'GET') {
+      const auth = await getRole(request, env);
+      if(!auth) return err('Требуется авторизация', 401);
+
       const data = await env.TREE_KV.get('tree_data');
       if(!data) return new Response('No tree data', { status: 404, headers: CORS });
 
