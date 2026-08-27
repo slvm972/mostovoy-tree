@@ -389,10 +389,13 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','phone','email','social','bio','photo','missing'];
+                       'sex','rel','phone','email','social','bio','photo','missing','gen'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
+        if(field === 'gen' && val !== null && val !== undefined && !Number.isInteger(val)) {
+          return err('Поле gen должно быть целым числом');
+        }
         if(val === null || val === undefined) {
           delete IDX.nodes[personId][field];
         } else {

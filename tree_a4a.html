@@ -2709,11 +2709,40 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       const emailV  = document.getElementById('f-email').value.trim();
       const socialV = document.getElementById('f-social').value.trim();
       const genitiveV = document.getElementById('f-name-genitive').value.trim();
+
+      // ── Вычисляем поколение (gen) ДО создания персоны ──
+      // Без этого сервер по умолчанию ставит gen=0 (уровень прадедов) —
+      // баг, из-за которого новые люди зависали как "поколение 0" в
+      // диагностике вместо реального места в дереве. Считаем на основе
+      // того, к кому привязывается новый человек: через поля «Отец»/
+      // «Мать» (приоритетнее, т.к. однозначнее) или через «Связь с кем».
+      let computedGen = null;
+      const fatherMatchEarly = fatherLabel.match(/\[(P\d+)\]\s*$/);
+      const motherMatchEarly = motherLabel.match(/\[(P\d+)\]\s*$/);
+      const fatherIdEarly = fatherMatchEarly ? fatherMatchEarly[1] : null;
+      const motherIdEarly = motherMatchEarly ? motherMatchEarly[1] : null;
+      const parentGens = [fatherIdEarly, motherIdEarly]
+        .map(pid => pid && IDX.nodes[pid] && typeof IDX.nodes[pid].gen === 'number' ? IDX.nodes[pid].gen : null)
+        .filter(g => g !== null);
+      if(parentGens.length){
+        computedGen = Math.max(...parentGens) + 1;
+      } else {
+        const relIdMatchEarly = relP.match(/\[(P\d+)\]\s*$/);
+        const relTargetIdEarly = relIdMatchEarly ? relIdMatchEarly[1] : null;
+        const relatedNode = relTargetIdEarly ? IDX.nodes[relTargetIdEarly] : null;
+        if(relatedNode && typeof relatedNode.gen === 'number'){
+          if(relT === 'ребёнок')      computedGen = relatedNode.gen + 1;
+          else if(relT === 'родитель') computedGen = relatedNode.gen - 1;
+          else                         computedGen = relatedNode.gen; // жена/муж/брат/сестра — то же поколение
+        }
+      }
+
       const body = {
         name,
         sex: document.getElementById('f-sex').value || '',
         birth, death,
         rel: relP ? (relT + ' ' + relP) : '',
+        ...(computedGen !== null ? {gen: computedGen} : {}),
         ...(phoneV    ? {phone:phoneV}       : {}),
         ...(emailV    ? {email:emailV}       : {}),
         ...(socialV   ? {social:socialV}     : {}),
