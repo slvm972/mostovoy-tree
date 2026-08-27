@@ -790,6 +790,127 @@ export default {
       return json({ ok: true, message: 'Пароль для родственников обновлён' });
     }
 
+    // ── POST /api/rebuild-cache ───────────────────────────
+    // Admin only: rebuild relatives, child_of, parent_in, and
+    // grandparents entirely from scratch, using ONLY families+nodes
+    // (the source of truth) as input. Fixes "ghost" cards in the tree
+    // (a card rendered for an ID that no longer has valid data) caused
+    // by derived caches drifting out of sync after edits/merges/deletes.
+    // Also drops any dangling references in families (husband/wife/child
+    // IDs that no longer exist in nodes) before rebuilding, and reports
+    // how many such references were dropped. Person/family records
+    // themselves are never modified — only the derived link caches.
+    if(path === '/api/rebuild-cache' && method === 'POST') {
+      const auth = await getRole(request, env);
+      if(auth !== 'admin') return err('Только для администратора', 403);
+
+      const rawData = await env.TREE_KV.get('tree_data');
+      if(!rawData) return err('Данные дерева не найдены', 404);
+
+      const IDX = JSON.parse(rawData);
+      const nodeIds = new Set(Object.keys(IDX.nodes));
+      let droppedFamilyRefs = 0;
+
+      // 1. Clean dangling references inside families before rebuilding —
+      //    a family pointing at a deleted person would otherwise poison
+      //    every derived cache built from it.
+      for(const fam of Object.values(IDX.families)){
+        if(fam.husband && !nodeIds.has(fam.husband)){ fam.husband = null; droppedFamilyRefs++; }
+        if(fam.wife    && !nodeIds.has(fam.wife))   { fam.wife    = null; droppedFamilyRefs++; }
+        const before = (fam.children || []).length;
+        fam.children = (fam.children || []).filter(cid => nodeIds.has(cid));
+        droppedFamilyRefs += before - fam.children.length;
+      }
+
+      // 2. Rebuild relatives / child_of / parent_in from scratch
+      const relatives = {};
+      const child_of  = {};
+      const parent_in = {};
+      for(const id of nodeIds) relatives[id] = { parents: [], siblings: [], spouses: [], children: [] };
+
+      for(const [fid, fam] of Object.entries(IDX.families)){
+        const parents = [fam.husband, fam.wife].filter(Boolean);
+
+        // Spouses — mutual link between both parents of this family
+        if(parents.length === 2){
+          const [p1, p2] = parents;
+          if(!relatives[p1].spouses.includes(p2)) relatives[p1].spouses.push(p2);
+          if(!relatives[p2].spouses.includes(p1)) relatives[p2].spouses.push(p1);
+        }
+
+        for(const pid of parents){
+          if(!parent_in[pid]) parent_in[pid] = [];
+          if(!parent_in[pid].includes(fid)) parent_in[pid].push(fid);
+        }
+
+        for(const cid of fam.children){
+          // A child should belong to exactly one family. If the data has
+          // the same child listed under two families (a pre-existing
+          // inconsistency), keep the first assignment encountered rather
+          // than silently overwriting — avoids masking a data problem
+          // that deserves manual review.
+          if(!(cid in child_of)) child_of[cid] = fid;
+
+          for(const pid of parents){
+            if(!relatives[cid].parents.includes(pid)) relatives[cid].parents.push(pid);
+            if(!relatives[pid].children.includes(cid)) relatives[pid].children.push(cid);
+          }
+        }
+
+        // Siblings — mutual link between every pair of children in this family
+        for(const cid of fam.children){
+          for(const sib of fam.children){
+            if(sib !== cid && !relatives[cid].siblings.includes(sib)){
+              relatives[cid].siblings.push(sib);
+            }
+          }
+        }
+      }
+
+      // 3. Rebuild grandparents cache from the freshly-built child_of
+      const grandparents = {};
+      for(const id of nodeIds){
+        grandparents[id] = [];
+        const famId = child_of[id];
+        if(!famId) continue;
+        const fam = IDX.families[famId];
+        if(!fam) continue;
+        const parents = [fam.husband, fam.wife].filter(Boolean);
+        const seenGpFam = new Set();
+        for(const pid of parents){
+          const gpFamId = child_of[pid];
+          if(!gpFamId || seenGpFam.has(gpFamId)) continue;
+          seenGpFam.add(gpFamId);
+          const gpFam = IDX.families[gpFamId];
+          if(!gpFam) continue;
+          grandparents[id].push({ family: gpFamId, husband: gpFam.husband, wife: gpFam.wife });
+        }
+      }
+
+      IDX.relatives    = relatives;
+      IDX.child_of     = child_of;
+      IDX.parent_in    = parent_in;
+      IDX.grandparents = grandparents;
+
+      const ts = Date.now();
+      await env.TREE_KV.put('backup_' + ts, rawData);
+      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
+
+      const list = await env.TREE_KV.list({ prefix: 'backup_' });
+      const keys = list.keys.map(k => k.name).sort();
+      if(keys.length > 10){
+        for(const old of keys.slice(0, keys.length - 10)) await env.TREE_KV.delete(old);
+      }
+
+      return json({
+        ok: true,
+        message: 'Кэш связей пересчитан',
+        persons: nodeIds.size,
+        families: Object.keys(IDX.families).length,
+        droppedFamilyRefs
+      });
+    }
+
     // ── 404 ──────────────────────────────────────────
     return err('Не найдено', 404);
   }
