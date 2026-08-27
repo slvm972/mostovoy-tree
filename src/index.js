@@ -57,6 +57,43 @@ export default {
       return err('Неверный пароль', 401);
     }
 
+    // ── GET /api/tree/public ─────────────────────────
+    // Public, reduced snapshot used for the initial tree render.
+    // Contact details, biographies, social links and photo URLs stay private.
+    if(path === '/api/tree/public' && method === 'GET') {
+      const rawData = await env.TREE_KV.get('tree_data');
+      if(!rawData) return err('Данные дерева не найдены. Загрузите начальный файл.', 404);
+
+      const source = JSON.parse(rawData);
+      const publicFields = ['id', 'name', 'birth', 'death', 'birth_he', 'death_he',
+                            'hebrew_name', 'sex', 'gen', 'missing', 'rel', 'genitive',
+                            'rel_en', 'rel_he', 'family_note', 'family_note_en',
+                            'family_note_he', 'other_note', 'other_note_en', 'other_note_he'];
+      const nodes = {};
+      for(const [id, person] of Object.entries(source.nodes || {})) {
+        nodes[id] = {};
+        for(const field of publicFields) {
+          if(person[field] !== undefined) nodes[id][field] = person[field];
+        }
+        nodes[id].id = nodes[id].id || id;
+      }
+
+      return new Response(JSON.stringify({
+        nodes,
+        families: source.families || {},
+        relatives: source.relatives || {},
+        child_of: source.child_of || {},
+        parent_in: source.parent_in || {},
+        grandparents: source.grandparents || {},
+      }), {
+        headers: {
+          ...CORS,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+        },
+      });
+    }
+
     // ── GET /api/tree ────────────────────────────────
     // Returns current IDX JSON (the family tree data)
     if(path === '/api/tree' && method === 'GET') {
@@ -140,13 +177,13 @@ export default {
       const idxRaw = await env.TREE_KV.get('proposals_index');
       const idx    = idxRaw ? JSON.parse(idxRaw) : [];
 
-      const proposals = [];
-      for(const id of idx.slice(0, 50)) {
-        const raw = await env.TREE_KV.get(id);
-        if(!raw) continue;
-        const p = JSON.parse(raw);
-        if(status === 'all' || p.status === status) proposals.push(p);
-      }
+      const records = await Promise.all(
+        idx.slice(0, 50).map(id => env.TREE_KV.get(id))
+      );
+      const proposals = records
+        .filter(Boolean)
+        .map(raw => JSON.parse(raw))
+        .filter(proposal => status === 'all' || proposal.status === status);
 
       return json({ ok: true, proposals });
     }
