@@ -51,7 +51,7 @@ export default {
       if(await checkPassword(password, env.ADMIN_PASSWORD_HASH)) {
         return json({ ok: true, role: 'admin' });
       }
-      if(await checkPassword(password, env.GUEST_PASSWORD_HASH)) {
+      if(await checkPassword(password, await getGuestHash(env))) {
         return json({ ok: true, role: 'guest' });
       }
       return err('Неверный пароль', 401);
@@ -764,12 +764,46 @@ export default {
       return json({ ok: true, deleted: famId });
     }
 
+    // ── PATCH /api/settings/guest-password ───────────────
+    // Admin only: change the guest password at runtime, without a
+    // redeploy. Stores the new hash in KV; getRole()/api/login check
+    // this override first, falling back to the wrangler.toml hash.
+    // Body: { password: "новый пароль для родственников" }
+    if(path === '/api/settings/guest-password' && method === 'PATCH') {
+      const auth = await getRole(request, env);
+      if(auth !== 'admin') return err('Только для администратора', 403);
+
+      const body = await request.json().catch(() => null);
+      if(!body || !body.password || body.password.length < 4) {
+        return err('Пароль должен быть не короче 4 символов');
+      }
+      // Guard against setting the guest password equal to the admin
+      // password — would let guests silently gain admin rights since
+      // /api/login checks ADMIN_PASSWORD_HASH first.
+      if(await checkPassword(body.password, env.ADMIN_PASSWORD_HASH)) {
+        return err('Пароль гостя не должен совпадать с паролем администратора');
+      }
+
+      const newHash = await sha256(body.password);
+      await env.TREE_KV.put('guest_password_hash_override', newHash);
+
+      return json({ ok: true, message: 'Пароль для родственников обновлён' });
+    }
+
     // ── 404 ──────────────────────────────────────────
     return err('Не найдено', 404);
   }
 };
 
 // ── Auth helper ────────────────────────────────────────
+// Guest password can be overridden at runtime (stored in KV) without
+// requiring a redeploy — see PATCH /api/settings/guest-password below.
+// Falls back to the deploy-time hash in wrangler.toml if no override exists.
+async function getGuestHash(env) {
+  const override = await env.TREE_KV.get('guest_password_hash_override');
+  return override || env.GUEST_PASSWORD_HASH;
+}
+
 async function getRole(request, env) {
   // Accept password via Authorization header: "Bearer <password>"
   // or via X-Password header
@@ -779,6 +813,6 @@ async function getRole(request, env) {
 
   if(!pass) return null;
   if(await checkPassword(pass, env.ADMIN_PASSWORD_HASH)) return 'admin';
-  if(await checkPassword(pass, env.GUEST_PASSWORD_HASH)) return 'guest';
+  if(await checkPassword(pass, await getGuestHash(env))) return 'guest';
   return null;
 }

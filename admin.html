@@ -81,6 +81,7 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
     <button class="hbtn" onclick="showTab('upload')">⬆ Загрузить дерево</button>
     <button class="hbtn" onclick="showTab('backups')">💾 Резервные копии</button>
     <button class="hbtn" onclick="showTab('maintenance')">🔧 Обслуживание</button>
+    <button class="hbtn" onclick="showTab('settings')">⚙️ Настройки</button>
     <button class="hbtn" onclick="logout()">Выйти</button>
   </header>
 
@@ -144,6 +145,27 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
       <div id="rebuild-status" style="margin-top:14px"></div>
     </div>
 
+    <!-- SETTINGS TAB -->
+    <div id="tab-settings" style="display:none">
+      <div class="info">
+        Пароль для родственников (гостевой доступ) можно сменить здесь — без переразвёртывания
+        сервера. Новый пароль вступает в силу немедленно для всех новых входов. Пароль
+        администратора отсюда не меняется — только гостевой.
+      </div>
+      <div style="max-width:360px">
+        <label style="display:block;font-size:.78rem;color:#7A5828;margin-bottom:6px;font-weight:600">
+          Новый пароль для родственников
+        </label>
+        <input type="password" id="new-guest-pwd" placeholder="Минимум 4 символа"
+          style="width:100%;padding:9px 12px;border:1px solid rgba(184,144,48,.4);
+                 border-radius:4px;font-size:.85rem;margin-bottom:10px;font-family:inherit">
+        <button class="hbtn" onclick="changeGuestPassword()" style="background:#C09828;color:#fff;padding:8px 18px">
+          💾 Сохранить новый пароль
+        </button>
+        <div id="guest-pwd-status" style="margin-top:12px;font-size:.8rem"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -203,11 +225,34 @@ async function api(method, path, body) {
 
 // ── Tabs ─────────────────────────────────────────────────
 function showTab(tab) {
-  ['proposals','upload','backups','maintenance'].forEach(t => {
+  ['proposals','upload','backups','maintenance','settings'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
   });
   currentTab = tab;
   if(tab === 'backups') loadBackups();
+}
+
+// ── Settings: change guest (relatives) password ──────────
+async function changeGuestPassword() {
+  const input = document.getElementById('new-guest-pwd');
+  const st    = document.getElementById('guest-pwd-status');
+  const pwd   = input.value.trim();
+
+  if(pwd.length < 4){
+    st.innerHTML = '<div class="info" style="color:red">❌ Пароль должен быть не короче 4 символов</div>';
+    return;
+  }
+  if(!confirm('Сменить пароль для родственников? Все, кто пользуется старым паролем, потеряют доступ до тех пор, пока вы не сообщите им новый.')) return;
+
+  st.innerHTML = '<div class="info">⏳ Сохраняю...</div>';
+  try {
+    const data = await api('PATCH', '/api/settings/guest-password', { password: pwd });
+    st.innerHTML = `<div class="info" style="background:#D4EDDA;color:#155724">✅ ${data.message}</div>`;
+    input.value = '';
+    toast('✅ Пароль для родственников обновлён');
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+  }
 }
 
 // ── Maintenance: rebuild derived-cache fields ─────────────
