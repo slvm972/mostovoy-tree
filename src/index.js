@@ -405,6 +405,60 @@ export default {
       });
     }
 
+    // ── POST /api/upload-photo ───────────────────────────
+    // Admin only: upload a person's photo file into R2.
+    // Body: multipart/form-data with fields "photo" (File) and "person" (id)
+    // Returns: { ok, key, url } — url points to GET /api/photo/:key below,
+    // and the frontend PATCHes that url onto the person's `photo` field.
+    if(path === '/api/upload-photo' && method === 'POST') {
+      const auth = await getRole(request, env);
+      if(auth !== 'admin') return err('Только для администратора', 403);
+      if(!env.PHOTOS_BUCKET) return err('Хранилище фото не настроено (PHOTOS_BUCKET)', 500);
+
+      const form   = await request.formData().catch(() => null);
+      const file   = form && form.get('photo');
+      const person = form && form.get('person');
+      if(!file || typeof file === 'string') return err('Файл фото не найден в запросе');
+      if(!person) return err('Не указана персона (person)');
+
+      const MAX_SIZE = 8 * 1024 * 1024; // 8MB
+      if(file.size > MAX_SIZE) return err('Файл слишком большой (максимум 8 МБ)', 413);
+
+      const contentType = file.type || 'application/octet-stream';
+      if(!contentType.startsWith('image/')) return err('Файл должен быть изображением');
+
+      const extFromType = { 'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp' };
+      const extFromName  = (file.name && file.name.includes('.'))
+        ? file.name.split('.').pop().toLowerCase() : null;
+      const ext = extFromType[contentType] || extFromName || 'jpg';
+
+      const key = `${person}-${Date.now()}.${ext}`;
+      const bytes = await file.arrayBuffer();
+      await env.PHOTOS_BUCKET.put(key, bytes, { httpMetadata: { contentType } });
+
+      return json({ ok: true, key, url: '/api/photo/' + key });
+    }
+
+    // ── GET /api/photo/:key ───────────────────────────────
+    // Public (like calendar.ics/contacts.vcf): serves an uploaded photo
+    // from R2 by its key. No auth — the value is embedded directly as
+    // <img src="..."> in the person panel, which can't attach X-Password.
+    // The panel itself still gates *display* of the <img> behind login.
+    if(path.startsWith('/api/photo/') && method === 'GET') {
+      if(!env.PHOTOS_BUCKET) return err('Хранилище фото не настроено (PHOTOS_BUCKET)', 500);
+      const key = decodeURIComponent(path.replace('/api/photo/', ''));
+      const obj = await env.PHOTOS_BUCKET.get(key);
+      if(!obj) return err('Фото не найдено', 404);
+
+      return new Response(obj.body, {
+        headers: {
+          ...CORS,
+          'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      });
+    }
+
     // ── PATCH /api/person/:id ────────────────────────────
     // Admin only: update specific fields of one person
     // Body: { field: value, ... } — only listed fields are changed

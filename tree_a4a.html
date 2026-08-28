@@ -3135,7 +3135,23 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       // val === '' here always means "user cleared this field" (see the
       // `changed` filter above) — send null so the server deletes the key,
       // instead of writing an empty string that still counts as "has data".
-      for(const f of changed) patch[f.key] = f.val || null;
+      // NOTE: `gen` needs special handling — the plain text input always
+      // yields a string ("5"), but the server requires an actual JSON
+      // number and otherwise replies "Поле gen должно быть целым числом".
+      for(const f of changed){
+        if(f.key === 'gen'){
+          const genNum = f.val === '' ? null : parseInt(f.val, 10);
+          if(genNum !== null && !Number.isInteger(genNum)){
+            showToast(currentLang==='he' ? '⚠ מספר הדור חייב להיות מספר שלם'
+                    : currentLang==='en' ? '⚠ Generation number must be a whole number'
+                    : '⚠ Поле «номер поколения» должно быть целым числом', true);
+            return;
+          }
+          patch.gen = genNum;
+          continue;
+        }
+        patch[f.key] = f.val || null;
+      }
       if(familyNote) patch.family_note = familyNote;
       if(otherNote)  patch.other_note  = otherNote;
 
