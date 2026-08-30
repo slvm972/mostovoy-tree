@@ -436,7 +436,7 @@ export default {
       const bytes = await file.arrayBuffer();
       await env.PHOTOS_BUCKET.put(key, bytes, { httpMetadata: { contentType } });
 
-      return json({ ok: true, key, url: '/api/photo/' + key });
+      return json({ ok: true, key, url: 'https://mostovoy-tree.slvm972.workers.dev/api/photo/' + key });
     }
 
     // ── GET /api/photo/:key ───────────────────────────────
