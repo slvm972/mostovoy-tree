@@ -12,34 +12,39 @@ const PAPER = {
 };
 let printFmt = 'A1L';
 
-// Format selector
-document.querySelectorAll('.print-opt').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.print-opt').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    printFmt = btn.dataset.fmt;
+// tree-print.js подключается через <script src> в <head> и выполняется
+// ДО парсинга <body> — на этот момент кнопок печати ещё нет в DOM.
+// Регистрацию обработчиков откладываем до готовности DOM.
+document.addEventListener('DOMContentLoaded', () => {
+  // Format selector
+  document.querySelectorAll('.print-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.print-opt').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      printFmt = btn.dataset.fmt;
+    });
   });
-});
 
-// ── Open print dialog ───────────────────────────────────
-document.getElementById('btn-print').addEventListener('click', () => {
-  if(!IDX){ showToast('Данные не загружены', true); return; }
-  const n = Object.keys(IDX.nodes).length;
-  const f = Object.keys(IDX.families).length;
-  const stats = document.getElementById('print-stats');
-  stats.style.color = '';
-  stats.style.fontWeight = '';
-  stats.textContent = `В дереве: ${n} персон, ${f} семей`;
-  document.getElementById('print-overlay').classList.add('open');
-});
-document.getElementById('print-cancel').addEventListener('click', () => {
-  document.getElementById('print-overlay').classList.remove('open');
-});
+  // ── Open print dialog ───────────────────────────────────
+  document.getElementById('btn-print').addEventListener('click', () => {
+    if(!IDX){ showToast('Данные не загружены', true); return; }
+    const n = Object.keys(IDX.nodes).length;
+    const f = Object.keys(IDX.families).length;
+    const stats = document.getElementById('print-stats');
+    stats.style.color = '';
+    stats.style.fontWeight = '';
+    stats.textContent = `В дереве: ${n} персон, ${f} семей`;
+    document.getElementById('print-overlay').classList.add('open');
+  });
+  document.getElementById('print-cancel').addEventListener('click', () => {
+    document.getElementById('print-overlay').classList.remove('open');
+  });
 
-// Build full tree SVG and print
-document.getElementById('print-go').addEventListener('click', () => {
-  document.getElementById('print-overlay').classList.remove('open');
-  setTimeout(buildAndPrint, 80);
+  // Build full tree SVG and print
+  document.getElementById('print-go').addEventListener('click', () => {
+    document.getElementById('print-overlay').classList.remove('open');
+    setTimeout(buildAndPrint, 80);
+  });
 });
 
 function buildAndPrint() {
