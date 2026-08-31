@@ -27,6 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Open print dialog ───────────────────────────────────
   document.getElementById('btn-print').addEventListener('click', () => {
+    if(!_sessionPassword){
+      document.getElementById('btn-login').click();
+      showToast(currentLang==='he' ? '🔒 התחבר כדי להדפיס את העץ'
+               : currentLang==='en' ? '🔒 Login to print the tree'
+               : '🔒 Войдите чтобы распечатать дерево', true);
+      return;
+    }
     if(!IDX){ showToast('Данные не загружены', true); return; }
     const n = Object.keys(IDX.nodes).length;
     const f = Object.keys(IDX.families).length;
