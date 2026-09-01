@@ -3,3 +3,4 @@ node_modules/
 .tmp.driveupload/
 desktop.ini
 *.ini
+.aider*
