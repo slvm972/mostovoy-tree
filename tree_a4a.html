@@ -428,6 +428,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 
     <label data-i="fix_name">Имя</label>
     <input id="ff-name" type="text" data-ph="ph_name" placeholder="Например: Анна Иванова">
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <input id="ff-name-en" type="text" placeholder="EN" style="font-size:.72rem">
+      <input id="ff-name-he" type="text" placeholder="עברית" dir="rtl" style="font-size:.72rem">
+    </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="fix_genitive" style="margin:10px 0 3px">Имя в родительном падеже (для фраз родства)</label>
@@ -1444,6 +1448,8 @@ function noteText(n, field){
 function pname(id) {
   const n = IDX.nodes[id]; if(!n) return id;
   if(currentLang === 'ru') return n.name;
+  const manual = n['name_' + currentLang];
+  if(manual) return manual;
   const d = NAMES[id];
   if(!d) return n.name;
   return d[currentLang] || n.name;
@@ -1583,7 +1589,7 @@ function openModal(prefillId, mode){
    'f-photo-url','f-photo-cap','photoFileInput',
    'f-bio-text','f-bio-url',
    'f-date-note','f-father','f-mother',
-   'ff-name','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
+   'ff-name','ff-name-en','ff-name-he','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
    'ff-phone','ff-email','ff-social','ff-rel','ff-gen','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
     const el = document.getElementById(fid);
@@ -1640,6 +1646,8 @@ function openModal(prefillId, mode){
     // Show current data as a reference card (read-only summary)
     const lines = [];
     if(n.name)     lines.push(t('lbl_name')     + ': ' + pname(prefillId));
+    if(n.name_en)  lines.push(t('lbl_name') + ' (EN): ' + n.name_en);
+    if(n.name_he)  lines.push(t('lbl_name') + ' (HE): ' + n.name_he);
     if(n.birth)    lines.push(t('birth')         + ': ' + n.birth);
     if(n.birth_he) lines.push(t('fix_birth_he')  + ': ' + n.birth_he);
     if(n.death)    lines.push(t('death')         + ': ' + n.death);
@@ -1667,6 +1675,8 @@ function openModal(prefillId, mode){
     // Prefill the editable fields with CURRENT values so user only changes what's wrong
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
     setVal('ff-name',      pname(prefillId));
+    setVal('ff-name-en',   n.name_en);
+    setVal('ff-name-he',   n.name_he);
     setVal('ff-genitive',  n.genitive);
     setVal('ff-birth',     n.birth);
     setVal('ff-death',     n.death);
@@ -2197,6 +2207,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     const fields = [
       { key: 'name',     label: t('fix_name'),       val: getV('ff-name'),     orig: orig.name || '' },
+      { key: 'name_en', label: t('lbl_name') + ' (EN)', val: getV('ff-name-en'), orig: orig.name_en || '' },
+      { key: 'name_he', label: t('lbl_name') + ' (HE)', val: getV('ff-name-he'), orig: orig.name_he || '' },
       { key: 'genitive', label: t('fix_genitive'),   val: getV('ff-genitive'), orig: orig.genitive || '' },
       { key: 'birth',    label: t('fix_birth'),       val: getV('ff-birth'),    orig: orig.birth || '' },
       { key: 'death',    label: t('fix_death'),       val: getV('ff-death'),    orig: orig.death || '' },
@@ -2528,7 +2540,11 @@ function runDiagnostics(){
 
   // NAMES dict coverage
   const namesCount = Object.keys(NAMES).length;
-  const nodeMissing = Object.keys(IDX.nodes).filter(id => !NAMES[id]).length;
+  const nodeMissing = Object.keys(IDX.nodes).filter(id => {
+    const n = IDX.nodes[id];
+    const hasManual = !!(n.name_en && n.name_he);
+    return !NAMES[id] && !hasManual;
+  }).length;
   nodeMissing === 0 ? ok('NAMES покрывает все персоны', namesCount + ' записей')
                     : warn('Персон без EN/HE перевода', nodeMissing);
 
