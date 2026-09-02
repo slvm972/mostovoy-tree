@@ -480,7 +480,7 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','phone','email','social','bio','photo','missing','gen'];
+                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
