@@ -175,6 +175,9 @@ function placeFamiliesInRow(row, familiesOfThisRow, placedPositions, IDX) {
   const sortedNeither = neitherPlaced.slice()
     .sort((a, b) => familyNumKey(a) - familyNumKey(b));
   let newPairCursor = 0;
+  for (const pos of Object.values(placedPositions)) {
+    if (pos.y === y) newPairCursor = Math.max(newPairCursor, pos.x + CW + SIBLING_GAP);
+  }
   for (const famId of sortedNeither) {
     const fam = IDX.families[famId];
     const pairWidth = CW * 2 + COUPLE_GAP;
@@ -204,8 +207,199 @@ function placeFamiliesInRow(row, familiesOfThisRow, placedPositions, IDX) {
   }
 }
 
+// ── placeChildrenOfFamiliesInRow ─────────────────────────────────────────
+// row: номер row родителей (детей размещаем на row+1)
+// familiesOfThisRow: тот же список famId, что передавался в placeFamiliesInRow
+//   для этого row (полный список relevantFamilies этого row — включая
+//   семьи с одним известным родителем и полностью безродительские семьи
+//   с детьми — placeFamiliesInRow их сам молча игнорирует, здесь же они
+//   как раз и обрабатываются)
+// placedPositions: {personId: {x,y}} — мутируется этим вызовом
+// IDX: полные данные дерева
+//
+// Принцип: childFootprint-стиль из getCenteredLayout (tree-layout.js,
+// ~197-267) — НО только 1 уровень вперёд: ширина блока детей семьи —
+// просто kids.length*CW + gaps, БЕЗ рекурсивного footprint под будущих
+// внуков. Один общий проход "собрать все блоки → отсортировать по
+// желаемому x → пройти слева направо, раздвигая коллизии через
+// prevRight/SIBLING_GAP" — тот же паттерн, что уже в placeFamiliesInRow.
+// Никакого отдельного реестра занятости.
+function placeChildrenOfFamiliesInRow(row, familiesOfThisRow, placedPositions, IDX) {
+  const childRow = row + 1;
+  const y = childRow * LEVEL_H;
+
+  function numKey(id) {
+    if (!id) return Infinity;
+    const m = String(id).match(/\d+/);
+    return m ? parseInt(m[0], 10) : Infinity;
+  }
+  function familyNumKey(famId) {
+    const fam = IDX.families[famId];
+    return numKey(fam.husband || fam.wife || (fam.children && fam.children[0]) || famId);
+  }
+
+  const tasks = []; // {famId, x, width, kids, anchorNull}
+
+  for (const famId of familiesOfThisRow) {
+    const fam = IDX.families[famId];
+    const h = fam.husband || null;
+    const w = fam.wife || null;
+    const kids = (fam.children || []).filter(cid => IDX.nodes[cid]);
+    if (!kids.length) continue; // у семьи нет детей — размещать нечего
+
+    const hPos = h ? placedPositions[h] : null;
+    const wPos = w ? placedPositions[w] : null;
+
+    let anchorX = null;
+    let anchorNull = false;
+
+    if (h && w) {
+      // оба родителя известны — нужен хотя бы один размещённый, иначе
+      // пропускаем эту семью в этом проходе (её очередь ещё не пришла)
+      if (!hPos && !wPos) continue;
+      anchorX = (hPos && wPos)
+        ? (hPos.x + CW / 2 + wPos.x + CW / 2) / 2
+        : (hPos || wPos).x + CW / 2;
+    } else if (h || w) {
+      // один известный родитель — берём его позицию, если он уже размещён
+      const soloPos = hPos || wPos;
+      if (!soloPos) continue; // единственный известный родитель ещё не размещён — пропускаем
+      anchorX = soloPos.x + CW / 2;
+    } else {
+      // husband=null И wife=null — блок детей сам себе якорь
+      anchorNull = true;
+    }
+
+    // Только 1 уровень вперёд: ширина блока = число детей этой семьи,
+    // БЕЗ рекурсии на footprint внуков (childFootprint-стиль, но урезанный
+    // до одного уровня по прямому указанию задания).
+    const sortedKids = kids.slice().sort((a, b) => numKey(a) - numKey(b));
+    const width = sortedKids.length * CW + (sortedKids.length - 1) * SIBLING_GAP;
+
+    tasks.push({
+      famId,
+      anchorNull,
+      x: anchorNull ? null : (anchorX - width / 2),
+      width,
+      kids: sortedKids
+    });
+  }
+
+  // ── безродительские блоки — desired x через курсор, тот же наивный
+  // приём, что newPairCursor в placeFamiliesInRow (начинается с 0, финальная
+  // сортировка+развод коллизий сама расставит их относительно остальных) ──
+  const selfAnchored = tasks.filter(t => t.anchorNull)
+    .sort((a, b) => familyNumKey(a.famId) - familyNumKey(b.famId));
+  let selfCursor = 0;
+  for (const pos of Object.values(placedPositions)) {
+    if (pos.y === y) selfCursor = Math.max(selfCursor, pos.x + CW + SIBLING_GAP);
+  }
+  for (const t of selfAnchored) {
+    t.x = selfCursor;
+    selfCursor += t.width + SIBLING_GAP;
+  }
+
+  // ── единый проход слева направо: сортировка по x, prevRight/SIBLING_GAP развод ──
+  tasks.sort((a, b) => a.x - b.x);
+  let prevRight = -Infinity;
+  for (const task of tasks) {
+    let finalStart = task.x;
+    if (finalStart < prevRight + SIBLING_GAP) finalStart = prevRight + SIBLING_GAP;
+    let cx = finalStart;
+    for (const cid of task.kids) {
+      // Ребёнок мог уже оказаться размещённым (напр. если тем же вызовом
+      // ранее его "занял" другой блок из-за дублирующейся ссылки в данных) —
+      // не перезаписываем, но остальных детей того же блока это не
+      // затрагивает: курсор блока идёт дальше как обычно.
+      if (!placedPositions[cid]) {
+        placedPositions[cid] = { x: cx, y };
+      }
+      cx += CW + SIBLING_GAP;
+    }
+    prevRight = finalStart + task.width;
+  }
+}
+
+// ── layoutComponentV3 ─────────────────────────────────────────────────────
+// Раскладывает ОДНУ компоненту связности целиком: супруги (placeFamiliesInRow)
+// + дети (placeChildrenOfFamiliesInRow), обрабатывая row по возрастанию.
+// Отбор relevantFamilies и группировка familiesByRow — та же логика, что
+// уже проверена в tree-print-layout2.js layoutComponent (для совместимости
+// сигнатуры и поведения на семьях с одним/без родителей).
+// Возвращает { positions, width, maxX } — та же форма, что старый layoutComponent.
+function layoutComponentV3(IDX, componentPersonIds, rows, startX) {
+  const componentSet = new Set(componentPersonIds);
+  const placedPositions = {};
+
+  // ── 1. Отбор семей, относящихся к этой компоненте (как в layoutComponent) ──
+  const relevantFamilies = [];
+  for (const [famId, fam] of Object.entries(IDX.families || {})) {
+    const h = fam.husband || null;
+    const w = fam.wife || null;
+    const hInComp = h && componentSet.has(h);
+    const wInComp = w && componentSet.has(w);
+    const noParents = !h && !w;
+    const hasChildInComp = (fam.children || []).some(cid => componentSet.has(cid));
+    if (hInComp || wInComp || (noParents && hasChildInComp)) {
+      relevantFamilies.push(famId);
+    }
+  }
+
+  // ── 2. Группировка семей по row родителя (как в layoutComponent) ──
+  const familiesByRow = new Map();
+  for (const famId of relevantFamilies) {
+    const fam = IDX.families[famId];
+    let row;
+    if (fam.husband && rows[fam.husband] !== undefined) row = rows[fam.husband];
+    else if (fam.wife && rows[fam.wife] !== undefined) row = rows[fam.wife];
+    else if (fam.children && fam.children.length && rows[fam.children[0]] !== undefined) {
+      row = rows[fam.children[0]] - 1;
+    } else {
+      console.warn('[layoutComponentV3] Пропущена семья без определяемого row:', famId);
+      continue;
+    }
+    if (!familiesByRow.has(row)) familiesByRow.set(row, []);
+    familiesByRow.get(row).push(famId);
+  }
+
+  const sortedRows = [...familiesByRow.keys()].sort((a, b) => a - b);
+
+  // ── 3. Обработка по row: сначала супруги, потом их дети ──
+  for (const row of sortedRows) {
+    const famIds = familiesByRow.get(row);
+    placeFamiliesInRow(row, famIds, placedPositions, IDX);
+    placeChildrenOfFamiliesInRow(row, famIds, placedPositions, IDX);
+  }
+
+  // ── 4. Доразмещение персон компоненты, оставшихся без позиции
+  //    (изолированные внутри компоненты — напр. без релевантной семьи) ──
+  function numKey(id) { const m = id && String(id).match(/\d+/); return m ? parseInt(m[0], 10) : Infinity; }
+  const leftoverIds = componentPersonIds
+    .filter(id => !placedPositions[id])
+    .sort((a, b) => numKey(a) - numKey(b));
+  for (const id of leftoverIds) {
+    const row = (rows[id] !== undefined) ? rows[id] : (sortedRows.length ? sortedRows[sortedRows.length - 1] : 0);
+    const y = row * LEVEL_H;
+    let x = 0;
+    for (const pos of Object.values(placedPositions)) {
+      if (pos.y === y) x = Math.max(x, pos.x + CW + SIBLING_GAP);
+    }
+    placedPositions[id] = { x, y };
+  }
+
+  const allX = Object.values(placedPositions).map(p => p.x);
+  const maxX = allX.length ? Math.max(...allX) + CW : startX;
+  const width = maxX - startX;
+
+  return { positions: placedPositions, width, maxX };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CW, CH, COUPLE_GAP, SIBLING_GAP, LEVEL_H, placeCouple, placeFamiliesInRow, findConnectedComponents, assignRows };
+  module.exports = {
+    CW, CH, COUPLE_GAP, SIBLING_GAP, LEVEL_H,
+    placeCouple, placeFamiliesInRow, placeChildrenOfFamiliesInRow, layoutComponentV3,
+    findConnectedComponents, assignRows
+  };
 }
 
 // ── тестовый блок ──────────────────────────────────────────────────────
@@ -216,89 +410,84 @@ if (typeof require !== 'undefined' && require.main === module) {
 
   const rows = assignRows(IDX);
   const components = findConnectedComponents(IDX);
-  const biggest = components.sort((a, b) => b.length - a.length)[0];
-  const componentSet = new Set(biggest);
+  const sortedBySize = [...components].sort((a, b) => b.length - a.length);
 
-  // ── собрать все 35 реальных супружеских пар (husband И wife оба заданы)
-  // этой компоненты, сгруппировать по row семьи ──
-  // row семьи: rows[husband], если определён, иначе rows[wife] (тот же
-  // приоритет, что уже используется в tree-print-layout2.js familiesByRow).
-  const familiesOfComponent = [];
-  for (const [famId, fam] of Object.entries(IDX.families)) {
-    const h = fam.husband, w = fam.wife;
-    if (!h || !w) continue;
-    if (!componentSet.has(h) || !componentSet.has(w)) continue;
-    familiesOfComponent.push(famId);
-  }
+  function runComponentTest(component, label) {
+    console.log('');
+    console.log('══════════════════════════════════════════════════════════');
+    console.log('=== layoutComponentV3: ' + label + ' (' + component.length + ' персон) ===');
+    console.log('══════════════════════════════════════════════════════════');
 
-  const familiesByRow = new Map();
-  for (const famId of familiesOfComponent) {
-    const fam = IDX.families[famId];
-    const row = (rows[fam.husband] !== undefined) ? rows[fam.husband] : rows[fam.wife];
-    if (row === undefined) { console.warn('[test] Пропущена семья без row:', famId); continue; }
-    if (!familiesByRow.has(row)) familiesByRow.set(row, []);
-    familiesByRow.get(row).push(famId);
-  }
+    const result = layoutComponentV3(IDX, component, rows, 0);
+    const placedIds = Object.keys(result.positions);
+    console.log('Персон получили позиции:', placedIds.length, '(цель: ' + component.length + ' из ' + component.length + ')');
 
-  const sortedRows = [...familiesByRow.keys()].sort((a, b) => a - b);
-
-  console.log('=== placeFamiliesInRow: тест на 35 супружеских парах самой большой компоненты ===');
-  console.log('Всего пар (husband+wife оба в компоненте):', familiesOfComponent.length);
-  console.log('Задействовано row:', sortedRows.join(', '));
-
-  const placedPositions = {};
-  for (const row of sortedRows) {
-    placeFamiliesInRow(row, familiesByRow.get(row), placedPositions, IDX);
-  }
-
-  const placedCount = Object.keys(placedPositions).length;
-  console.log('');
-  console.log('Персон получили позиции:', placedCount);
-
-  // дубли координат
-  const byCoord = new Map();
-  for (const [id, pos] of Object.entries(placedPositions)) {
-    const key = pos.x + ',' + pos.y;
-    if (!byCoord.has(key)) byCoord.set(key, []);
-    byCoord.get(key).push(id);
-  }
-  const dupCoords = [...byCoord.entries()].filter(([, ids]) => ids.length > 1);
-  console.log('Дублей координат:', dupCoords.length);
-  dupCoords.forEach(([key, ids]) => console.log('  ' + key + ' -> ' + ids.join(', ')));
-
-  // все 35 пар: разрыв
-  console.log('');
-  console.log('=== Все пары: муж, жена, разрыв (x_жены - x_мужа - CW) ===');
-  const gapResults = [];
-  for (const famId of familiesOfComponent) {
-    const fam = IDX.families[famId];
-    const hp = placedPositions[fam.husband];
-    const wp = placedPositions[fam.wife];
-    if (!hp || !wp) { console.log('  ' + famId + ': ' + fam.husband + '/' + fam.wife + ' — НЕ размещены'); continue; }
-    const gap = (hp.y === wp.y) ? (wp.x - hp.x - CW) : null; // разные row — разрыв не определён
-    gapResults.push({ famId, h: fam.husband, w: fam.wife, gap, sameRow: hp.y === wp.y });
-  }
-  gapResults.forEach(g => {
-    console.log('  ' + g.famId + ': ' + g.h + ' ↔ ' + g.w + '  gap=' + (g.sameRow ? g.gap.toFixed(0) : 'РАЗНЫЕ ROW'));
-  });
-
-  const withGap = gapResults.filter(g => g.sameRow);
-  const suspicious = withGap.filter(g => Math.abs(g.gap) > 300);
-  console.log('');
-  console.log('Пар с разрывом > 300 единиц:', suspicious.length, '(цель: 0)');
-  suspicious.forEach(g => console.log('  ' + g.famId + ': ' + g.h + '↔' + g.w + ' gap=' + g.gap.toFixed(0)));
-
-  // отдельно P246
-  console.log('');
-  console.log('=== P246: оба брака (F74, F77) ===');
-  const p246 = placedPositions.P246;
-  console.log('P246: x=' + (p246 ? p246.x.toFixed(0) : 'не размещён'));
-  ['P247', 'P254'].forEach(id => {
-    const p = placedPositions[id];
-    if (p && p246) {
-      console.log('  ' + id + ': x=' + p.x.toFixed(0) + ', разрыв от P246=' + (p.x - p246.x - CW).toFixed(0));
-    } else {
-      console.log('  ' + id + ': не размещён или P246 не размещён');
+    // дубли координат
+    const byCoord = new Map();
+    for (const [id, pos] of Object.entries(result.positions)) {
+      const key = pos.x + ',' + pos.y;
+      if (!byCoord.has(key)) byCoord.set(key, []);
+      byCoord.get(key).push(id);
     }
-  });
+    const dupCoords = [...byCoord.entries()].filter(([, ids]) => ids.length > 1);
+    console.log('Дублей координат:', dupCoords.length, '(цель: 0)');
+    dupCoords.forEach(([key, ids]) => console.log('  ' + key + ' -> ' + ids.join(', ')));
+
+    // все пары husband+wife одного row: разрыв
+    const componentSet = new Set(component);
+    const gaps = [];
+    for (const [famId, fam] of Object.entries(IDX.families)) {
+      const h = fam.husband, w = fam.wife;
+      if (!h || !w) continue;
+      if (!componentSet.has(h) || !componentSet.has(w)) continue;
+      const hp = result.positions[h], wp = result.positions[w];
+      if (!hp || !wp) { console.log('  ' + famId + ': ' + h + '/' + w + ' — НЕ размещены'); continue; }
+      if (hp.y !== wp.y) { gaps.push({ famId, h, w, gap: null, sameRow: false }); continue; }
+      gaps.push({ famId, h, w, gap: Math.abs(wp.x - hp.x) - CW, sameRow: true });
+    }
+    const sameRowGaps = gaps.filter(g => g.sameRow);
+    console.log('');
+    console.log('Пар husband+wife (обе в компоненте):', gaps.length, '— из них одного row:', sameRowGaps.length);
+    const gapCounts = new Map();
+    sameRowGaps.forEach(g => {
+      const key = g.gap.toFixed(0);
+      gapCounts.set(key, (gapCounts.get(key) || 0) + 1);
+    });
+    console.log('Распределение разрывов (gap → сколько пар):');
+    [...gapCounts.entries()].sort((a, b) => +a[0] - +b[0]).forEach(([gap, cnt]) => console.log('  gap=' + gap + ': ' + cnt + ' пар'));
+
+    const suspicious = sameRowGaps.filter(g => g.gap > 300).sort((a, b) => b.gap - a.gap);
+    console.log('Пар с разрывом > 300 единиц:', suspicious.length, '(цель: 0 или единицы с понятным объяснением)');
+    suspicious.forEach(g => console.log('  ' + g.famId + ': ' + g.h + '↔' + g.w + ' gap=' + g.gap.toFixed(0)));
+    const diffRow = gaps.filter(g => !g.sameRow);
+    if (diffRow.length) {
+      console.log('Пар husband+wife на РАЗНЫХ row (gap не определён):', diffRow.length);
+      diffRow.forEach(g => console.log('  ' + g.famId + ': ' + g.h + '↔' + g.w));
+    }
+
+    // P246 — оба брака (F74, F77) — только для компоненты, где он есть
+    if (componentSet.has('P246')) {
+      console.log('');
+      console.log('=== P246: оба брака (F74/F77 → P247, F77 → P254) ===');
+      const p246 = result.positions.P246;
+      console.log('P246: x=' + (p246 ? p246.x.toFixed(0) : 'не размещён'));
+      ['P247', 'P254'].forEach(id => {
+        const p = result.positions[id];
+        if (p && p246) {
+          console.log('  ' + id + ': x=' + p.x.toFixed(0) + ', y=' + p.y + ', разрыв от P246=' +
+            (p.y === p246.y ? (p.x - p246.x - CW).toFixed(0) : 'РАЗНЫЕ ROW'));
+        } else {
+          console.log('  ' + id + ': не размещён или P246 не размещён');
+        }
+      });
+    }
+
+    return { result, dupCoords, suspicious };
+  }
+
+  const biggest = sortedBySize[0];
+  const second = sortedBySize[1];
+
+  runComponentTest(biggest, 'самая большая компонента');
+  runComponentTest(second, 'вторая по размеру компонента');
 }
