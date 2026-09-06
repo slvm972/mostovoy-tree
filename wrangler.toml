@@ -8,7 +8,6 @@ id = "fc83f0c432a848f09698d09af25ba6f0"
 
 [vars]
 TREE_ACTIVE = "true"
-TREE_ACTIVE = "true"
 
 [[r2_buckets]]
 binding = "PHOTOS_BUCKET"
