@@ -43,6 +43,19 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
     }
 
+    // ── Subscription freeze check ────────────────────────
+    // If env.TREE_ACTIVE is explicitly set to 'false', block all API
+    // access except a polite status message. Used for the subscription
+    // support model: if payment lapses, support can freeze the tree
+    // without deleting any data — reactivating just flips this back.
+    if(env.TREE_ACTIVE === 'false') {
+      return json({
+        ok: false,
+        frozen: true,
+        error: 'Доступ к дереву временно приостановлен. Обратитесь в техподдержку для возобновления.'
+      }, 402); // 402 Payment Required — semantically appropriate
+    }
+
     // ── POST /api/login ──────────────────────────────
     // Body: { password }
     // Returns: { ok, role: 'guest'|'admin' }
