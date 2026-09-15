@@ -579,14 +579,14 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 <!-- ── PRINT PREVIEW ── -->
 <div id="print-overlay">
   <div id="print-box">
-    <h3>🖨 Печать генеалогического дерева</h3>
-    <p>Будет сформирован и скачан HTML-файл. Откройте его в браузере и нажмите <strong>Ctrl+P</strong> (или ⌘P на Mac) — выберите принтер или «Сохранить как PDF».</p>
+    <h3 data-i="print_title">🖨 Печать генеалогического дерева</h3>
+    <p data-i-html="print_desc">Будет сформирован и скачан HTML-файл. Откройте его в браузере и нажмите <strong>Ctrl+P</strong> (или ⌘P на Mac) — выберите принтер или «Сохранить как PDF».</p>
     <div class="print-opts">
-      <div class="print-opt active" data-fmt="A1L">A1 альбом</div>
-      <div class="print-opt" data-fmt="A0L">A0 альбом</div>
-      <div class="print-opt" data-fmt="A2L">A2 альбом</div>
+      <div class="print-opt active" data-fmt="A1L" data-i="print_opt_a1">A1 альбом</div>
+      <div class="print-opt" data-fmt="A0L" data-i="print_opt_a0">A0 альбом</div>
+      <div class="print-opt" data-fmt="A2L" data-i="print_opt_a2">A2 альбом</div>
     </div>
-    <p style="font-size:.72rem;color:#888;margin-top:6px">
+    <p style="font-size:.72rem;color:#888;margin-top:6px" data-i="print_note">
       A0/A1/A2 — это физический размер бумаги (A0 крупнее, A2 компактнее), а не качество картинки.
       Нужен широкоформатный принтер или плоттер (типография/копицентр).
       На обычном A4-принтере можно распечатать постер «плиткой» на несколько листов и склеить —
@@ -594,8 +594,8 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     </p>
     <p id="print-stats" style="font-size:.72rem;color:#888"></p>
     <div class="print-btns">
-      <button class="pbtn pbtn-cancel" id="print-cancel">Отмена</button>
-      <button class="pbtn pbtn-primary" id="print-go">⬇ Скачать для печати</button>
+      <button class="pbtn pbtn-cancel" id="print-cancel" data-i="btn_cancel">Отмена</button>
+      <button class="pbtn pbtn-primary" id="print-go" data-i="print_download">⬇ Скачать для печати</button>
     </div>
   </div>
 </div>
@@ -1491,6 +1491,13 @@ window.applyLang = function(lang){
   document.querySelectorAll('[data-i]').forEach(el => {
     const v = M[el.dataset.i];
     if(v !== undefined && v !== '') el.textContent = v;
+  });
+
+  // 1b. Elements needing inline HTML markup preserved (e.g. <strong>) —
+  // separate from [data-i] above, which uses textContent and would strip tags
+  document.querySelectorAll('[data-i-html]').forEach(el => {
+    const v = M[el.dataset.iHtml];
+    if(v !== undefined && v !== '') el.innerHTML = v;
   });
 
   // 2. Back button (has {n} placeholder)
@@ -2902,7 +2909,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
   lines.push('END:VCALENDAR');
 
   if(count === 0){
-    showToast('⚠ Нет дат рождения для экспорта', true);
+    showToast(t('calendar_no_dates'), true);
     return;
   }
 

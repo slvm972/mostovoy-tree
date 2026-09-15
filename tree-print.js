@@ -34,13 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
                : '🔒 Войдите чтобы распечатать дерево', true);
       return;
     }
-    if(!IDX){ showToast('Данные не загружены', true); return; }
+    if(!IDX){ showToast(t('print_no_data'), true); return; }
     const n = Object.keys(IDX.nodes).length;
     const f = Object.keys(IDX.families).length;
     const stats = document.getElementById('print-stats');
     stats.style.color = '';
     stats.style.fontWeight = '';
-    stats.textContent = `В дереве: ${n} персон, ${f} семей`;
+    stats.textContent = t('print_stats').replace('{n}', n).replace('{f}', f);
     document.getElementById('print-overlay').classList.add('open');
   });
   document.getElementById('print-cancel').addEventListener('click', () => {
@@ -554,6 +554,6 @@ window.onload = resetZoom;
   const info = document.getElementById('print-stats');
   info.style.color = '#C09828';
   info.style.fontWeight = '600';
-  info.textContent = '✓ Файл скачан. Откройте его в браузере → Ctrl+P → Печать / PDF';
+  info.textContent = t('print_done');
   document.getElementById('print-overlay').classList.add('open');
 }

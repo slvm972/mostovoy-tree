@@ -96,7 +96,16 @@ const UI = {
     logout_confirm_guest:'Вы вошли как гость. Выйти?',
     tooltip_print:'Печать A1',
     tooltip_contacts:'Скачать контакты',
-    tooltip_calendar:'Скачать календарь дней рождения'
+    tooltip_calendar:'Скачать календарь дней рождения',
+    print_title:'🖨 Печать генеалогического дерева',
+    print_desc:'Будет сформирован и скачан HTML-файл. Откройте его в браузере и нажмите <strong>Ctrl+P</strong> (или ⌘P на Mac) — выберите принтер или «Сохранить как PDF».',
+    print_note:'A0/A1/A2 — это физический размер бумаги (A0 крупнее, A2 компактнее), а не качество картинки. Нужен широкоформатный принтер или плоттер (типография/копицентр). На обычном A4-принтере можно распечатать постер «плиткой» на несколько листов и склеить — в диалоге печати или в Adobe Acrobat это называется «Poster» / «Tile» / «Плакат».',
+    print_opt_a0:'A0 альбом', print_opt_a1:'A1 альбом', print_opt_a2:'A2 альбом',
+    print_download:'⬇ Скачать для печати',
+    print_stats:'В дереве: {n} персон, {f} семей',
+    print_no_data:'Данные не загружены',
+    print_done:'✓ Файл скачан. Откройте его в браузере → Ctrl+P → Печать / PDF',
+    calendar_no_dates:'⚠ Нет дат рождения для экспорта'
   },
   en: {
     back:'◀ Back', back_n:'◀ Back ({n})',
@@ -192,7 +201,16 @@ const UI = {
     logout_confirm_guest:'You are logged in as guest. Log out?',
     tooltip_print:'Print A1',
     tooltip_contacts:'Download contacts',
-    tooltip_calendar:'Download birthday calendar'
+    tooltip_calendar:'Download birthday calendar',
+    print_title:'🖨 Print the family tree',
+    print_desc:'An HTML file will be generated and downloaded. Open it in your browser and press <strong>Ctrl+P</strong> (or ⌘P on Mac) — choose a printer or "Save as PDF".',
+    print_note:'A0/A1/A2 is the physical paper size (A0 largest, A2 most compact), not image quality. You need a wide-format printer or plotter (print shop). On a regular A4 printer you can print a tiled poster across several sheets and glue them together — in the print dialog or Adobe Acrobat this is called "Poster" / "Tile".',
+    print_opt_a0:'A0 poster', print_opt_a1:'A1 poster', print_opt_a2:'A2 poster',
+    print_download:'⬇ Download for printing',
+    print_stats:'Tree contains: {n} people, {f} families',
+    print_no_data:'Data not loaded',
+    print_done:'✓ File downloaded. Open it in your browser → Ctrl+P → Print / PDF',
+    calendar_no_dates:'⚠ No birthdays to export'
   },
   he: {
     back:'◀ חזרה', back_n:'◀ חזרה ({n})',
@@ -288,7 +306,16 @@ const UI = {
     logout_confirm_guest:'נכנסת כאורח. להתנתק?',
     tooltip_print:'הדפסה A1',
     tooltip_contacts:'הורדת אנשי קשר',
-    tooltip_calendar:'הורדת לוח שנת ימי הולדת'
+    tooltip_calendar:'הורדת לוח שנת ימי הולדת',
+    print_title:'🖨 הדפסת עץ המשפחה',
+    print_desc:'ייווצר ויורד קובץ HTML. פתחו אותו בדפדפן ולחצו <strong>Ctrl+P</strong> (או ⌘P ב-Mac) — בחרו מדפסת או "שמור כ-PDF".',
+    print_note:'A0/A1/A2 הם גדלי נייר פיזיים (A0 הגדול ביותר, A2 הקומפקטי ביותר), לא איכות התמונה. דרושה מדפסת פורמט רחב או פלוטר (בית דפוס). במדפסת A4 רגילה ניתן להדפיס פוסטר מרוצף על כמה דפים ולהדביק — בתפריט ההדפסה או ב-Adobe Acrobat זה נקרא "Poster" / "Tile".',
+    print_opt_a0:'פוסטר A0', print_opt_a1:'פוסטר A1', print_opt_a2:'פוסטר A2',
+    print_download:'⬇ הורדה להדפסה',
+    print_stats:'בעץ: {n} אנשים, {f} משפחות',
+    print_no_data:'הנתונים לא נטענו',
+    print_done:'✓ הקובץ הורד. פתחו אותו בדפדפן ← Ctrl+P ← הדפסה / PDF',
+    calendar_no_dates:'⚠ אין תאריכי לידה לייצוא'
   }
 };
 
