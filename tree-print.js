@@ -292,7 +292,18 @@ function buildAndPrint() {
   // ── 4. Build SVG ───────────────────────────────────────
   const SEX_FILL = { M:'#1E4870', F:'#701838' };
   const today = new Date().toLocaleDateString('ru-RU');
-  const title = '🌳 Мостовые · Журахинские · Лейцис';
+  // Заголовок постера с названием семьи. НЕ переиспользуем t('tree_title') —
+  // этот ключ в словаре содержит ОБЩУЮ подпись «Семейное дерево»/«Family Tree»,
+  // а не конкретную фамильную триаду; переиспользование стёрло бы название
+  // семьи с постера. Транслитерация EN/HE согласована с NAMES (tree-names.js):
+  // Мостовой→Mostovoy/מוסטובוי, Журахинский→Zhurakhinsky/ז'ורחינסקי, Лейцис→Leytsis/לייצס.
+  const title = currentLang === 'he' ? '🌳 מוסטובוי · ז\'ורחינסקי · לייצס'
+              : currentLang === 'en' ? '🌳 Mostovoy · Zhurakhinsky · Leytsis'
+              : '🌳 Мостовые · Журахинские · Лейцис';
+  // Подпись «N персон» под заголовком постера (п.4) — заморожена на момент клика
+  const personsLabel = currentLang === 'he' ? 'אנשים'
+                      : currentLang === 'en' ? 'people'
+                      : 'персон';
 
   let edges = '';
   const parentStroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
@@ -431,14 +442,30 @@ function buildAndPrint() {
 
   const svgBody = `
   <text x="${printW/2}" y="30" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#28180A" text-anchor="middle">${title}</text>
-  <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} персон</text>
+  <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} ${personsLabel}</text>
   ${edges}
   ${cardsHTML}`;
 
   // ── 5. Build full HTML and download ───────────────────
+  // Скачиваемый файл — самостоятельный документ вне SPA (не подключён к
+  // applyLang()/UI-словарю), поэтому весь его текст замораживаем на
+  // currentLang ЗДЕСЬ, в момент генерации, обычными JS-переменными.
+  const docTitleLabel = currentLang === 'he' ? 'עץ משפחה'
+                       : currentLang === 'en' ? 'Family tree'
+                       : 'Семейное дерево';
+  const fitLabel = currentLang === 'he' ? 'התאמה'
+                  : currentLang === 'en' ? 'Fit'
+                  : 'Вписать';
+  const printPdfLabel = currentLang === 'he' ? '🖨 הדפסה / PDF'
+                       : currentLang === 'en' ? '🖨 Print / PDF'
+                       : '🖨 Печать / PDF';
+  const hintLabel = currentLang === 'he' ? 'גלגלת העכבר — זום · גרירה — הזזה'
+                   : currentLang === 'en' ? 'Mouse wheel — zoom · Drag — pan'
+                   : 'Колесо мыши — масштаб · Тяни — перемещение';
+
   const fullHTML = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
-<title>Семейное дерево — ${pageSize}</title>
+<title>${docTitleLabel} — ${pageSize}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#FAF7F0;font-family:Segoe UI,Arial,sans-serif}
@@ -461,12 +488,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#FAF7F0;font-family:
 </style></head>
 <body>
 <div id="toolbar">
-  🌳 Семейное дерево — ${pageSize}
-  <button onclick="resetZoom()">⊡ Вписать</button>
+  🌳 ${docTitleLabel} — ${pageSize}
+  <button onclick="resetZoom()">⊡ ${fitLabel}</button>
   <button onclick="zoomIn()">＋</button>
   <button onclick="zoomOut()">－</button>
-  <button onclick="window.print()" style="background:rgba(237,216,144,.3);font-weight:600">🖨 Печать / PDF</button>
-  <span id="hint">Колесо мыши — масштаб · Тяни — перемещение</span>
+  <button onclick="window.print()" style="background:rgba(237,216,144,.3);font-weight:600">${printPdfLabel}</button>
+  <span id="hint">${hintLabel}</span>
 </div>
 <div id="canvas">
   <div id="svg-wrap">
