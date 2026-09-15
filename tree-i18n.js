@@ -93,7 +93,10 @@ const UI = {
     login_err_wrong:'Неверный пароль',
     login_err_prefix:'Ошибка: ',
     logout_confirm_admin:'Вы вошли как администратор. Выйти?',
-    logout_confirm_guest:'Вы вошли как гость. Выйти?'
+    logout_confirm_guest:'Вы вошли как гость. Выйти?',
+    tooltip_print:'Печать A1',
+    tooltip_contacts:'Скачать контакты',
+    tooltip_calendar:'Скачать календарь дней рождения'
   },
   en: {
     back:'◀ Back', back_n:'◀ Back ({n})',
@@ -186,7 +189,10 @@ const UI = {
     login_err_wrong:'Incorrect password',
     login_err_prefix:'Error: ',
     logout_confirm_admin:'You are logged in as admin. Log out?',
-    logout_confirm_guest:'You are logged in as guest. Log out?'
+    logout_confirm_guest:'You are logged in as guest. Log out?',
+    tooltip_print:'Print A1',
+    tooltip_contacts:'Download contacts',
+    tooltip_calendar:'Download birthday calendar'
   },
   he: {
     back:'◀ חזרה', back_n:'◀ חזרה ({n})',
@@ -279,7 +285,10 @@ const UI = {
     login_err_wrong:'סיסמה שגויה',
     login_err_prefix:'שגיאה: ',
     logout_confirm_admin:'נכנסת כמנהל. להתנתק?',
-    logout_confirm_guest:'נכנסת כאורח. להתנתק?'
+    logout_confirm_guest:'נכנסת כאורח. להתנתק?',
+    tooltip_print:'הדפסה A1',
+    tooltip_contacts:'הורדת אנשי קשר',
+    tooltip_calendar:'הורדת לוח שנת ימי הולדת'
   }
 };
 

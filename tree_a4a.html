@@ -288,10 +288,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
                 width:160px;outline:none">
   <button class="btn" id="btn-search-go" style="padding:5px 10px" title="Перейти">→</button>
   <button class="btn" id="btn-edit" style="display:none;margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
-  <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1">🖨</button>
-  <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты">📇</button>
+  <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1" data-title="tooltip_print">🖨</button>
+  <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты" data-title="tooltip_contacts">📇</button>
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
-  <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения">📅</button>
+  <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Войти">🔑</button>
   <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика">⚙</button>
   <button class="btn" id="btn-help" style="padding:4px 8px;opacity:.7">?</button>
@@ -1505,6 +1505,12 @@ window.applyLang = function(lang){
   // 4. Placeholders with data-ph
   document.querySelectorAll('[data-ph]').forEach(el => {
     if(M[el.dataset.ph]) el.placeholder = M[el.dataset.ph];
+  });
+
+  // 4b. Tooltips (title attribute) with data-title
+  document.querySelectorAll('[data-title]').forEach(el => {
+    const v = M[el.dataset.title];
+    if(v !== undefined && v !== '') el.title = v;
   });
 
   // 5. All select options with data-i (covers sex, rel-type, ff-sex)
