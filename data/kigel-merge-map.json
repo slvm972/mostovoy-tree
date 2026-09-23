@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "source": {
+    "file": "Родословная Кигель, Feldberg family.html",
+    "basis": "User-confirmed identity of the Kulnitsky line"
+  },
+  "confirmed_person_matches": [
+    {
+      "legacy_name": "Мойше Кульницкий",
+      "legacy_birth": null,
+      "legacy_death": null,
+      "current_id": "P150",
+      "current_name": "Миша Кульницкий",
+      "current_birth": "1915",
+      "current_death": "1990",
+      "status": "confirmed_by_user"
+    },
+    {
+      "legacy_name": "Ива Кульницкая",
+      "legacy_birth": null,
+      "legacy_death": null,
+      "current_id": "P176",
+      "current_name": "Ива",
+      "current_birth": "1924",
+      "current_death": "",
+      "status": "confirmed_by_user"
+    },
+    {
+      "legacy_name": "Леонид Кульницкий",
+      "legacy_birth": null,
+      "legacy_death": null,
+      "current_id": "P151",
+      "current_name": "Леня Кульницкий",
+      "current_birth": "1947",
+      "current_death": "",
+      "status": "confirmed_by_user"
+    },
+    {
+      "legacy_name": "Светлана Кульницкая",
+      "legacy_birth": null,
+      "legacy_death": null,
+      "current_id": "P308",
+      "current_name": "Света",
+      "current_birth": "",
+      "current_death": "",
+      "status": "confirmed_by_user"
+    },
+    {
+      "legacy_name": "Мария Кульницкая",
+      "legacy_birth": "unknown",
+      "legacy_death": "unknown",
+      "current_id": "P153",
+      "current_name": "Маша Кульницкая",
+      "current_birth": "1981",
+      "current_death": "",
+      "status": "confirmed_by_user"
+    },
+    {
+      "legacy_name": "Александра Кульницкая",
+      "legacy_birth": "unknown",
+      "legacy_death": "unknown",
+      "current_id": "P309",
+      "current_name": "Саша Кульницкая",
+      "current_birth": "1970",
+      "current_death": "",
+      "status": "confirmed_by_user"
+    }
+  ],
+  "confirmed_family_matches": [
+    {
+      "legacy_parents": ["Мойше Кульницкий", "Ива Кульницкая"],
+      "current_family_id": "F39",
+      "current_parents": ["P150", "P176"],
+      "legacy_children_mapped": ["Леонид Кульницкий"],
+      "current_children": ["P151"],
+      "status": "confirmed_by_structure_and_user"
+    },
+    {
+      "legacy_parents": ["Леонид Кульницкий", "Светлана Кульницкая"],
+      "current_family_id": "F40",
+      "current_parents": ["P151", "P308"],
+      "legacy_children_mapped": ["Мария Кульницкая", "Александра Кульницкая"],
+      "current_children": ["P153", "P309"],
+      "status": "confirmed_by_structure_and_user"
+    }
+  ],
+  "next_merge_scope": {
+    "action": "Use the confirmed IDs above as anchors. Add the remaining people from the legacy Kulnitsky branch as new people, never as duplicate matches unless separately confirmed.",
+    "legacy_branch_people": [
+      "Иона Кигель (Кульницкий)",
+      "Тэма Кульницкая",
+      "Маня Кульницкая",
+      "Иосиф Кандрор",
+      "Хаим Кульницкий",
+      "Тамара Кульницкая",
+      "Лев Кульницкий",
+      "? Кульницкая",
+      "Елена Кульницкая",
+      "Александр (Шика) Кульницкий"
+    ]
+  }
+}
