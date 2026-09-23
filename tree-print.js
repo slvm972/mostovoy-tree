@@ -68,21 +68,6 @@ function buildAndPrint() {
 
   const minGen = Math.min(...Object.values(IDX.nodes).map(n => n.gen ?? 0));
 
-  // BFS: process families level by level
-  // Level-by-level: collect families per generation level
-  const famsByLevel = {};  // level → [famId]
-  for (const [famId, fam] of Object.entries(IDX.families)) {
-    // Determine level from husband or wife gen
-    let refId = fam.husband || fam.wife;
-    if (!refId && fam.children.length > 0) refId = fam.children[0];
-    if (!refId) continue;
-    const g = IDX.nodes[refId]?.gen ?? 0;
-    if (!famsByLevel[g]) famsByLevel[g] = [];
-    famsByLevel[g].push(famId);
-  }
-
-  const levels = Object.keys(famsByLevel).map(Number).sort((a,b)=>a-b);
-
   // Pass 1: count children per family to allocate horizontal space
   function subtreeWidth(famId, level) {
     const fam = IDX.families[famId];
@@ -103,8 +88,24 @@ function buildAndPrint() {
   }
 
   // Pass 2: layout top-down
-  // Find root families (gen = minGen)
-  const rootFams = famsByLevel[minGen] || [];
+  // Root families: a family is a genuine "top of branch" if at least one
+  // spouse is not a child in ANY known family (a true top-level ancestor).
+  // The previous heuristic (`famsByLevel[minGen]`) assumed the whole tree
+  // shares one root at the single globally-lowest `gen` value. In this
+  // dataset exactly one person carries gen:-1 (an unrelated branch), so
+  // that heuristic discovered only 1 root family and left 172 of 239
+  // people (72%) — including entire independent ancestor lines — out of
+  // the recursive layout entirely, dumping them into the flat "unplaced"
+  // fallback below with no family-aware positioning (E2-fix, see audit).
+  // Verified against tree-fallback.json: old heuristic → 67/239 placed;
+  // this one → 220/239 placed, remaining 19 confirmed as genuinely
+  // isolated persons (no parents/spouse/children in the data at all).
+  const rootFams = [];
+  for (const [famId, fam] of Object.entries(IDX.families)) {
+    const spouses = [fam.husband, fam.wife].filter(Boolean);
+    if (!spouses.length) continue; // parentless sibling-only families are handled as edges, not as layout roots
+    if (spouses.some(id => !IDX.child_of[id])) rootFams.push(famId);
+  }
   let curX = 0;
   const famPos = {};  // famId → centerX
 
@@ -306,6 +307,15 @@ function buildAndPrint() {
   let edges = '';
   const parentStroke = 'stroke="#C09828" stroke-width="1.5" opacity="0.6"';
   const spouseStroke = 'stroke="#C09828" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"';
+  // Отдельный стиль для скобки "сиблинги без известных родителей" (семьи
+  // с husband=null И wife=null) — раньше рисовалась тем же parentStroke,
+  // что и линия родитель→ребёнок, из-за чего пара, где у одного из
+  // супругов есть такая скобка к его/её реальному брату/сестре, визуально
+  // читалась как "у супругов общий родитель" (см. кейс P41+P70: скобка
+  // Баси к сестре Хане рядом с линией отца Якова создавала иллюзию
+  // родства между супругами). Голубой цвет + иной пунктир — чтобы этот
+  // тип связи нельзя было спутать с происхождением.
+  const siblingStroke = 'stroke="#5A8AA8" stroke-width="1.3" stroke-dasharray="6,3" opacity="0.6"';
 
   // ── Связь супругов (сердце) — рисуется НЕЗАВИСИМО от наличия детей.
   // Раньше сердце пропадало у бездетных пар, т.к. этот код лежал внутри
@@ -340,9 +350,9 @@ function buildAndPrint() {
         const minCX = Math.min(...cxs), maxCX = Math.max(...cxs);
         const childTop = finalPos[visCh[0]].top;
         const bracketY = childTop - gapUsed / 2;
-        edges += `<line x1="${minCX}" y1="${bracketY}" x2="${maxCX}" y2="${bracketY}" ${parentStroke}/>`;
+        edges += `<line x1="${minCX}" y1="${bracketY}" x2="${maxCX}" y2="${bracketY}" ${siblingStroke}/>`;
         for (const cid of visCh) {
-          edges += `<line x1="${finalPos[cid].x}" y1="${bracketY}" x2="${finalPos[cid].x}" y2="${finalPos[cid].top}" ${parentStroke}/>`;
+          edges += `<line x1="${finalPos[cid].x}" y1="${bracketY}" x2="${finalPos[cid].x}" y2="${finalPos[cid].top}" ${siblingStroke}/>`;
         }
       }
       continue;
