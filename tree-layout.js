@@ -73,7 +73,7 @@ function placeCouple(husband, wife, anchorX, y, role){
 function getCenteredLayout(focalId){
   const nmap = IDX.nodes;
   const rel  = IDX.relatives[focalId];
-  const gps  = IDX.grandparents[focalId] || [];
+  // NB: IDX.grandparents намеренно не читаем — см. комментарий у LEVEL −2 ниже.
   const fams = IDX.families;
   if(!rel) {
     console.warn('[getCenteredLayout] IDX.relatives[' + focalId + '] отсутствует — '
@@ -160,14 +160,20 @@ function getCenteredLayout(focalId){
   for(const pn of parentNodes) parentCX[pn.id] = pn.x + CW/2;
 
   // ── LEVEL −2: grandparents ────────────────────────────
-  // For each grandparent family, centre above the parent who is their child
-  // First compute raw positions
+  // Строим НАПРЯМУЮ из IDX.relatives (его поддерживают свежим все
+  // family-эндпоинты при любой правке), а НЕ из IDX.grandparents —
+  // тот кэш пересчитывается только вручную (POST /api/rebuild-cache,
+  // никем не вызывается автоматически) и протухает при любом
+  // создании/переносе семьи выше по цепочке предков. Раньше это
+  // приводило к тихому исчезновению дедов/бабок у части персон.
   const gpRaw = []; // [{nodes: [{id,x,y,role}], left, right}]
-  for(const gp of gps){
-    const parId = rel.parents.find(p => IDX.child_of[p] === gp.family);
-    if(!parId || !(parId in parentCX)) continue;
+  for(const parId of rel.parents){
+    if(!(parId in parentCX)) continue;
+    const parRel = IDX.relatives[parId];
+    if(!parRel || !parRel.parents || !parRel.parents.length) continue;
+    const [gpHusband, gpWife] = parRel.parents;
     const anchor = parentCX[parId];
-    const gpNodes = placeCouple(gp.husband, gp.wife, anchor, -2*LEVEL_H, 'grandparent');
+    const gpNodes = placeCouple(gpHusband, gpWife, anchor, -2*LEVEL_H, 'grandparent');
     if(!gpNodes.length) continue; // both grandparents missing from nodes — nothing to draw
     gpRaw.push({
       nodes: gpNodes,
