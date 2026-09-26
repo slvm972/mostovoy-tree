@@ -642,7 +642,11 @@ export default {
 
       const p1 = body.parent1 || null;
       const p2 = body.parent2 || null;
-      if(!p1 && !p2) return err('Нужен хотя бы один родитель');
+      // Разрешаем семью без известных родителей только когда это группа
+      // из ≥2 уже существующих детей (братья/сёстры с неизвестными
+      // родителями) — иначе, как раньше, требуем хотя бы одного родителя.
+      const uniqueKnownChildren = new Set((body.children || []).filter(c => IDX.nodes[c]));
+      if(!p1 && !p2 && uniqueKnownChildren.size < 2) return err('Нужен хотя бы один родитель');
       if(p1 && !IDX.nodes[p1]) return err('Персона не найдена: ' + p1, 404);
       if(p2 && !IDX.nodes[p2]) return err('Персона не найдена: ' + p2, 404);
 
