@@ -490,6 +490,12 @@ svg{position:absolute;top:0;left:0;overflow:visible}
       <input id="ff-rel-he" type="text" placeholder="עברית" dir="rtl" style="font-size:.72rem">
     </div>
 
+    <label data-i="lbl_father" style="margin:10px 0 3px;display:block">Отец</label>
+    <input id="ff-father" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <label data-i="lbl_mother" style="margin:10px 0 3px;display:block">Мать</label>
+    <input id="ff-mother" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
+    <p style="font-size:.68rem;color:#7A5828;margin:2px 0 10px;line-height:1.4" data-i="hint_fix_parents">Оставьте пустым, чтобы сделать родителя неизвестным. Не трогайте поле, чтобы оставить как есть.</p>
+
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="fix_family" style="margin:10px 0 3px">Семейная связь (что изменить)</label>
       <button type="button" onclick="openMoveChildDialog()" title="Переместить в другую семью/брак" style="font-size:.62rem;padding:1px 6px;background:rgba(184,144,48,.12);border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828;flex-shrink:0;white-space:nowrap" data-i="btn_move_child">🔀 Переместить</button>
@@ -1595,7 +1601,7 @@ function openModal(prefillId, mode){
    'f-bio-text','f-bio-url',
    'f-date-note','f-father','f-mother',
    'ff-name','ff-name-en','ff-name-he','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
-   'ff-phone','ff-email','ff-social','ff-rel','ff-gen','ff-family','ff-other',
+   'ff-phone','ff-email','ff-social','ff-rel','ff-gen','ff-father','ff-mother','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
     const el = document.getElementById(fid);
     if(el) el.value = '';
@@ -1690,6 +1696,19 @@ function openModal(prefillId, mode){
     setVal('ff-phone',     n.phone);
     setVal('ff-email',     n.email);
     setVal('ff-social',    n.social);
+
+    // Отец/Мать не хранятся в IDX.nodes — берём из текущей family-записи
+    // ребёнка (IDX.child_of → IDX.families), а не из relatives (кэш).
+    const parentLabel = (pid) => {
+      if(!pid || !IDX.nodes[pid]) return '';
+      const py = IDX.nodes[pid].birth ? (IDX.nodes[pid].birth.match(/\d{4}/)||[''])[0] : '';
+      return pname(pid) + (py ? ' (' + py + ')' : '') + ' [' + pid + ']';
+    };
+    const prefillFamId = IDX.child_of[prefillId];
+    const prefillFam   = prefillFamId ? IDX.families[prefillFamId] : null;
+    setVal('ff-father', prefillFam ? parentLabel(prefillFam.husband) : '');
+    setVal('ff-mother', prefillFam ? parentLabel(prefillFam.wife)    : '');
+
     setVal('ff-rel',       trel(n.rel));
     setVal('ff-rel-en',    n.rel_en);
     setVal('ff-rel-he',    n.rel_he);
@@ -2210,6 +2229,33 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     const getV = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
 
+    // ── Отец/Мать: структурные поля, не часть IDX.nodes[id] ──────────
+    const origFamId   = origId ? IDX.child_of[origId] : null;
+    const origFam     = origFamId ? IDX.families[origFamId] : null;
+    const oldFatherId = origFam ? (origFam.husband || null) : null;
+    const oldMotherId = origFam ? (origFam.wife    || null) : null;
+
+    const parseParentField = (elId) => {
+      const el = document.getElementById(elId);
+      const val = el ? el.value.trim() : '';
+      if(!val) return null;
+      const m = val.match(/\[(P\d+)\]\s*$/);
+      if(m && IDX.nodes[m[1]]) return m[1];
+      const lower = val.toLowerCase();
+      const found = Object.entries(IDX.nodes).find(([, nn]) => (nn.name||'').toLowerCase() === lower);
+      return found ? found[0] : 'INVALID';
+    };
+    const newFatherId = parseParentField('ff-father');
+    const newMotherId = parseParentField('ff-mother');
+
+    if(newFatherId === 'INVALID' || newMotherId === 'INVALID'){
+      showToast(currentLang==='he' ? '⚠ אב/אם לא נמצאו — יש לבחור מרשימת ההשלמה'
+              : currentLang==='en' ? '⚠ Father/mother not found — please pick from the autocomplete list'
+              : '⚠ Отец/мать не найдены — выберите точно из автокомплита', true);
+      return;
+    }
+    const parentsChanged = (newFatherId !== oldFatherId) || (newMotherId !== oldMotherId);
+
     const fields = [
       { key: 'name',     label: t('fix_name'),       val: getV('ff-name'),     orig: orig.name || '' },
       { key: 'name_en', label: t('lbl_name') + ' (EN)', val: getV('ff-name-en'), orig: orig.name_en || '' },
@@ -2249,7 +2295,7 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       (f.val && f.val !== f.orig) || (!f.val && f.orig && f.key !== 'name')
     );
 
-    if(!changed.length && !familyNote && !otherNote){
+    if(!changed.length && !familyNote && !otherNote && !parentsChanged){
       alert(t('alert_fix_empty') || 'Укажите хотя бы одно изменение');
       return;
     }
@@ -2268,6 +2314,27 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     }
 
     if(isAdminFix){
+      // Отец/Мать — структурная операция, отдельная от PATCH персоны.
+      // Выполняется первой: если она упадёт, дальше не идём — не хотим
+      // сохранить обычные поля, но оставить родителей в неопределённом
+      // состоянии из-за сетевой ошибки на полпути.
+      if(parentsChanged){
+        const btnP = document.getElementById('modal-generate');
+        const origTextP = btnP.textContent;
+        btnP.textContent = '⏳ ' + (currentLang==='he' ? 'מעדכן הורים...' : currentLang==='en' ? 'Updating parents...' : 'Обновляю родителей...');
+        btnP.disabled = true;
+        try {
+          await reassignParentsForFix(origId, origFamId, newFatherId, newMotherId);
+        } catch(e){
+          showToast('⚠ ' + e.message, true);
+          btnP.textContent = origTextP;
+          btnP.disabled = false;
+          return;
+        }
+        btnP.textContent = origTextP;
+        btnP.disabled = false;
+      }
+
       const patch = {};
       // val === '' here always means "user cleared this field" (see the
       // `changed` filter above) — send null so the server deletes the key,
@@ -2293,6 +2360,15 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
       if(otherNote)  patch.other_note  = otherNote;
 
       if(Object.keys(patch).length === 0){
+        if(parentsChanged){
+          document.getElementById('modal-overlay').classList.remove('open');
+          if(typeof refreshCanvas === 'function') refreshCanvas();
+          if(typeof showPanel === 'function') showPanel(origId);
+          showToast(currentLang==='he' ? '✓ ההורים עודכנו'
+                  : currentLang==='en' ? '✓ Parents updated'
+                  : '✓ Родители обновлены', false);
+          return;
+        }
         showToast(currentLang==='he' ? '✓ אין שינויים לשמירה — הנתונים כבר עודכנו'
                 : currentLang==='en' ? '✓ Nothing to save — data was already up to date'
                 : '✓ Нечего сохранять — данные уже актуальны', false);
@@ -3909,6 +3985,64 @@ async function attachParentsToNewPerson(newId, fatherId, motherId){
     });
     const d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Не удалось привязать родителя');
+  }
+}
+
+// Форма "Исправить": переназначить отца/мать УЖЕ существующей персоны.
+// В отличие от attachParentsToNewPerson (только добавляет — у новой
+// персоны заведомо нет старой семьи), здесь childId мог уже состоять
+// в family oldFamId, поэтому сначала отвязываем оттуда, потом привязываем
+// к найденной/созданной целевой семье с точным совпадением новой пары
+// родителей. Оба родителя null → ребёнок просто отвязывается, новая
+// семья не создаётся (совпадает с поведением confirmRemoveChild).
+async function reassignParentsForFix(childId, oldFamId, fatherId, motherId){
+  const headers = {'Content-Type':'application/json','X-Password':_sessionPassword};
+  const bothUnknown = !fatherId && !motherId;
+
+  let targetFamId = null;
+  if(!bothUnknown){
+    targetFamId = Object.entries(IDX.families).find(([, f]) =>
+      (f.husband || null) === fatherId && (f.wife || null) === motherId
+    )?.[0];
+
+    if(!targetFamId){
+      const createRes = await fetch(WORKER_URL + '/api/family', {
+        method: 'POST', headers,
+        body: JSON.stringify({ parent1: fatherId, parent2: motherId, children: [] })
+      });
+      const createData = await createRes.json();
+      if(!createData.ok) throw new Error(createData.error || 'Не удалось создать семью для новых родителей');
+      targetFamId = createData.familyId;
+    }
+  }
+
+  if(targetFamId && targetFamId === oldFamId) return; // фактически не изменилось
+
+  if(oldFamId){
+    const rmRes = await fetch(WORKER_URL + '/api/family/' + oldFamId, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ removeChild: childId })
+    });
+    const rmData = await rmRes.json();
+    if(!rmData.ok) throw new Error(rmData.error || 'Не удалось отвязать от прежней семьи');
+  }
+
+  if(targetFamId){
+    const addRes = await fetch(WORKER_URL + '/api/family/' + targetFamId, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ addChild: childId })
+    });
+    const addData = await addRes.json();
+    if(!addData.ok) throw new Error(addData.error || 'Не удалось привязать к новой семье');
+  }
+
+  // Обновляем локальный IDX сразу, не дожидаясь следующей полной загрузки
+  const savedPwd = sessionStorage.getItem('tree_pwd') || _sessionPassword;
+  const res = await fetch(WORKER_URL + '/api/tree', { headers: { 'X-Password': savedPwd } });
+  if(res.ok){
+    const data = await res.json();
+    IDX = data;
+    if(typeof buildDatalist === 'function') buildDatalist();
   }
 }
 
