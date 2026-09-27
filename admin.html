@@ -82,6 +82,7 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
     <button class="hbtn" onclick="showTab('backups')">💾 Резервные копии</button>
     <button class="hbtn" onclick="showTab('maintenance')">🔧 Обслуживание</button>
     <button class="hbtn" onclick="showTab('settings')">⚙️ Настройки</button>
+    <button class="hbtn" onclick="showTab('bulk')">🔧 Массовое обновление полей</button>
     <button class="hbtn" onclick="logout()">Выйти</button>
   </header>
 
@@ -114,7 +115,8 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
         Загрузите обновлённый HTML-файл дерева. Данные IDX будут извлечены и сохранены в облако.
         Предыдущая версия автоматически сохранится как резервная копия.
       </div>
-      <div class="upload-area" onclick="document.getElementById('file-input').click()">
+      <div class="upload-area" data-target-input="file-input" data-handler="handleTreeFileSelected"
+           onclick="document.getElementById('file-input').click()">
         <div style="font-size:2rem">📂</div>
         <div style="font-weight:600;margin-top:8px">Выберите tree_a4a.html</div>
         <p>или перетащите файл сюда</p>
@@ -177,6 +179,52 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
       </div>
     </div>
 
+    <!-- BULK FIELD PATCH TAB -->
+    <div id="tab-bulk" style="display:none">
+      <div class="info">
+        Загрузите JSON-файл в одном из двух форматов:<br>
+        1) готовый патч: <code>{ "patches": { "P42": { "birth": "1888" } } }</code><br>
+        2) объект персон — весь <code>nodes</code> из дерева (или полный файл дерева с
+        ключом <code>nodes</code>), или его часть: <code>{ "P42": { "birth": "1888" } }</code>.
+        Каждое поле каждой персоны сравнивается с текущими данными на сервере, в патч
+        попадают только реально изменившиеся значения.<br>
+        Разрешённые для правки поля: <code>name, birth, death, birth_he, death_he,
+        hebrew_name, sex, rel, rel_en, rel_he, name_en, name_he, phone, email, social,
+        bio, photo, missing, gen</code> — остальные поля в файле игнорируются (клиентом
+        и сервером одинаково).
+      </div>
+
+      <div class="upload-area" data-target-input="bulk-file-input" data-handler="handleBulkFileSelected"
+           onclick="document.getElementById('bulk-file-input').click()">
+        <div style="font-size:2rem">🔧</div>
+        <div style="font-weight:600;margin-top:8px">Выберите JSON-файл с правками</div>
+        <p>или перетащите файл сюда</p>
+      </div>
+      <input type="file" id="bulk-file-input" accept=".json" style="display:none" onchange="handleBulkFileSelected(event)">
+      <div id="bulk-status"></div>
+
+      <div id="bulk-preview" style="display:none;margin-top:16px">
+        <div class="info" id="bulk-preview-summary"></div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+            <thead>
+              <tr style="text-align:left;border-bottom:2px solid #C09828">
+                <th style="padding:6px 8px">Персона</th>
+                <th style="padding:6px 8px">Поле</th>
+                <th style="padding:6px 8px">Было</th>
+                <th style="padding:6px 8px">Станет</th>
+                <th style="padding:6px 8px">Исключить</th>
+              </tr>
+            </thead>
+            <tbody id="bulk-preview-tbody"></tbody>
+          </table>
+        </div>
+        <button class="hbtn" id="bulk-apply-btn" onclick="submitBulkPatch()" style="background:#C09828;color:#fff;padding:8px 18px;margin-top:12px">
+          💾 Применить
+        </button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -236,7 +284,7 @@ async function api(method, path, body) {
 
 // ── Tabs ─────────────────────────────────────────────────
 function showTab(tab) {
-  ['proposals','upload','backups','maintenance','settings'].forEach(t => {
+  ['proposals','upload','backups','maintenance','settings','bulk'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
   });
   currentTab = tab;
@@ -556,18 +604,231 @@ function toast(msg) {
   setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// Drag & drop
+// Drag & drop — generalized over every `.upload-area` on the page (now
+// two: the tree-upload one and the bulk-patch one), each wired to its own
+// target <input> + handler via data-target-input/data-handler attributes.
+// Previously this used querySelector('.upload-area') (singular), which
+// would have silently wired only the FIRST matching element once a second
+// .upload-area was added for the bulk-patch tab below.
 document.addEventListener('DOMContentLoaded', () => {
-  const ua = document.querySelector('.upload-area');
-  if(!ua) return;
-  ua.addEventListener('dragover', e => { e.preventDefault(); ua.style.borderColor='#C09828'; });
-  ua.addEventListener('dragleave', () => { ua.style.borderColor=''; });
-  ua.addEventListener('drop', e => {
-    e.preventDefault(); ua.style.borderColor='';
-    const file = e.dataTransfer.files[0];
-    if(file){ document.getElementById('file-input').files = e.dataTransfer.files; handleTreeFileSelected({target:{files:[file]}}); }
+  document.querySelectorAll('.upload-area').forEach(ua => {
+    const targetInputId = ua.dataset.targetInput;
+    const handlerName    = ua.dataset.handler;
+    if(!targetInputId || !handlerName) return;
+    ua.addEventListener('dragover', e => { e.preventDefault(); ua.style.borderColor='#C09828'; });
+    ua.addEventListener('dragleave', () => { ua.style.borderColor=''; });
+    ua.addEventListener('drop', e => {
+      e.preventDefault(); ua.style.borderColor='';
+      const file = e.dataTransfer.files[0];
+      if(file){
+        document.getElementById(targetInputId).files = e.dataTransfer.files;
+        window[handlerName]({target:{files:[file]}});
+      }
+    });
   });
 });
+// ════════════════════════════════════════════════════════
+//  BULK FIELD PATCH — computes patches from either a ready-made
+//  { patches: {...} } file or a raw nodes-object file (diffed locally
+//  against the tree currently on the server), previews them in an
+//  editable table, and applies via POST /api/bulk-patch.
+// ════════════════════════════════════════════════════════
+
+// Same whitelist as ALLOWED in src/index.js (PATCH /api/person/:id and
+// POST /api/bulk-patch) — kept in sync manually. Fields outside this list
+// are silently ignored by the server, so previewing them here would be
+// misleading (a row the admin thinks was applied, that the server drops).
+const BULK_ALLOWED_FIELDS = ['name','birth','death','birth_he','death_he','hebrew_name',
+  'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen'];
+
+let bulkCurrentIDX  = null; // last-fetched server tree — the "Было" reference, updated in place after a successful apply
+let bulkPreviewRows = [];   // [{ personId, field, before, after, excluded }]
+
+function bulkValuesDiffer(a, b) {
+  // Structural compare (handles arrays like `missing`, and treats
+  // undefined/null both as "no value") rather than strict !==.
+  const norm = v => (v === undefined ? null : v);
+  return JSON.stringify(norm(a)) !== JSON.stringify(norm(b));
+}
+
+async function handleBulkFileSelected(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const st = document.getElementById('bulk-status');
+  document.getElementById('bulk-preview').style.display = 'none';
+  bulkPreviewRows = [];
+
+  st.innerHTML = '<div class="info">⏳ Читаю файл...</div>';
+
+  let parsed;
+  try {
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ Файл не является валидным JSON: ${e.message}</div>`;
+    return;
+  }
+
+  st.innerHTML = '<div class="info">⏳ Загружаю текущее дерево с сервера для сравнения...</div>';
+  try {
+    bulkCurrentIDX = await fetchCurrentTreeForPreview();
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+    return;
+  }
+
+  let ignoredFieldCount = 0;
+  const rows = [];
+
+  if(parsed && typeof parsed.patches === 'object' && parsed.patches !== null) {
+    // Format (a): ready-made { patches: { personId: { field: value } } } —
+    // shown as-is (no diff-filtering — the file already decided the
+    // change), enriched with the current server value for "Было".
+    for(const [personId, fields] of Object.entries(parsed.patches)) {
+      if(!fields || typeof fields !== 'object') continue;
+      const currentNode = (bulkCurrentIDX.nodes || {})[personId];
+      for(const [field, val] of Object.entries(fields)) {
+        if(!BULK_ALLOWED_FIELDS.includes(field)) { ignoredFieldCount++; continue; }
+        const before = currentNode ? currentNode[field] : undefined;
+        rows.push({ personId, field, before, after: val, excluded: false });
+      }
+    }
+  } else {
+    // Format (b): a nodes-shaped object — { personId: { field: value } }.
+    // Also accepts a full IDX file (with a top-level `.nodes`) as a
+    // convenience, since that's the same file used on the "Загрузить
+    // дерево" tab and admins are likely to reach for it here too.
+    const nodesMap = (parsed && typeof parsed.nodes === 'object' && parsed.nodes !== null)
+      ? parsed.nodes
+      : parsed;
+    for(const [personId, fields] of Object.entries(nodesMap || {})) {
+      if(!fields || typeof fields !== 'object') continue;
+      const currentNode = (bulkCurrentIDX.nodes || {})[personId];
+      for(const [field, val] of Object.entries(fields)) {
+        if(!BULK_ALLOWED_FIELDS.includes(field)) { ignoredFieldCount++; continue; }
+        const before = currentNode ? currentNode[field] : undefined;
+        if(!bulkValuesDiffer(before, val)) continue; // unchanged — not a candidate patch
+        rows.push({ personId, field, before, after: val, excluded: false });
+      }
+    }
+  }
+
+  bulkPreviewRows = rows;
+  st.innerHTML = ignoredFieldCount
+    ? `<div class="info">Поля вне разрешённого списка проигнорированы: ${ignoredFieldCount}.</div>`
+    : '';
+  renderBulkPreviewTable();
+}
+
+function fmtBulkVal(v) {
+  if(v === undefined) return '<span style="color:#aaa">—</span>';
+  if(v === null) return '<i style="color:#aaa">null</i>';
+  if(Array.isArray(v)) return escHtml(JSON.stringify(v));
+  return escHtml(String(v));
+}
+
+function renderBulkPreviewTable() {
+  const wrap      = document.getElementById('bulk-preview');
+  const tbody     = document.getElementById('bulk-preview-tbody');
+  const summaryEl = document.getElementById('bulk-preview-summary');
+
+  if(!bulkPreviewRows.length) {
+    wrap.style.display = 'none';
+    tbody.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = bulkPreviewRows.map((row, i) => {
+    const node = bulkCurrentIDX.nodes && bulkCurrentIDX.nodes[row.personId];
+    const personLabel = node
+      ? `${escHtml(node.name || row.personId)} <span style="color:#999">[${row.personId}]</span>`
+      : `${row.personId} <span style="color:#C03030">(не найдена на сервере)</span>`;
+    return `<tr style="border-bottom:1px solid #eee;${row.excluded ? 'opacity:.4' : ''}">
+      <td style="padding:5px 8px">${personLabel}</td>
+      <td style="padding:5px 8px"><code>${escHtml(row.field)}</code></td>
+      <td style="padding:5px 8px">${fmtBulkVal(row.before)}</td>
+      <td style="padding:5px 8px">${fmtBulkVal(row.after)}</td>
+      <td style="padding:5px 8px;text-align:center">
+        <input type="checkbox" ${row.excluded ? 'checked' : ''} onchange="toggleBulkRowExcluded(${i})">
+      </td>
+    </tr>`;
+  }).join('');
+
+  const includedCount = bulkPreviewRows.filter(r => !r.excluded).length;
+  summaryEl.innerHTML = `Вычислено изменений: <b>${bulkPreviewRows.length}</b>, из них будет применено: <b>${includedCount}</b>.`;
+
+  wrap.style.display = 'block';
+}
+
+function toggleBulkRowExcluded(i) {
+  bulkPreviewRows[i].excluded = !bulkPreviewRows[i].excluded;
+  renderBulkPreviewTable();
+}
+
+async function submitBulkPatch() {
+  const patches = {};
+  for(const row of bulkPreviewRows) {
+    if(row.excluded) continue;
+    if(!patches[row.personId]) patches[row.personId] = {};
+    patches[row.personId][row.field] = row.after;
+  }
+  if(Object.keys(patches).length === 0) {
+    toast('Нет строк для применения (все исключены)');
+    return;
+  }
+
+  const st = document.getElementById('bulk-status');
+  st.innerHTML = '<div class="info">⏳ Применяю...</div>';
+
+  let data;
+  try {
+    data = await api('POST', '/api/bulk-patch', { patches });
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+    return;
+  }
+
+  const appliedPersons     = Object.keys(data.applied || {});
+  const appliedFieldsCount = appliedPersons.reduce((s,id) => s + data.applied[id].length, 0);
+  const skippedPersons     = Object.keys(data.skipped || {});
+
+  // Reflect ONLY the fields the server confirms were applied (a field can
+  // be present in `patches` yet still be rejected, e.g. an invalid `gen`)
+  // onto the locally cached tree, so "Было" stays correct for a follow-up
+  // bulk-patch file in the same session, without a full page reload.
+  for(const [personId, fieldsApplied] of Object.entries(data.applied || {})) {
+    if(!bulkCurrentIDX.nodes) bulkCurrentIDX.nodes = {};
+    if(!bulkCurrentIDX.nodes[personId]) bulkCurrentIDX.nodes[personId] = { id: personId };
+    for(const field of fieldsApplied) {
+      const val = patches[personId][field];
+      if(val === null || val === undefined) delete bulkCurrentIDX.nodes[personId][field];
+      else bulkCurrentIDX.nodes[personId][field] = val;
+    }
+  }
+
+  const skippedLines = skippedPersons.map(id => {
+    const s = data.skipped[id];
+    if(s && Array.isArray(s.rejectedFields)) {
+      return `${id}: ` + s.rejectedFields.map(rf => `${rf.field} — ${rf.reason}`).join('; ');
+    }
+    if(s && s.reason) return `${id}: ${s.reason}`;
+    return `${id}: ${JSON.stringify(s)}`;
+  });
+
+  st.innerHTML =
+    `<div class="info" style="background:#D4EDDA;color:#155724">
+      ✅ Применено: ${appliedFieldsCount} полей у ${appliedPersons.length} персон(ы).
+      ${skippedPersons.length ? ` Пропущено: ${skippedPersons.length}.` : ''}
+    </div>` +
+    (skippedLines.length ? `<div class="info" style="margin-top:8px">${skippedLines.map(escHtml).join('<br>')}</div>` : '');
+
+  toast('✅ Массовое обновление применено');
+
+  // Clear the preview — it described a batch that has now been sent.
+  bulkPreviewRows = [];
+  renderBulkPreviewTable();
+}
 </script>
 </body>
 </html>
