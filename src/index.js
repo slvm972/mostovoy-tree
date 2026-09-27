@@ -129,11 +129,17 @@ export default {
       const body = await request.text();
       try { JSON.parse(body); } catch(e) { return err('Невалидный JSON'); }
 
-      await env.TREE_KV.put('tree_data', body);
-
-      // Save timestamped backup (keep last 10)
+      // Backup the PREVIOUS tree_data (read before overwrite), not the
+      // incoming body — mirrors PATCH /api/person/:id below. Previously
+      // this backed up `body` itself (the new data being written), so a
+      // restore never actually recovered the prior state.
+      const previousRawData = await env.TREE_KV.get('tree_data');
       const ts = Date.now();
-      await env.TREE_KV.put('backup_' + ts, body);
+      if(previousRawData) {
+        await env.TREE_KV.put('backup_' + ts, previousRawData);
+      }
+
+      await env.TREE_KV.put('tree_data', body);
 
       // Trim old backups (keep last 10)
       const list = await env.TREE_KV.list({ prefix: 'backup_' });
@@ -642,11 +648,7 @@ export default {
 
       const p1 = body.parent1 || null;
       const p2 = body.parent2 || null;
-      // Разрешаем семью без известных родителей только когда это группа
-      // из ≥2 уже существующих детей (братья/сёстры с неизвестными
-      // родителями) — иначе, как раньше, требуем хотя бы одного родителя.
-      const uniqueKnownChildren = new Set((body.children || []).filter(c => IDX.nodes[c]));
-      if(!p1 && !p2 && uniqueKnownChildren.size < 2) return err('Нужен хотя бы один родитель');
+      if(!p1 && !p2) return err('Нужен хотя бы один родитель');
       if(p1 && !IDX.nodes[p1]) return err('Персона не найдена: ' + p1, 404);
       if(p2 && !IDX.nodes[p2]) return err('Персона не найдена: ' + p2, 404);
 
