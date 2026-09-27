@@ -533,6 +533,145 @@ export default {
       return json({ ok: true, personId, applied });
     }
 
+    // ── POST /api/bulk-patch ─────────────────────────────
+    // Admin only: apply field-level PATCHes to MANY persons at once,
+    // in a single KV write + single backup. Mirrors PATCH /api/person/:id
+    // field-by-field (same ALLOWED whitelist, same null-deletes semantics),
+    // but batches everything so unifying e.g. birth-date formatting across
+    // 50 people costs one backup + one tree_data write, not 50.
+    // Body: { patches: { "<personId>": { "<field>": <value|null>, ... }, ... } }
+    // Does NOT touch families/relatives/child_of/parent_in/grandparents —
+    // person-field edits only, same scope as the single-person PATCH.
+    if(path === '/api/bulk-patch' && method === 'POST') {
+      const auth = await getRole(request, env);
+      if(auth !== 'admin') return err('Только для администратора', 403);
+
+      const rawData = await env.TREE_KV.get('tree_data');
+      if(!rawData) return err('Данные дерева не найдены', 404);
+
+      const body = await request.json().catch(() => null);
+      if(!body || typeof body.patches !== 'object' || body.patches === null) {
+        return err('Неверный формат данных: ожидается { patches: { personId: { field: value } } }');
+      }
+
+      const IDX = JSON.parse(rawData);
+      // Same whitelist as PATCH /api/person/:id above — kept identical
+      // deliberately (not re-derived) so the two endpoints can never drift.
+      const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
+                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen'];
+
+      // Normalizes a raw `gen` value into either {ok:true, value:<integer>}
+      // or {ok:false, reason:<string>} — never throws, never signals
+      // "reject the whole person". null/undefined are handled by the
+      // caller (same delete-semantics as every other field) before this
+      // is ever invoked; this only decides genuine value/format problems.
+      function normalizeGen(rawVal) {
+        if(typeof rawVal === 'number') {
+          if(Number.isInteger(rawVal)) return { ok: true, value: rawVal };
+          return { ok: false, reason: 'gen must be an integer (e.g. 0,1,2,3), got: ' + JSON.stringify(rawVal) };
+        }
+        if(typeof rawVal === 'string') {
+          const trimmed = rawVal.trim();
+          if(/^-?\d+$/.test(trimmed)) {
+            const n = Number(trimmed);
+            if(Number.isInteger(n)) return { ok: true, value: n };
+          }
+          return { ok: false, reason: 'gen must be an integer (e.g. 0,1,2,3), got: ' + JSON.stringify(rawVal) };
+        }
+        return { ok: false, reason: 'gen must be an integer (e.g. 0,1,2,3), got: ' + JSON.stringify(rawVal) };
+      }
+
+      const applied = {};   // personId -> [fields...]
+      // skipped[personId] has one of two distinct, non-overlapping shapes:
+      //   { reason: '<string>' }        — the WHOLE person was skipped
+      //                                    (not found / not a field object /
+      //                                    no allowed fields at all)
+      //   { rejectedFields: [{ field, reason }, ...] } — the person WAS
+      //                                    processed; some individual
+      //                                    field(s) were rejected, but any
+      //                                    other valid fields in the same
+      //                                    patch were still applied
+      //                                    (recorded separately in `applied`)
+      const skipped = {};
+
+      for(const [personId, fields] of Object.entries(body.patches)) {
+        if(!IDX.nodes[personId]) {
+          skipped[personId] = { reason: 'person not found' };
+          continue;
+        }
+        if(!fields || typeof fields !== 'object') {
+          skipped[personId] = { reason: 'patch is not a field object' };
+          continue;
+        }
+
+        const appliedFields = [];
+        const rejectedFields = []; // [{ field, reason }, ...] — extensible; only gen can reject a field today
+
+        for(const [field, val] of Object.entries(fields)) {
+          if(!ALLOWED.includes(field)) continue; // silently ignore disallowed fields, same as single PATCH
+
+          if(field === 'gen') {
+            if(val === null || val === undefined) {
+              delete IDX.nodes[personId][field];
+              appliedFields.push(field);
+              continue;
+            }
+            const norm = normalizeGen(val);
+            if(!norm.ok) {
+              // This one field is rejected — everything else for this
+              // person keeps being processed below (no all-or-nothing).
+              rejectedFields.push({ field: 'gen', reason: norm.reason });
+              continue;
+            }
+            IDX.nodes[personId][field] = norm.value;
+            appliedFields.push(field);
+            continue;
+          }
+
+          if(val === null || val === undefined) {
+            delete IDX.nodes[personId][field];
+          } else {
+            IDX.nodes[personId][field] = val;
+          }
+          appliedFields.push(field);
+        }
+
+        if(appliedFields.length > 0) {
+          applied[personId] = appliedFields;
+        }
+        if(rejectedFields.length > 0) {
+          skipped[personId] = { rejectedFields };
+        } else if(appliedFields.length === 0) {
+          // Nothing applied and nothing individually rejected — every
+          // field in this person's patch was either absent or not in
+          // ALLOWED. Whole-person skip, not a field-level rejection.
+          skipped[personId] = { reason: 'no allowed fields in patch' };
+        }
+      }
+
+      if(Object.keys(applied).length === 0) {
+        return err('Ни одна персона не была обновлена: ' + JSON.stringify(skipped));
+      }
+
+      // ONE backup of the pre-batch state, ONE tree_data write, ONE trim —
+      // not per-person, regardless of how many persons were patched above.
+      // Same old-data-first order as the POST /api/tree fix (Step B0) and
+      // the existing PATCH /api/person/:id above.
+      const ts = Date.now();
+      await env.TREE_KV.put('backup_' + ts, rawData);
+      await env.TREE_KV.put('tree_data', JSON.stringify(IDX));
+
+      const list = await env.TREE_KV.list({ prefix: 'backup_' });
+      const keys = list.keys.map(k => k.name).sort();
+      if(keys.length > 10) {
+        for(const old of keys.slice(0, keys.length - 10)) {
+          await env.TREE_KV.delete(old);
+        }
+      }
+
+      return json({ ok: true, applied, skipped });
+    }
+
     // ── POST /api/person ─────────────────────────────────
     // Admin only: create a new person
     // Body: { name, sex, gen, birth?, death?, rel?, phone?, email?, social?, ... }
