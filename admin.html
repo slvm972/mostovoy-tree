@@ -119,8 +119,19 @@ header .hbtn:hover{background:rgba(237,216,144,.25)}
         <div style="font-weight:600;margin-top:8px">Выберите tree_a4a.html</div>
         <p>или перетащите файл сюда</p>
       </div>
-      <input type="file" id="file-input" accept=".html" style="display:none" onchange="uploadTree(event)">
+      <input type="file" id="file-input" accept=".html,.json" style="display:none" onchange="handleTreeFileSelected(event)">
       <div id="upload-status"></div>
+      <div id="upload-preview" style="display:none;margin-top:16px">
+        <div class="info" id="upload-preview-summary"></div>
+        <div id="upload-preview-lists" style="font-size:.75rem;color:#555;max-height:220px;overflow-y:auto;margin-bottom:10px"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:#28180A;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="upload-confirm-checkbox" onchange="updateUploadConfirmButton()">
+          Понимаю, что это полная замена дерева
+        </label>
+        <button class="hbtn" id="upload-confirm-btn" disabled onclick="confirmUploadTree()" style="background:#C09828;color:#fff;padding:8px 18px">
+          🚀 Подтвердить и загрузить
+        </button>
+      </div>
     </div>
 
     <!-- BACKUPS TAB -->
@@ -344,34 +355,160 @@ async function rejectProposal(id) {
 }
 
 // ── Upload tree ──────────────────────────────────────────
-async function uploadTree(event) {
+// Two-step flow: (1) read + parse the file and show a diff preview against
+// the tree currently on the server, with no write yet; (2) only once the
+// admin ticks the confirmation checkbox does confirmUploadTree() actually
+// call POST /api/tree — the request body and endpoint are unchanged from
+// before, just deferred behind the preview+checkbox gate below.
+let pendingUpload = null; // { jsonText, parsed } for the file staged for confirmation
+
+// Reads the selected file and extracts the tree JSON.
+// - Pure JSON file (text, after trim(), starts with "{"): parsed directly,
+//   no regex involved.
+// - HTML file: same two regex patterns as before —
+//   Old: const IDX = {...};
+//   New: FALLBACK_DATA = {...};  (API-driven architecture)
+async function parseTreeFile(file) {
+  const text = await file.text();
+  const trimmed = text.trim();
+
+  if(trimmed.startsWith('{')) {
+    const parsed = JSON.parse(trimmed);
+    return { jsonText: trimmed, parsed };
+  }
+
+  const m = text.match(/const IDX = ({[\s\S]*?});\n/)
+           || text.match(/FALLBACK_DATA = ({[\s\S]*?});\n/);
+  if(!m) throw new Error('IDX не найден в файле');
+  const jsonText = m[1];
+  const parsed = JSON.parse(jsonText);
+  return { jsonText, parsed };
+}
+
+// GET /api/tree returns the raw stored IDX JSON directly (no {ok:...}
+// envelope) — unlike the rest of the endpoints, so this bypasses the
+// api() helper (which expects and checks data.ok) and fetches directly.
+async function fetchCurrentTreeForPreview() {
+  const r = await fetch(WORKER_URL + '/api/tree', {
+    headers: { 'X-Password': adminPassword }
+  });
+  if(r.status === 404) {
+    // Fresh project — tree_data doesn't exist in KV yet (server returns
+    // 404 "Данные дерева не найдены"). Treat this as an empty tree so the
+    // diff preview shows everything in the file as newly added, instead
+    // of failing before the admin ever gets to upload the first version.
+    return { nodes: {}, families: {} };
+  }
+  if(!r.ok) throw new Error('Не удалось получить текущее дерево с сервера (' + r.status + ')');
+  return await r.json();
+}
+
+function computeTreeDiff(oldIDX, newIDX) {
+  const oldNodes = (oldIDX && oldIDX.nodes) || {};
+  const newNodes = (newIDX && newIDX.nodes) || {};
+  const oldIds = new Set(Object.keys(oldNodes));
+  const newIds = new Set(Object.keys(newNodes));
+  const added   = [...newIds].filter(id => !oldIds.has(id)).sort();
+  const removed = [...oldIds].filter(id => !newIds.has(id)).sort();
+  return {
+    oldPersons:  oldIds.size,
+    newPersons:  newIds.size,
+    oldFamilies: Object.keys((oldIDX && oldIDX.families) || {}).length,
+    newFamilies: Object.keys((newIDX && newIDX.families) || {}).length,
+    added, removed
+  };
+}
+
+function renderUploadPreview(diff) {
+  const summaryEl = document.getElementById('upload-preview-summary');
+  const listsEl   = document.getElementById('upload-preview-lists');
+
+  const freshProjectNote = (diff.oldPersons === 0 && diff.oldFamilies === 0)
+    ? `<div style="margin-bottom:6px;color:#7A5828">⚠ На сервере пока нет данных дерева — все персоны и семьи будут добавлены впервые.</div>`
+    : '';
+
+  summaryEl.innerHTML = freshProjectNote +
+    `Сейчас на сервере: <b>${diff.oldPersons}</b> персон, <b>${diff.oldFamilies}</b> семей.<br>` +
+    `В загружаемом файле: <b>${diff.newPersons}</b> персон, <b>${diff.newFamilies}</b> семей.<br>` +
+    `Добавлено ID: <b>${diff.added.length}</b> · Исчезло ID: <b>${diff.removed.length}</b>`;
+
+  const listBlock = (title, ids, color) => !ids.length ? '' :
+    `<div style="margin-top:8px"><b style="color:${color}">${title} (${ids.length}):</b><br>${ids.join(', ')}</div>`;
+
+  listsEl.innerHTML =
+    listBlock('➕ Добавленные ID', diff.added, '#2E7D32') +
+    listBlock('➖ Исчезнувшие ID',  diff.removed, '#C03030');
+
+  document.getElementById('upload-preview').style.display = 'block';
+}
+
+function updateUploadConfirmButton() {
+  const cb  = document.getElementById('upload-confirm-checkbox');
+  const btn = document.getElementById('upload-confirm-btn');
+  btn.disabled = !(cb && cb.checked && pendingUpload);
+}
+
+// Step 1: file selected — parse + diff-preview only, no write.
+async function handleTreeFileSelected(event) {
   const file = event.target.files[0];
   if(!file) return;
+
   const st = document.getElementById('upload-status');
-  st.innerHTML = '<div class="info">⏳ Читаю файл...</div>';
+  const preview = document.getElementById('upload-preview');
+  preview.style.display = 'none';
+  pendingUpload = null;
+  const cb = document.getElementById('upload-confirm-checkbox');
+  if(cb) cb.checked = false;
+  updateUploadConfirmButton();
 
-  const html = await file.text();
+  st.innerHTML = '<div class="info">⏳ Читаю и разбираю файл...</div>';
 
-  // Extract IDX from HTML — supports both formats:
-  // Old: const IDX = {...};
-  // New: FALLBACK_DATA = {...};  (API-driven architecture)
-  const m = html.match(/const IDX = ({[\s\S]*?});\n/)
-           || html.match(/FALLBACK_DATA = ({[\s\S]*?});\n/);
-  if(!m){ st.innerHTML = '<div class="info" style="color:red">❌ IDX не найден в файле</div>'; return; }
+  let parsedFile;
+  try {
+    parsedFile = await parseTreeFile(file);
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+    return;
+  }
+
+  st.innerHTML = '<div class="info">⏳ Сравниваю с текущим деревом на сервере...</div>';
+  let currentIDX;
+  try {
+    currentIDX = await fetchCurrentTreeForPreview();
+  } catch(e) {
+    st.innerHTML = `<div class="info" style="color:red">❌ ${e.message}</div>`;
+    return;
+  }
+
+  const diff = computeTreeDiff(currentIDX, parsedFile.parsed);
+  pendingUpload = parsedFile;
+  st.innerHTML = '';
+  renderUploadPreview(diff);
+  updateUploadConfirmButton();
+}
+
+// Step 2: admin ticked the checkbox and clicked confirm — same POST
+// /api/tree call and response handling as the previous single-step version.
+async function confirmUploadTree() {
+  if(!pendingUpload) return;
+  const st = document.getElementById('upload-status');
+  st.innerHTML = '<div class="info">⏳ Загружаю на сервер...</div>';
 
   try {
-    JSON.parse(m[1]); // validate
-    st.innerHTML = '<div class="info">⏳ Загружаю на сервер...</div>';
-
     const r = await fetch(WORKER_URL + '/api/tree', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Password': adminPassword },
-      body: m[1],
+      body: pendingUpload.jsonText,
     });
     const data = await r.json();
     if(data.ok){
       st.innerHTML = '<div class="info" style="background:#D4EDDA;color:#155724">✅ Дерево успешно загружено</div>';
       toast('✅ Дерево обновлено');
+      document.getElementById('upload-preview').style.display = 'none';
+      pendingUpload = null;
+      const cb2 = document.getElementById('upload-confirm-checkbox');
+      if(cb2) cb2.checked = false;
+      updateUploadConfirmButton();
     } else {
       st.innerHTML = `<div class="info" style="color:red">❌ ${data.error}</div>`;
     }
@@ -428,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ua.addEventListener('drop', e => {
     e.preventDefault(); ua.style.borderColor='';
     const file = e.dataTransfer.files[0];
-    if(file){ document.getElementById('file-input').files = e.dataTransfer.files; uploadTree({target:{files:[file]}}); }
+    if(file){ document.getElementById('file-input').files = e.dataTransfer.files; handleTreeFileSelected({target:{files:[file]}}); }
   });
 });
 </script>
