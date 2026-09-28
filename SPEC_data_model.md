@@ -237,12 +237,46 @@ GET  /api/tree                    → полный IDX в JSON
 ```
 POST /api/login                   → { password } → { ok, role: 'admin'|'guest' }
 
+POST   /api/tree                  → полная замена дерева (тело — полный IDX в JSON)
+       Перед записью сохраняет бэкап (хранит последние 10).
+       Примечание: бэкап сохраняет состояние дерева ДО перезаписи
+       (ранее по ошибке сохранял новые, только что присланные данные —
+       восстановиться из такого бэкапа предыдущее состояние было нельзя).
+
 PATCH  /api/person/:id            → изменить поля персоны
        Body: { name?, birth?, death?, birth_he?, death_he?, hebrew_name?,
-                sex?, rel?, phone?, email?, social?, bio?, photo?, missing? }
-       Разрешённые поля (ALLOWED whitelist) — попытка изменить структурные
-       поля (id, gen) игнорируется. Значение null удаляет поле.
+                sex?, rel?, rel_en?, rel_he?, name_en?, name_he?, phone?,
+                email?, social?, bio?, photo?, missing?, gen? }
+       Разрешённые поля (ALLOWED whitelist, 19 полей): name, birth, death,
+       birth_he, death_he, hebrew_name, sex, rel, rel_en, rel_he, name_en,
+       name_he, phone, email, social, bio, photo, missing, gen.
+       Поля вне списка (в том числе id) игнорируются. gen изменяется,
+       значение должно быть целым числом. Значение null удаляет поле.
        Автоматически создаёт бэкап перед изменением (хранит последние 10).
+
+POST   /api/bulk-patch            → массово изменить поля многих персон за один запрос
+       Body: { patches: { "<personId>": { "<field>": <value|null>, ... }, ... } }
+       Разрешённые поля — список ALLOWED из описания PATCH /api/person/:id
+       выше (поля вне списка молча игнорируются). Значение null/undefined
+       удаляет поле.
+       Поле gen: целое число применяется как есть; строка, однозначно
+       представляющая целое ("3", " 3 "), приводится к числу; любое другое
+       значение отклоняется только для этого поля — остальные поля той же
+       персоны применяются как обычно (не "всё или ничего" на уровне персоны).
+       Структуры families/relatives/child_of/parent_in/grandparents не
+       затрагиваются — только поля персон.
+       Один бэкап (состояние ДО изменений), одна запись tree_data и одна
+       обрезка бэкапов (>10) на весь батч, независимо от числа персон.
+       Ответ: { ok, applied: { personId: [fields...] },
+                skipped: { personId: { reason }
+                                   | { rejectedFields: [{ field, reason }] } } }
+         - skipped[personId].reason — персона обработана целиком не была
+           ("person not found", "patch is not a field object",
+           "no allowed fields in patch");
+         - skipped[personId].rejectedFields — персона обработана, но часть
+           полей отклонена (сейчас — только некорректный gen); такая
+           персона может одновременно присутствовать и в applied.
+       Если не применено ни одно поле ни у одной персоны — 400.
 
 POST   /api/person                → создать новую персону
        Body: { name, sex?, birth?, death?, rel?, phone?, email?, social?, ... }
