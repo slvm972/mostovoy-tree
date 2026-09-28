@@ -458,11 +458,49 @@ function buildAndPrint() {
     cardsHTML += `<g transform="translate(${r.rowTranslateX},${r.rowTranslateY}) scale(${r.rowScale})">${rowCards}</g>`;
   }
 
+  // ── Легенда типов линий (внизу листа) ───────────────────
+  // Стоит внизу, а не под заголовком: скобки «сиблинги без известных
+  // родителей» верхнего ряда рисуются выше карточек (childTop - gapUsed/2)
+  // и попали бы в зону под заголовком. Нижний ряд карточек заканчивается
+  // не ниже printH - MARGIN, поэтому нижняя полоса свободна.
+  // Образцы линий рисуются теми же константами parentStroke / spouseStroke /
+  // siblingStroke, что и сами связи, — легенда не разойдётся с чертежом.
+  // Текст заморожен на currentLang в момент клика (как title/personsLabel).
+  const legendLabels = currentLang === 'he'
+      ? ['הורים וילדים', 'נישואין / זוגיות', 'אחים, ההורים לא ידועים']
+      : currentLang === 'en'
+      ? ['parents → children', 'marriage / couple', 'siblings, parents unknown']
+      : ['родители → дети', 'брак / пара', 'сиблинги, родители неизвестны'];
+  const LEG_FONT = 12, LEG_SAMPLE = 40, LEG_GAP = 8, LEG_ITEM_GAP = 48;
+  const LEG_Y = printH - 18;
+  const legendItems = [
+    { stroke: parentStroke,  heart: false, label: legendLabels[0] },
+    { stroke: spouseStroke,  heart: true,  label: legendLabels[1] },
+    { stroke: siblingStroke, heart: false, label: legendLabels[2] },
+  ];
+  // Иврит читается справа налево — порядок пунктов зеркалим.
+  if (currentLang === 'he') legendItems.reverse();
+  for (const it of legendItems) it.textW = it.label.length * LEG_FONT * 0.56;
+  const legendTotalW = legendItems.reduce((sum, it) => sum + LEG_SAMPLE + LEG_GAP + it.textW, 0)
+                     + (legendItems.length - 1) * LEG_ITEM_GAP;
+  let legX = (printW - legendTotalW) / 2;
+  let legend = '';
+  for (const it of legendItems) {
+    const x2 = legX + LEG_SAMPLE;
+    legend += `<line x1="${legX}" y1="${LEG_Y}" x2="${x2}" y2="${LEG_Y}" ${it.stroke}/>`;
+    if (it.heart) {
+      legend += `<text x="${(legX + x2) / 2}" y="${LEG_Y + 4}" font-family="Segoe UI,Arial,sans-serif" font-size="10" fill="#C09828" text-anchor="middle">♥</text>`;
+    }
+    legend += `<text x="${x2 + LEG_GAP + it.textW / 2}" y="${LEG_Y + LEG_FONT * 0.33}" font-family="Segoe UI,Arial,sans-serif" font-size="${LEG_FONT}" fill="#555" text-anchor="middle">${it.label}</text>`;
+    legX = x2 + LEG_GAP + it.textW + LEG_ITEM_GAP;
+  }
+
   const svgBody = `
   <text x="${printW/2}" y="30" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#28180A" text-anchor="middle">${title}</text>
   <text x="${printW/2}" y="50" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#888" text-anchor="middle">${today} · ${Object.keys(IDX.nodes).length} ${personsLabel}</text>
   ${edges}
-  ${cardsHTML}`;
+  ${cardsHTML}
+  ${legend}`;
 
   // ── 5. Build full HTML and download ───────────────────
   // Скачиваемый файл — самостоятельный документ вне SPA (не подключён к
