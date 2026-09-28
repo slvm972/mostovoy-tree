@@ -787,9 +787,20 @@ export default {
 
       const p1 = body.parent1 || null;
       const p2 = body.parent2 || null;
-      if(!p1 && !p2) return err('Нужен хотя бы один родитель');
       if(p1 && !IDX.nodes[p1]) return err('Персона не найдена: ' + p1, 404);
       if(p2 && !IDX.nodes[p2]) return err('Персона не найдена: ' + p2, 404);
+
+      // Семья без обоих родителей допустима только как группа сиблингов —
+      // минимум 2 РАЗНЫХ существующих ребёнка (после дедупликации ниже).
+      // Иначе (0 или 1 родитель отсутствует, детей меньше 2) — прежнее
+      // поведение: явная ошибка вместо тихого создания "повисшей" семьи.
+      if(!p1 && !p2){
+        const uniqueValidChildren = [...new Set(body.children || [])]
+          .filter(c => IDX.nodes[c]);
+        if(uniqueValidChildren.length < 2){
+          return err('Нужен хотя бы один родитель или минимум два известных ребёнка');
+        }
+      }
 
       // Generate next family ID
       const maxF = Math.max(0, ...Object.keys(IDX.families)
@@ -810,7 +821,7 @@ export default {
         wife    = p2 || null;
       }
 
-      const children = (body.children || []).filter(c => IDX.nodes[c]);
+      const children = [...new Set(body.children || [])].filter(c => IDX.nodes[c]);
       IDX.families[famId] = { id: famId, husband, wife, children };
 
       // Update parent_in and relatives for both parents
