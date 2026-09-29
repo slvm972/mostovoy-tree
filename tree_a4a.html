@@ -3929,12 +3929,23 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
 
     // Блокируем только реальный конфликт: у обеих персон УЖЕ есть родительские
     // семьи, и это РАЗНЫЕ семьи — тут автообъединение рискованно.
+    // F3: сообщение локализовано (RU/EN/HE), как остальные тексты интерфейса —
+    // запрос к серверу в этом случае не отправляется вообще.
     if(existingFamId && targetFamId && existingFamId !== targetFamId){
-      throw new Error('У прикрепляемой персоны и у целевой персоны — разные родительские семьи (' + existingFamId + ' и ' + targetFamId + '). Автоматическое объединение двух разных семей не поддерживается — нужна ручная проверка через «Исправить» → «Семейная связь».');
+      throw new Error(currentLang==='he'
+        ? `לשני האנשים האלה כבר יש הורים/משפחות שונות (${existingFamId} ו-${targetFamId}); יש לתקן קודם את הקשר דרך "תיקון" → "קשר משפחתי"`
+        : currentLang==='en'
+        ? `These people already have different parent families (${existingFamId} and ${targetFamId}); merging two different families automatically is not supported — fix the link first via "Correct" → "Family link"`
+        : `У этих людей уже указаны разные родители/семьи (${existingFamId} и ${targetFamId}); сначала исправьте связи через «Исправить» → «Семейная связь»`);
     }
 
     if(existingFamId && existingFamId === targetFamId){
-      // Уже принадлежат одной и той же семье — родство уже установлено, делать нечего
+      // F3: раньше здесь был тихий no-op — пользователь видел «✓ Связь
+      // установлена», хотя ничего не менялось. Теперь явное сообщение,
+      // чтобы не вводить в заблуждение (запрос к серверу по-прежнему не идёт).
+      throw new Error(currentLang==='he' ? 'הם כבר מקושרים כאח/אחות'
+        : currentLang==='en' ? 'They are already linked as siblings'
+        : 'Они уже связаны как брат/сестра');
     } else {
       const useFamId   = targetFamId || existingFamId; // какая семья уже есть (если есть)
       const missingId  = targetFamId ? existingId : targetId; // кого в неё добавить
