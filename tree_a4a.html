@@ -1685,7 +1685,7 @@ function openModal(prefillId, mode){
 
     // Prefill the editable fields with CURRENT values so user only changes what's wrong
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
-    setVal('ff-name',      pname(prefillId));
+    setVal('ff-name',      n.name);
     setVal('ff-name-en',   n.name_en);
     setVal('ff-name-he',   n.name_he);
     setVal('ff-genitive',  n.genitive);
@@ -2501,6 +2501,122 @@ document.addEventListener('click', () => {
 // ════════════════════════════════════════════════════════
 //  DIAGNOSTIC SYSTEM
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+//  N1: имена, введённые не на основном языке дерева
+// ════════════════════════════════════════════════════════
+// TODO(template-sync): при синхронизации с family-tree-template ВСЁ ниже
+// (PRIMARY_LANG, PRIMARY_SCRIPT_RE, DIAG_NONPRIMARY_TEXT) должно браться из
+// TREE_CONFIG шаблона, а не быть захардкожено. Это единственная точка
+// привязки к основному языку дерева в этом блоке.
+const PRIMARY_LANG = 'ru';
+const PRIMARY_SCRIPT_RE = /[\u0400-\u04FF]/;   // письмо основного языка (кириллица для 'ru')
+const DIAG_NONPRIMARY_TEXT = {
+  langWord: 'русском',                          // TODO(template-sync): из TREE_CONFIG
+  title:    'Имена не на {lang} языке'          // TODO(template-sync): из TREE_CONFIG
+};
+function diagNonPrimaryTitle(){
+  return DIAG_NONPRIMARY_TEXT.title.replace('{lang}', DIAG_NONPRIMARY_TEXT.langWord);
+}
+function diagEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Классификация персон, у которых n.name не содержит ни одной буквы
+// основного письма. category: 'latin' -> name_en, 'hebrew' -> name_he,
+// 'manual' -> только показать. patch=true — попадёт в bulk-patch.
+function classifyNonPrimaryNames(){
+  const items = [];
+  if(!IDX || !IDX.nodes) return items;
+  const HEB_RE = /[\u0590-\u05FF]/, LAT_RE = /[A-Za-z]/;
+  for(const [id, n] of Object.entries(IDX.nodes)){
+    const name = (n && typeof n.name === 'string') ? n.name.trim() : '';
+    if(!name || PRIMARY_SCRIPT_RE.test(name)) continue;
+    const hasHeb = HEB_RE.test(name), hasLat = LAT_RE.test(name);
+    const otherLetters = /\p{L}/u.test(name.replace(/[A-Za-z\u0590-\u05FF]/g, ''));
+    let category = 'manual', field = null, patch = false, note = '';
+    if(hasLat && !hasHeb && !otherLetters){ category = 'latin';  field = 'name_en'; }
+    else if(hasHeb && !hasLat && !otherLetters){ category = 'hebrew'; field = 'name_he'; }
+    else note = 'смешанное или прочее письмо — требует ручной проверки';
+
+    if(field){
+      const targetLang = field.replace('name_', '');
+      const existing = n[field];
+      if(targetLang === PRIMARY_LANG){
+        category = 'manual'; field = null;
+        note = 'целевое поле совпадает с основным языком — требует ручной проверки';
+      } else if(existing && existing !== name){
+        category = 'manual';
+        note = 'поле ' + field + ' уже занято другим значением («' + existing + '») — требует ручной проверки';
+        field = null;
+      } else if(existing === name){
+        note = 'поле ' + field + ' уже содержит это значение — осталось вписать русское имя';
+      } else {
+        patch = true;
+      }
+    }
+    items.push({ id, name, category, field, patch, note });
+  }
+  return items;
+}
+
+function exportNonPrimaryNamesBulkPatch(){
+  const items = classifyNonPrimaryNames().filter(it => it.patch);
+  if(!items.length){
+    showToast('⚠ Нет персон для экспорта (нечего переносить автоматически)', true);
+    return;
+  }
+  const patches = {};
+  for(const it of items) patches[it.id] = { [it.field]: it.name };   // поле name НЕ трогаем
+  const blob = new Blob([JSON.stringify({ patches }, null, 2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bulk-patch-non-primary-names-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✓ Экспортировано персон: ' + items.length, false);
+}
+
+// diag-overlay (z-index 700) перекрывает modal-overlay (500) — закрываем
+// диагностику перед открытием формы «Исправить».
+function diagOpenFix(id){
+  document.getElementById('diag-overlay').classList.remove('open');
+  openModal(id);
+}
+
+function renderNonPrimaryNamesSection(){
+  const items = classifyNonPrimaryNames();
+  if(!items.length) return '';
+  const isAdmin = !!(window._userRole === 'admin' && _sessionPassword);
+  const catLabel = { latin:'латиница → name_en', hebrew:'иврит → name_he', manual:'вручную' };
+  const patchable = items.filter(it => it.patch).length;
+
+  let html = '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(237,216,144,.25);font-family:Segoe UI,sans-serif">'
+    + '<div style="font-size:.8rem;color:#EDD890;margin-bottom:6px">⚠ ' + diagEsc(diagNonPrimaryTitle())
+    + ' (' + items.length + ')</div>';
+  if(isAdmin){
+    html += '<button id="diag-export-names" onclick="exportNonPrimaryNamesBulkPatch()" '
+      + 'style="margin-bottom:8px;background:rgba(237,216,144,.15);border:1px solid rgba(237,216,144,.3);'
+      + 'color:#EDD890;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:.72rem">'
+      + '⬇ Экспортировать как bulk-patch (' + patchable + ')</button>';
+  }
+  for(const it of items){
+    html += '<div class="dt"><span class="dt-warn">⚠</span>'
+      + '<span class="dt-label">' + diagEsc(it.id) + ' — ' + diagEsc(it.name)
+      + '<br><span style="opacity:.55;font-size:.65rem">' + diagEsc(catLabel[it.category])
+      + (it.note ? ' · ' + diagEsc(it.note) : '') + '</span></span>';
+    if(isAdmin){
+      html += '<button onclick="diagOpenFix(\'' + diagEsc(it.id) + '\')" title="Исправить" '
+        + 'style="background:none;border:1px solid rgba(237,216,144,.3);color:#EDD890;'
+        + 'border-radius:3px;cursor:pointer;font-size:.68rem;padding:1px 8px;flex-shrink:0">🔧</button>';
+    }
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+
 function runDiagnostics(){
   const results = [];
   function ok(label, val)   { results.push({s:'ok',   label, val: val !== undefined ? String(val) : ''}); }
@@ -2593,6 +2709,13 @@ function runDiagnostics(){
   ).length;
   mixedNames === 0 ? ok('Имена без смешения языков')
                    : warn('Имена со смешением языков', mixedNames);
+
+  // N1: имена без букв основного письма
+  {
+    const npn = classifyNonPrimaryNames();
+    npn.length === 0 ? ok('Все имена содержат основное письмо')
+                     : warn(diagNonPrimaryTitle(), npn.length + ' — см. список ниже');
+  }
 
   // ── 2. UI FUNCTIONS ─────────────────────────────────
   typeof navigateTo === 'function' ? ok('navigateTo()') : fail('navigateTo() не найдена');
@@ -2727,7 +2850,7 @@ function showDiagnostics(){
     </div>`
   ).join('');
 
-  document.getElementById('diag-results').innerHTML = summary + rows;
+  document.getElementById('diag-results').innerHTML = summary + rows + renderNonPrimaryNamesSection();
   document.getElementById('diag-overlay').classList.add('open');
 }
 
