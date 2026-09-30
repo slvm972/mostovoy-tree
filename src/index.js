@@ -30,6 +30,20 @@ async function checkPassword(provided, storedHash) {
   return h === storedHash;
 }
 
+// F2b: guard "ребёнок уже состоит в другой семье". Конфликт — ТОЛЬКО если
+// IDX.child_of[cid] существует и не равен целевой семье (targetFamId).
+// Для новой семьи передаётся null — тогда конфликт при любом существующем
+// child_of. Намеренно НЕ сканирует children всех семей (см. решение F2b).
+// Возвращает текст ошибки или null.
+function childFamilyConflict(IDX, cid, targetFamId) {
+  const existingFamId = IDX.child_of && IDX.child_of[cid];
+  if(existingFamId && existingFamId !== targetFamId) {
+    const name = (IDX.nodes[cid] && IDX.nodes[cid].name) || cid;
+    return 'Персона ' + name + ' (' + cid + ') уже состоит в семье ' + existingFamId;
+  }
+  return null;
+}
+
 // ── Route handler ──────────────────────────────────────
 
 export default {
@@ -821,7 +835,34 @@ export default {
         wife    = p2 || null;
       }
 
+      // F2b: дубль пары родителей — только когда известны ОБА родителя.
+      // Сравнение без учёта порядка слотов (husband/wife уже нормализованы
+      // по полу выше, но в старых данных слоты могут быть переставлены).
+      if(husband && wife){
+        const dupFamId = Object.keys(IDX.families).find(fid => {
+          const f = IDX.families[fid];
+          return f.husband && f.wife &&
+            ((f.husband === husband && f.wife === wife) ||
+             (f.husband === wife && f.wife === husband));
+        });
+        if(dupFamId){
+          return json({
+            ok: false,
+            error: 'Семья с этой парой родителей уже существует: ' + dupFamId,
+            existingFamilyId: dupFamId
+          }, 409);
+        }
+      }
+
       const children = [...new Set(body.children || [])].filter(c => IDX.nodes[c]);
+
+      // F2b: ни один ребёнок не должен уже состоять в другой семье.
+      // Проверка до любых изменений IDX и до KV-записи.
+      for(const cid of children){
+        const conflict = childFamilyConflict(IDX, cid, null);
+        if(conflict) return err(conflict, 409);
+      }
+
       IDX.families[famId] = { id: famId, husband, wife, children };
 
       // Update parent_in and relatives for both parents
@@ -886,6 +927,9 @@ export default {
       if(body.addChild) {
         const cid = body.addChild;
         if(!IDX.nodes[cid]) return err('Персона не найдена: ' + cid, 404);
+        // F2b: ребёнок уже в другой семье — 409, ничего не меняем.
+        const addConflict = childFamilyConflict(IDX, cid, famId);
+        if(addConflict) return err(addConflict, 409);
         if(!fam.children.includes(cid)) fam.children.push(cid);
 
         IDX.child_of[cid] = famId;
