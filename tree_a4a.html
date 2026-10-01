@@ -886,7 +886,7 @@ function showPanel(id){
 
   // ── Column 1: name, rel, dates ──
   const relForId = IDX.relatives[id];
-  const canEdit = !!_sessionPassword;
+  const canEdit = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
   const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
   const isAuth = !!(_sessionPassword);
   let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
@@ -2197,13 +2197,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
 
     const photoIdMatch = person.match(/\[(P\d+)\]\s*$/);
     const photoTargetId = photoIdMatch ? photoIdMatch[1] : null;
-    // ── ADMIN detection: явный логин (_sessionPassword) ИЛИ пароль,
-    // найденный через getAdminPassword() (localStorage/sessionStorage) ──
+    // ── ADMIN detection: только подтверждённая сервером роль admin ──
     const adminPwd = getAdminPassword();
-    if(adminPwd && !_sessionPassword){
-      _sessionPassword = adminPwd;
-      window._userRole = window._userRole || 'admin';
-    }
     const isAdminPhoto = !!(adminPwd && photoTargetId && WORKER_URL);
 
     if(isAdminPhoto){
@@ -2812,9 +2807,9 @@ function renderNonPrimaryNamesSection(){
 
 function runDiagnostics(){
   const results = [];
-  function ok(label, val)   { results.push({s:'ok',   label, val: val !== undefined ? String(val) : ''}); }
-  function fail(label, val) { results.push({s:'fail', label, val: val !== undefined ? String(val) : ''}); }
-  function warn(label, val) { results.push({s:'warn', label, val: val !== undefined ? String(val) : ''}); }
+  function ok(label, val, items)   { results.push({s:'ok',   label, val: val !== undefined ? String(val) : '', items}); }
+  function fail(label, val, items) { results.push({s:'fail', label, val: val !== undefined ? String(val) : '', items}); }
+  function warn(label, val, items) { results.push({s:'warn', label, val: val !== undefined ? String(val) : '', items}); }
 
   // ── 1. DATA INTEGRITY ───────────────────────────────
   const nodeCount = Object.keys(IDX.nodes).length;
@@ -2833,11 +2828,28 @@ function runDiagnostics(){
   brokenRefs === 0 ? ok('Ссылки семей корректны') : fail('Битых ссылок в семьях', brokenRefs);
 
   // Orphan nodes
-  const orphans = Object.keys(IDX.nodes).filter(id =>
+  const famsAll = Object.entries(IDX.families);
+  function orphanReason(id){
+    const inFam = famsAll
+      .filter(([, f]) => f.husband === id || f.wife === id || (f.children || []).includes(id))
+      .map(([fid]) => fid);
+    if(inFam.length)
+      return 'есть в семье ' + inFam.join(', ') + ', но кэш child_of/parent_in не обновлён → admin.html → Обслуживание → «Пересчитать кэш»';
+    const nm = (IDX.nodes[id].name || '').trim().toLowerCase();
+    const twins = Object.entries(IDX.nodes)
+      .filter(([oid, on]) => oid !== id && nm && (on.name || '').trim().toLowerCase() === nm)
+      .map(([oid]) => oid);
+    if(twins.length)
+      return 'не состоит ни в одной семье; возможный дубль: ' + twins.join(', ') + ' (объедините или удалите)';
+    return 'не состоит ни в одной семье: прикрепите к родителям/супругу или удалите';
+  }
+  const orphanIds = Object.keys(IDX.nodes).filter(id =>
     !IDX.child_of[id] && (!IDX.parent_in[id] || !IDX.parent_in[id].length)
-  ).length;
-  orphans === 0 ? ok('Нет изолированных персон')
-                : warn('Изолированные персоны (без связей)', orphans);
+  );
+  orphanIds.length === 0
+    ? ok('Нет изолированных персон')
+    : warn('Изолированные персоны (без связей)', orphanIds.length,
+        orphanIds.map(id => ({ id, reason: orphanReason(id), orphan: true })));
 
   // Death before birth
   let deadBeforeBorn = 0;
@@ -2854,7 +2866,10 @@ function runDiagnostics(){
   // до того как эти проверки появились на сервере).
   const famProblems = []; // { famId, childId, childName, reason }
   function famProblem(famId, childId, reason){
-    famProblems.push({ famId, childId, childName: IDX.nodes[childId]?.name || childId, reason });
+    const f = IDX.families[famId];
+    const par = f ? [f.husband, f.wife].filter(Boolean).map(p => IDX.nodes[p] ? pname(p) + ' [' + p + ']' : p).join(' + ') : '';
+    famProblems.push({ famId, childId, childName: IDX.nodes[childId]?.name || childId,
+      reason: (famId !== '—' ? 'семья ' + famId + (par ? ' (' + par + ')' : '') + ': ' : '') + reason });
   }
   function birthYr(id){ const m = IDX.nodes[id]?.birth && IDX.nodes[id].birth.match(/\d{4}/); return m ? +m[0] : null; }
   function genOf(id){ const g = IDX.nodes[id]?.gen; return (g===undefined||g===null) ? null : g; }
@@ -2887,12 +2902,8 @@ function runDiagnostics(){
   }
   famProblems.length === 0
     ? ok('Родственные связи без противоречий')
-    : fail('Подозрительные родственные связи', famProblems.length + ' — см. подробности ниже');
-  if(famProblems.length){
-    for(const p of famProblems.slice(0, 15)){
-      warn('  ⚠ ' + p.childName + (p.famId !== '—' ? ' (семья ' + p.famId + ')' : ''), p.reason);
-    }
-  }
+    : fail('Подозрительные родственные связи', famProblems.length,
+        famProblems.map(p => ({ id: p.childId, reason: p.reason })));
   deadBeforeBorn === 0 ? ok('Хронология дат корректна')
                        : fail('Смерть раньше рождения', deadBeforeBorn + ' случаев');
 
@@ -2974,7 +2985,8 @@ function runDiagnostics(){
   // Re-checks previously fixed issues to catch silent regressions from
   // future patches that may not read the full current file state.
   try {
-    const scriptText = Array.from(document.scripts).map(s => s.textContent).join('\n');
+    const scriptText = Array.from(document.scripts).map(s => s.textContent).join('\n')
+      + '\n' + (typeof getCenteredLayout === 'function' ? getCenteredLayout.toString() : '');
 
     if(/const MAX_GC\s*=\s*Infinity/.test(scriptText)){
       ok('Нет регрессии: MAX_GC = Infinity');
@@ -3022,6 +3034,48 @@ function runDiagnostics(){
   return results;
 }
 
+function diagEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function diagClose(){ document.getElementById('diag-overlay').classList.remove('open'); }
+function diagGo(id){ diagClose(); panelNavigate(id); }
+function diagFix(id){ diagClose(); openModal(id); }
+function diagAttach(id){
+  diagClose();
+  openModal();
+  const tab = document.querySelector('.mtype[data-type="attach"]');
+  if(tab) tab.click();
+  const n = IDX.nodes[id];
+  const yr = n && n.birth ? (n.birth.match(/\d{4}/) || [''])[0] : '';
+  const el = document.getElementById('f-attach-existing');
+  if(el) el.value = pname(id) + (yr ? ' (' + yr + ')' : '') + ' [' + id + ']';
+}
+
+function diagItemsHtml(r){
+  if(!r.items || !r.items.length) return '';
+  const isAdmin = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+  const canEdit = isAdmin;
+  const btn = 'font-size:.7rem;padding:1px 7px;background:rgba(237,216,144,.12);border:1px solid rgba(237,216,144,.3);border-radius:3px;cursor:pointer;color:#EDD890;font-family:inherit';
+  const yr = s => (s && (s.match(/\d{4}/) || [''])[0]) || '';
+  const rows = r.items.map(it => {
+    const n = IDX.nodes[it.id];
+    const name = n ? pname(it.id) : it.id;
+    const meta = n
+      ? [ 'gen ' + (n.gen ?? '?'), n.rel ? trel(n.rel) : '', [yr(n.birth), yr(n.death) ? '† ' + yr(n.death) : ''].filter(Boolean).join(' ') ].filter(Boolean).join(' · ')
+      : 'нет в IDX.nodes';
+    return `<div style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 18px;border-bottom:1px dotted rgba(255,255,255,.08)">
+      <div style="flex:1;min-width:0">
+        <div style="color:#EDD890">${diagEsc(name)} <span style="opacity:.5">[${it.id}]</span></div>
+        <div style="opacity:.55;font-size:.65rem">${diagEsc(meta)}</div>
+        <div style="color:#E0A050;font-size:.65rem;white-space:normal">${diagEsc(it.reason)}</div>
+      </div>
+      ${n ? `<button style="${btn}" title="Перейти к персоне" onclick="diagGo('${it.id}')">→</button>` : ''}
+      ${n && canEdit ? `<button style="${btn}" title="Исправить" onclick="diagFix('${it.id}')">🔧</button>` : ''}
+      ${n && isAdmin && it.orphan ? `<button style="${btn}" title="Прикрепить к родственникам" onclick="diagAttach('${it.id}')">🔗</button>` : ''}
+    </div>`;
+  }).join('');
+  return `<details ${r.items.length <= 5 ? 'open' : ''} style="margin:2px 0 6px">
+    <summary style="cursor:pointer;font-size:.68rem;opacity:.7;padding-left:18px">Показать (${r.items.length})</summary>${rows}</details>`;
+}
+
 function showDiagnostics(){
   const results = runDiagnostics();
   const passed = results.filter(r=>r.s==='ok').length;
@@ -3040,7 +3094,7 @@ function showDiagnostics(){
       <span class="dt-${r.s}">${r.s==='ok'?'✓':r.s==='fail'?'✗':'⚠'}</span>
       <span class="dt-label">${r.label}</span>
       ${r.val ? `<span class="dt-val">${r.val}</span>` : ''}
-    </div>`
+    </div>` + diagItemsHtml(r)
   ).join('');
 
   document.getElementById('diag-results').innerHTML = summary + rows + renderNonPrimaryNamesSection();
@@ -3069,22 +3123,13 @@ const WORKER_URL = 'https://mostovoy-tree.slvm972.workers.dev';
 // Session auth token (set after login)
 let _sessionPassword = '';
 
-// ── Admin password auto-detection (localStorage/sessionStorage) ──
-// Позволяет ранее сохранённому паролю администратора активировать режим
-// ADMIN (прямое сохранение на Worker), даже если пользователь не проходил
-// форму логина в этой конкретной вкладке/сессии. Порядок поиска:
-// 1) localStorage['admin_password'], 2) localStorage['tree_pwd'],
-// 3) sessionStorage['tree_pwd'], 4) уже установленный _sessionPassword.
+// ── Admin password (только подтверждённая сессия) ──
+// Возвращает пароль ТОЛЬКО если текущая сессия подтверждена как admin.
+// Раньше функция отдавала любой пароль из localStorage/sessionStorage —
+// в том числе гостевой (tree_pwd пишется и для гостей), и вызывающий код
+// повышал роль до admin. Роль определяется только сервером (/api/login).
 function getAdminPassword(){
-  try {
-    const fromLS = localStorage.getItem('admin_password') || localStorage.getItem('tree_pwd');
-    if(fromLS) return fromLS;
-  } catch(e){ /* localStorage недоступен (приватный режим и т.п.) — игнорируем */ }
-  try {
-    const fromSS = sessionStorage.getItem('tree_pwd');
-    if(fromSS) return fromSS;
-  } catch(e){ /* аналогично */ }
-  return _sessionPassword || '';
+  return (window._userRole === 'admin' && _sessionPassword) ? _sessionPassword : '';
 }
 
 // Submit proposal to Worker (called after prompt generation if WORKER_URL set)
@@ -3190,6 +3235,7 @@ document.getElementById('btn-login').addEventListener('click', e => {
       _sessionPassword = '';
       window._userRole = null;
       sessionStorage.removeItem('tree_pwd');
+      sessionStorage.removeItem('tree_role');
       document.getElementById('btn-login').textContent = '🔑';
       const editBtnOut = document.getElementById('btn-edit');
       if(editBtnOut) editBtnOut.style.display = 'none';
@@ -4374,6 +4420,33 @@ async function reassignParentsForFix(childId, oldFamId, fatherId, motherId){
 }
 
 // Инициализировать дерево с данными из API
+// После перезагрузки страницы в sessionStorage остаётся только пароль, а
+// window._userRole раньше не восстанавливался (tree_role писался, но нигде
+// не читался). С прав-проверкой «только админ» это скрыло бы кнопки у
+// самого админа. Роль подтверждаем у сервера (/api/login), а не берём из
+// sessionStorage на веру. Нет сети — используем сохранённую роль (сервер всё
+// равно перепроверит любую запись).
+async function restoreSessionRole(pwd){
+  try {
+    const r = await fetch(WORKER_URL + '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const d = await r.json();
+    if(d && d.ok){
+      window._userRole = d.role;
+      sessionStorage.setItem('tree_role', d.role);
+      return true;
+    }
+    return false;
+  } catch(e){
+    const saved = sessionStorage.getItem('tree_role');
+    window._userRole = (saved === 'admin' || saved === 'guest') ? saved : 'guest';
+    return true;
+  }
+}
+
 function initTree(data, pwd) {
   IDX = data;
   if (pwd) _sessionPassword = pwd;
@@ -4398,7 +4471,10 @@ function initTree(data, pwd) {
   if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
   hideLoader();
   const editBtn = document.getElementById('btn-edit');
-  if(editBtn) editBtn.style.display = _sessionPassword ? '' : 'none';
+  if(editBtn) editBtn.style.display = (_sessionPassword && window._userRole === 'admin' && WORKER_URL) ? '' : 'none';
+  // иконка входа после перезагрузки страницы (роль восстановлена в loadTree)
+  const loginBtnInit = document.getElementById('btn-login');
+  if(loginBtnInit && _sessionPassword && window._userRole) loginBtnInit.textContent = window._userRole === 'admin' ? '🔓' : '👤';
 }
 
 // Главная функция загрузки
@@ -4408,16 +4484,21 @@ async function loadTree() {
   if (savedPwd) {
     showLoader('Загрузка дерева…');
     try {
-      const res = await fetch(WORKER_URL + '/api/tree', {
-        headers: { 'X-Password': savedPwd }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        initTree(data, savedPwd);
-        return;
+      const roleOk = await restoreSessionRole(savedPwd);
+      if (roleOk) {
+        const res = await fetch(WORKER_URL + '/api/tree', {
+          headers: { 'X-Password': savedPwd }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          initTree(data, savedPwd);
+          return;
+        }
       }
       // Пароль устарел — очищаем
       sessionStorage.removeItem('tree_pwd');
+      sessionStorage.removeItem('tree_role');
+      window._userRole = null;
     } catch(e) {
       console.warn('API недоступен, используем встроенные данные', e);
       hideLoader();
