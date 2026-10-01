@@ -267,6 +267,19 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 @media (max-width: 640px) {
   #tb-hscroll, #canvas-hscroll, #canvas-vscroll { display: block; }
 }
+
+/* ── Date widget (birth/death: exact / year-only / unknown) ── */
+#modal .datew label.dw-opt{display:flex;align-items:center;gap:6px;margin:3px 0;font-size:.8rem;font-weight:400;
+  text-transform:none;letter-spacing:0;color:#28180A;cursor:pointer}
+#modal .datew input[type=radio]{width:auto;padding:0;margin:0;flex-shrink:0}
+#modal .datew .dw-row{display:flex;gap:6px;margin-top:6px}
+#modal .datew .dw-row select{flex:1 1 0;min-width:0}
+#modal .datew .dw-row input{flex:1.3 1 0;min-width:0}
+#modal .datew .dw-panel{margin-top:4px}
+#modal .datew .dw-legacy-val{background:#EDE4D3;color:#5A3C10}
+#modal .datew .dw-hint{font-size:.7rem;color:#A03818;line-height:1.5;margin-top:4px}
+#modal .datew .dw-restore{margin-top:6px;font-size:.7rem;padding:2px 8px;background:rgba(184,144,48,.12);
+  border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828}
 </style>
 <script src="tree-i18n.js"></script>
 <script src="tree-names.js"></script>
@@ -344,9 +357,9 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <label data-i="lbl_sex">Пол</label>
     <select id="f-sex"><option value="" data-i="sex_choose">— выбрать —</option><option value="F" data-i="sex_f">Женский</option><option value="M" data-i="sex_m">Мужской</option></select>
     <label data-i="lbl_birth">Дата рождения</label>
-    <input id="f-birth" type="text" data-ph="ph_birth" placeholder="Например: 15 марта 1975">
+    <div id="f-birth" data-dw-kind="birth"></div>
     <label data-i="lbl_death">Дата смерти (если есть)</label>
-    <input id="f-death" type="text" data-ph="ph_death" placeholder="оставьте пустым если жив(а)">
+    <div id="f-death" data-dw-kind="death"></div>
     <label data-i="lbl_father">Отец</label>
     <input id="f-father" type="text" list="names-list" data-ph="ph_search" placeholder="Начните вводить имя...">
     <label data-i="lbl_mother">Мать</label>
@@ -432,10 +445,10 @@ svg{position:absolute;top:0;left:0;overflow:visible}
     <input id="ff-genitive" type="text" data-ph="ph_genitive" placeholder="Например: Анны Ивановой">
 
     <label data-i="fix_birth">Дата рождения</label>
-    <input id="ff-birth" type="text" data-ph="ph_birth" placeholder="Например: 15 марта 1975">
+    <div id="ff-birth" data-dw-kind="birth"></div>
 
     <label data-i="fix_death">Дата смерти</label>
-    <input id="ff-death" type="text" data-ph="ph_death" placeholder="оставьте пустым если жив(а)">
+    <div id="ff-death" data-dw-kind="death"></div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="fix_birth_he" style="margin:10px 0 3px">Дата рождения (еврейский календарь)</label>
@@ -1530,6 +1543,9 @@ window.applyLang = function(lang){
     hb.innerHTML = '<b>'+(M.help_title||'')+'</b><ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
   }
 
+  // 8b. Date widgets: month labels come from tm()
+  if(typeof dateWidgetRefreshLabels === 'function') dateWidgetRefreshLabels();
+
   // 9. Rebuild names autocomplete in current language
   if(IDX && typeof buildDatalist === 'function') buildDatalist();
 
@@ -1587,6 +1603,148 @@ function buildDatalist(){
 }
 // buildDatalist() called after IDX loads in initTree()
 
+// ════════════════════════════════════════════════════════
+//  DATE WIDGET — birth/death: «точная дата» / «только год» / «неизвестно»
+//  Допустимые значения строки (и только они — для НОВОГО ввода):
+//    "Д MON ГГГГ" (день без ведущего нуля) | "ГГГГ" | "" (пустая строка).
+//  Любая другая уже существующая запись показывается в «служебном»
+//  состоянии (legacy): read-only, пока пользователь явно не выберет
+//  один из трёх вариантов. Серверный контракт не меняется — наружу
+//  уходит та же строка (dateWidgetRead().value).
+// ════════════════════════════════════════════════════════
+const DW_MONTHS  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const DW_YEAR_MIN = 1700;
+const DW_FULL_RE = /^([1-9]|[12]\d|3[01]) (JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC) (\d{4})$/;
+const DW_YEAR_RE = /^\d{4}$/;
+function dwYearMax(){ return new Date().getFullYear(); }
+
+function buildDateWidget(id){
+  const host = document.getElementById(id);
+  if(!host) return;
+  const kind = host.dataset.dwKind === 'death' ? 'death' : 'birth';
+  const grp  = 'dw-mode-' + id;
+  const dayOpts = '<option value="" data-i="date_day"></option>' +
+    Array.from({length:31}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('');
+  const monOpts = '<option value="" data-i="date_month"></option>' +
+    DW_MONTHS.map(m => `<option value="${m}" data-dw-month="${m}"></option>`).join('');
+  host.classList.add('datew');
+  host.innerHTML = `
+    <label class="dw-opt"><input type="radio" name="${grp}" value="full"><span data-i="date_mode_full"></span></label>
+    <label class="dw-opt"><input type="radio" name="${grp}" value="year"><span data-i="date_mode_year"></span></label>
+    <label class="dw-opt"><input type="radio" name="${grp}" value="unknown"><span data-i="date_mode_unknown_${kind}"></span></label>
+    <div class="dw-panel dw-p-legacy" style="display:none">
+      <input type="text" class="dw-legacy-val" readonly>
+      <div class="dw-hint" data-i="date_legacy_hint"></div>
+    </div>
+    <div class="dw-panel dw-p-full dw-row" style="display:none">
+      <select class="dw-day">${dayOpts}</select>
+      <select class="dw-month">${monOpts}</select>
+      <input type="number" class="dw-year-full" min="${DW_YEAR_MIN}" max="${dwYearMax()}" step="1" data-ph="date_year_ph">
+    </div>
+    <div class="dw-panel dw-p-year" style="display:none">
+      <input type="number" class="dw-year-only" min="${DW_YEAR_MIN}" max="${dwYearMax()}" step="1" data-ph="date_year_ph">
+    </div>
+    <button type="button" class="dw-restore" style="display:none" data-i="date_restore_legacy"></button>`;
+  host._dw = { kind, initialRaw: '', legacyRaw: null, mode: 'unknown' };
+
+  host.querySelectorAll('input[type=radio]').forEach(r =>
+    r.addEventListener('change', () => { if(r.checked) dwSetMode(host, r.value); }));
+  host.querySelector('.dw-restore').addEventListener('click', () => dwSetMode(host, 'legacy'));
+  dateWidgetRefreshLabels(host);
+}
+
+function dwSetMode(host, mode){
+  host._dw.mode = mode;
+  host.querySelectorAll('input[type=radio]').forEach(r => { r.checked = (r.value === mode); });
+  host.querySelector('.dw-p-legacy').style.display = mode === 'legacy' ? '' : 'none';
+  host.querySelector('.dw-p-full').style.display   = mode === 'full'   ? '' : 'none';
+  host.querySelector('.dw-p-year').style.display   = mode === 'year'   ? '' : 'none';
+  host.querySelector('.dw-restore').style.display  =
+    (host._dw.legacyRaw !== null && mode !== 'legacy') ? '' : 'none';
+}
+
+// Заполнить виджет существующим значением birth/death (parseIntoWidget).
+function dateWidgetSet(id, rawValue){
+  const host = document.getElementById(id);
+  if(!host || !host._dw) return;
+  const raw = (rawValue === undefined || rawValue === null) ? '' : String(rawValue);
+  host.querySelector('.dw-day').value = '';
+  host.querySelector('.dw-month').value = '';
+  host.querySelector('.dw-year-full').value = '';
+  host.querySelector('.dw-year-only').value = '';
+  host.querySelector('.dw-legacy-val').value = '';
+  host._dw.initialRaw = raw;
+  host._dw.legacyRaw = null;
+
+  let m;
+  if(raw === ''){
+    dwSetMode(host, 'unknown');
+  } else if(DW_YEAR_RE.test(raw)){
+    host.querySelector('.dw-year-only').value = raw;
+    dwSetMode(host, 'year');
+  } else if((m = raw.match(DW_FULL_RE))){
+    host.querySelector('.dw-day').value = m[1];
+    host.querySelector('.dw-month').value = m[2];
+    host.querySelector('.dw-year-full').value = m[3];
+    dwSetMode(host, 'full');
+  } else {
+    // устаревший/нестандартный формат ("OCT 1970", "ум.", "27 августа 1972"…)
+    host._dw.legacyRaw = raw;
+    host.querySelector('.dw-legacy-val').value = raw;
+    dwSetMode(host, 'legacy');
+  }
+}
+
+// Собрать виджет обратно в строку (widgetToString) + валидация.
+// Возвращает {ok:true, value} или {ok:false, error}.
+function dateWidgetRead(id){
+  const host = document.getElementById(id);
+  if(!host || !host._dw) return {ok:true, value:''};
+  const st = host._dw;
+  const label = st.kind === 'death' ? t('fix_death') : t('fix_birth');
+  const fail = (key) => ({ ok:false,
+    error: '⚠ ' + label + ': ' + t(key).replace('{min}', DW_YEAR_MIN).replace('{max}', dwYearMax()) });
+  const yearOk = (y, value) =>
+    value === st.initialRaw || (+y >= DW_YEAR_MIN && +y <= dwYearMax());
+
+  if(st.mode === 'legacy')  return { ok:true, value: st.legacyRaw };   // as-is: не меняет существующее
+  if(st.mode === 'unknown') return { ok:true, value: '' };
+
+  if(st.mode === 'year'){
+    const y = host.querySelector('.dw-year-only').value.trim();
+    if(!DW_YEAR_RE.test(y)) return fail('date_err_incomplete');
+    if(!yearOk(y, y)) return fail('date_err_year_range');
+    return { ok:true, value: y };
+  }
+
+  // full
+  const d  = host.querySelector('.dw-day').value;
+  const mo = host.querySelector('.dw-month').value;
+  const y  = host.querySelector('.dw-year-full').value.trim();
+  if(!d || !mo || !DW_YEAR_RE.test(y)) return fail('date_err_incomplete');
+  const value = d + ' ' + mo + ' ' + y;
+  if(!yearOk(y, value)) return fail('date_err_year_range');
+  const maxDay = new Date(+y, DW_MONTHS.indexOf(mo) + 1, 0).getDate();
+  if(+d > maxDay) return fail('date_err_bad_day');
+  return { ok:true, value };
+}
+
+// Подписи месяцев — из существующего tm(); остальные строки переводит applyLang через data-i/data-ph.
+function dateWidgetRefreshLabels(host){
+  const hosts = host ? [host] : document.querySelectorAll('.datew');
+  hosts.forEach(h => {
+    h.querySelectorAll('option[data-dw-month]').forEach(o => { o.textContent = tm(o.dataset.dwMonth); });
+    h.querySelectorAll('[data-i]').forEach(el => { const v = t(el.dataset.i); if(v) el.textContent = v; });
+    h.querySelectorAll('[data-ph]').forEach(el => { el.placeholder = t(el.dataset.ph); });
+  });
+}
+
+function initDateWidgets(){
+  ['f-birth','f-death','ff-birth','ff-death'].forEach(buildDateWidget);
+  ['f-birth','f-death','ff-birth','ff-death'].forEach(id => dateWidgetSet(id, ''));
+}
+initDateWidgets();
+
 // Open / close modal
 function openModal(prefillId, mode){
   mode = mode || 'fix'; // preserve existing behavior for all pre-existing openModal(id) calls
@@ -1596,16 +1754,18 @@ function openModal(prefillId, mode){
   document.getElementById('prompt-out').textContent = '';
 
   // ── Reset all form fields to blank ──────────────────
-  ['f-name','f-name-genitive','f-birth','f-death','f-phone','f-email','f-social',
+  ['f-name','f-name-genitive','f-phone','f-email','f-social',
    'f-photo-url','f-photo-cap','photoFileInput',
    'f-bio-text','f-bio-url',
    'f-date-note','f-father','f-mother',
-   'ff-name','ff-name-en','ff-name-he','ff-genitive','ff-birth','ff-death','ff-birth-he','ff-death-he',
+   'ff-name','ff-name-en','ff-name-he','ff-genitive','ff-birth-he','ff-death-he',
    'ff-phone','ff-email','ff-social','ff-rel','ff-gen','ff-father','ff-mother','ff-family','ff-other',
    'f-fix-comment'].forEach(fid => {
     const el = document.getElementById(fid);
     if(el) el.value = '';
   });
+  // Date widgets back to «unknown» (prefilled below in 'fix' mode)
+  ['f-birth','f-death','ff-birth','ff-death'].forEach(wid => dateWidgetSet(wid, ''));
   // Reset person fields
   ['f-rel-person','f-photo-person','f-bio-person','f-date-person','f-fix-person'].forEach(fid => {
     const el = document.getElementById(fid);
@@ -1689,8 +1849,8 @@ function openModal(prefillId, mode){
     setVal('ff-name-en',   n.name_en);
     setVal('ff-name-he',   n.name_he);
     setVal('ff-genitive',  n.genitive);
-    setVal('ff-birth',     n.birth);
-    setVal('ff-death',     n.death);
+    dateWidgetSet('ff-birth', n.birth);
+    dateWidgetSet('ff-death', n.death);
     setVal('ff-birth-he',  n.birth_he);
     setVal('ff-death-he',  n.death_he);
     setVal('ff-phone',     n.phone);
@@ -1854,13 +2014,17 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const isAdminDirect = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
     const name  = document.getElementById('f-name').value.trim();
     const sex   = document.getElementById('f-sex').value === 'F' ? 'Женский' : 'Мужской';
-    const birth = document.getElementById('f-birth').value.trim();
-    const death = document.getElementById('f-death').value.trim();
+    const birthR = dateWidgetRead('f-birth');
+    const deathR = dateWidgetRead('f-death');
+    const birth = birthR.ok ? birthR.value : '';
+    const death = deathR.ok ? deathR.value : '';
     const relP  = document.getElementById('f-rel-person').value.trim();
     const relT  = document.getElementById('f-rel-type').value;
 	const fatherLabel = document.getElementById('f-father').value.trim();
     const motherLabel = document.getElementById('f-mother').value.trim();
     if(!name){ alert('Введите имя'); return; }
+    if(!birthR.ok){ showToast(birthR.error, true); return; }
+    if(!deathR.ok){ showToast(deathR.error, true); return; }
 	// Проверка на дубль имени — не даём случайно создать вторую запись
     // того же человека, если имя уже встречается в дереве.
     if(isAdminDirect){
@@ -2256,13 +2420,18 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     }
     const parentsChanged = (newFatherId !== oldFatherId) || (newMotherId !== oldMotherId);
 
+    const birthFixR = dateWidgetRead('ff-birth');
+    const deathFixR = dateWidgetRead('ff-death');
+    if(!birthFixR.ok){ showToast(birthFixR.error, true); return; }
+    if(!deathFixR.ok){ showToast(deathFixR.error, true); return; }
+
     const fields = [
       { key: 'name',     label: t('fix_name'),       val: getV('ff-name'),     orig: orig.name || '' },
       { key: 'name_en', label: t('lbl_name') + ' (EN)', val: getV('ff-name-en'), orig: orig.name_en || '' },
       { key: 'name_he', label: t('lbl_name') + ' (HE)', val: getV('ff-name-he'), orig: orig.name_he || '' },
       { key: 'genitive', label: t('fix_genitive'),   val: getV('ff-genitive'), orig: orig.genitive || '' },
-      { key: 'birth',    label: t('fix_birth'),       val: getV('ff-birth'),    orig: orig.birth || '' },
-      { key: 'death',    label: t('fix_death'),       val: getV('ff-death'),    orig: orig.death || '' },
+      { key: 'birth',    label: t('fix_birth'),       val: birthFixR.value, orig: orig.birth || '' },
+      { key: 'death',    label: t('fix_death'),       val: deathFixR.value, orig: orig.death || '' },
       { key: 'birth_he', label: t('fix_birth_he'),    val: getV('ff-birth-he'), orig: orig.birth_he || '' },
       { key: 'death_he', label: t('fix_death_he'),    val: getV('ff-death-he'), orig: orig.death_he || '' },
       { key: 'phone',    label: t('lbl_phone'),       val: getV('ff-phone'),    orig: orig.phone || '' },
