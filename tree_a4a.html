@@ -208,11 +208,18 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 /* help tooltip */
 #help-bubble{display:none;position:fixed;top:52px;right:14px;width:280px;background:#1C1208;
              color:#EDD890;font-size:.75rem;padding:12px 14px;border-radius:6px;z-index:600;
-             box-shadow:0 4px 20px rgba(0,0,0,.4);line-height:1.5}
+             box-shadow:0 4px 20px rgba(0,0,0,.4);line-height:1.5;
+             max-height:calc(100vh - 70px);overflow-y:auto}
 #help-bubble.open{display:block}
 #help-bubble b{display:block;margin-bottom:4px;font-size:.8rem}
 #help-bubble ol{padding-left:16px;margin-top:4px}
 #help-bubble li{margin-bottom:3px}
+#help-bubble .lg-title{margin-top:10px;padding-top:8px;border-top:1px solid rgba(237,216,144,.25)}
+#help-bubble .lg-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+#help-bubble .lg-b{flex:0 0 auto;width:16px;height:16px;border-radius:50%;background:#C09828;color:#1C1208;
+  font-weight:bold;font-size:.7rem;line-height:16px;text-align:center}
+#help-bubble .lg-s{flex:0 0 auto;width:16px;text-align:center;font-size:.8rem}
+#help-bubble .lg-tip{margin-top:6px;opacity:.7}
 
 /* ── MOBILE RESPONSIVE (added — see chat audit) ── */
 @media (max-width: 640px) {
@@ -1493,6 +1500,27 @@ function applyLocalPatch(node, patch) {
 }
 
 
+// Окно «?»: шаги + легенда значков на карточках. Вызывается из applyLang()
+// и безусловно из initTree() — иначе в русской версии (applyLang при
+// загрузке не вызывается) легенда бы не появилась.
+function buildHelpBubble(lang){
+  const hb = document.getElementById('help-bubble');
+  if(!hb) return;
+  const M = UI[lang] || UI.ru;
+  const L = k => M[k] || UI.ru[k] || k;
+  const steps = M.help_steps || UI.ru.help_steps;
+  const rows = [['\u2665','legend_spouses'],['\u2191','legend_parents'],
+                ['\u2194','legend_siblings'],['\u2193','legend_children']];
+  let legend = '<b class="lg-title">' + L('legend_title') + '</b>';
+  for(const [glyph, key] of rows){
+    legend += '<div class="lg-row"><span class="lg-b">' + glyph + '</span><span>' + L(key) + '</span></div>';
+  }
+  legend += '<div class="lg-row"><span class="lg-s">\uD83D\uDD17</span><span>' + L('legend_social') + '</span></div>';
+  legend += '<div class="lg-tip">' + L('legend_tip') + '</div>';
+  hb.innerHTML = '<b>' + (M.help_title || '') + '</b><ol>' +
+                 steps.map(x => '<li>' + x + '</li>').join('') + '</ol>' + legend;
+}
+
 // Apply language to all static UI elements and re-render
 window.applyLang = function(lang){
   currentLang = lang;
@@ -1536,12 +1564,8 @@ window.applyLang = function(lang){
     const v = M[opt.dataset.i]; if(v) opt.textContent = v;
   });
 
-  // 8. Help bubble
-  const hb = document.getElementById('help-bubble');
-  if(hb){
-    const steps = M.help_steps || UI.ru.help_steps;
-    hb.innerHTML = '<b>'+(M.help_title||'')+'</b><ol>'+steps.map(s=>'<li>'+s+'</li>').join('')+'</ol>';
-  }
+  // 8. Help bubble (steps + badge legend)
+  buildHelpBubble(lang);
 
   // 8b. Date widgets: month labels come from tm()
   if(typeof dateWidgetRefreshLabels === 'function') dateWidgetRefreshLabels();
@@ -4370,6 +4394,7 @@ function initTree(data, pwd) {
   const keepFocal = (currentFocal && IDX.nodes[currentFocal]) ? currentFocal : 'P3';
   currentFocal = null;
   navigateTo(keepFocal);
+  buildHelpBubble(currentLang);
   if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
   hideLoader();
   const editBtn = document.getElementById('btn-edit');
