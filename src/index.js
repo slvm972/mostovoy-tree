@@ -30,6 +30,24 @@ async function checkPassword(provided, storedHash) {
   return h === storedHash;
 }
 
+// D3: формат НОВЫХ значений birth/death, приходящих через API. Допустимо
+// ровно три вида строки (та же регулярка, что DW_FULL_RE во фронтенд-виджете):
+//   ''            — неизвестно (для death: жив(а) / не указана)
+//   'ГГГГ'        — только год
+//   'Д MON ГГГГ'  — полная дата, день 1-31 без ведущего нуля, MON = JAN..DEC
+// Любая не-строка и любая другая строка — невалидны. null/undefined (значит
+// «удалить поле») вызывающий код обрабатывает ДО вызова этой функции.
+// Применяется только к входящим значениям; уже сохранённые в KV значения
+// НЕ проверяются и не мигрируются.
+const DATE_FULL_RE = /^([1-9]|[12]\d|3[01]) (JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC) \d{4}$/;
+function isValidDateField(value) {
+  if(typeof value !== 'string') return false;
+  return value === '' || /^\d{4}$/.test(value) || DATE_FULL_RE.test(value);
+}
+function dateFieldError(field, value) {
+  return "Поле " + field + " должно быть в формате 'Д MON ГГГГ' (например '9 OCT 1970'), 'ГГГГ' или пустым; получено: " + JSON.stringify(value);
+}
+
 // F2b: guard "ребёнок уже состоит в другой семье". Конфликт — ТОЛЬКО если
 // IDX.child_of[cid] существует и не равен целевой семье (targetFamId).
 // Для новой семьи передаётся null — тогда конфликт при любом существующем
@@ -520,6 +538,9 @@ export default {
         if(field === 'gen' && val !== null && val !== undefined && !Number.isInteger(val)) {
           return err('Поле gen должно быть целым числом');
         }
+        if((field === 'birth' || field === 'death') && val !== null && val !== undefined && !isValidDateField(val)) {
+          return err(dateFieldError(field, val));
+        }
         if(val === null || val === undefined) {
           delete IDX.nodes[personId][field];
         } else {
@@ -619,7 +640,7 @@ export default {
         }
 
         const appliedFields = [];
-        const rejectedFields = []; // [{ field, reason }, ...] — extensible; only gen can reject a field today
+        const rejectedFields = []; // [{ field, reason }, ...] — extensible; gen and birth/death can reject a field today
 
         for(const [field, val] of Object.entries(fields)) {
           if(!ALLOWED.includes(field)) continue; // silently ignore disallowed fields, same as single PATCH
@@ -640,6 +661,16 @@ export default {
             IDX.nodes[personId][field] = norm.value;
             appliedFields.push(field);
             continue;
+          }
+
+          if(field === 'birth' || field === 'death') {
+            // D3: null/undefined = delete (as for every field); otherwise the
+            // value must pass isValidDateField. A bad value rejects ONLY this
+            // field — the person's other fields are still applied.
+            if(val !== null && val !== undefined && !isValidDateField(val)) {
+              rejectedFields.push({ field, reason: dateFieldError(field, val) });
+              continue;
+            }
           }
 
           if(val === null || val === undefined) {
@@ -699,6 +730,13 @@ export default {
       const IDX  = JSON.parse(rawData);
       const body = await request.json().catch(() => null);
       if(!body || !body.name) return err('Поле name обязательно');
+      // D3: birth/death, если переданы непустыми, должны быть в допустимом формате
+      for(const f of ['birth', 'death']) {
+        const v = body[f];
+        if(v !== undefined && v !== null && v !== '' && !isValidDateField(v)) {
+          return err(dateFieldError(f, v));
+        }
+      }
 
       // Generate next person ID
       const maxP = Math.max(0, ...Object.keys(IDX.nodes)
