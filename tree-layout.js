@@ -9,6 +9,43 @@ const COUPLE_GAP  = 12;   // gap between focal and spouse
 const SIBLING_GAP = 22;   // gap between siblings / focal+spouse and sibling
 const LEVEL_H     = 168;  // vertical distance between generation rows
 
+// ── Значки скрытых родственников (углы карточки) ──────────
+// Центры значков заданы от левого верхнего угла карточки 150x100.
+const BADGE_R = 7;
+const BADGE_SLOTS = { spouses:[11,11], parents:[139,11], siblings:[11,89], children:[139,89] };
+const BADGE_GLYPH = { spouses:'\u2665', parents:'\u2191', siblings:'\u2194', children:'\u2193' };
+
+// Родственники персоны id, которых нет в текущем layout (visibleSet).
+// Источник истины — IDX.families (как в showPanel); Set убирает дубли семей.
+function computeHiddenRelatives(id, visibleSet){
+  const acc = { parents:new Set(), siblings:new Set(), spouses:new Set(), children:new Set() };
+  for(const f of Object.values(IDX.families)){
+    const kids = f.children || [];
+    if(kids.includes(id)){
+      if(f.husband) acc.parents.add(f.husband);
+      if(f.wife)    acc.parents.add(f.wife);
+      kids.forEach(c => acc.siblings.add(c));
+    }
+    if(f.husband === id || f.wife === id){
+      const sp = f.husband === id ? f.wife : f.husband;
+      if(sp) acc.spouses.add(sp);
+      kids.forEach(c => acc.children.add(c));
+    }
+  }
+  const res = {};
+  for(const k of Object.keys(acc)){
+    res[k] = [...acc[k]].filter(x => x !== id && IDX.nodes[x] && !visibleSet.has(x));
+  }
+  return res;
+}
+
+// Подсказка значка. У карточки супруга скрытые дети — это дети от других браков
+// (общие с фокальной персоной уже нарисованы).
+function badgeHint(kind, n, role){
+  const key = (kind === 'children' && role === 'spouse') ? 'hint_children_other' : 'hint_' + kind;
+  return t(key).replace('{n}', n);
+}
+
 // ── helpers ───────────────────────────────────────────────
 function py(s){ const m = s && s.match(/\d{4}/); return m ? +m[0] : 9999; }
 
@@ -516,6 +553,7 @@ function render(focalId){
   // ── Layer 2: cards (drawn on top) ─────────────────────
   const cardG = svgEl('g', {id:'cards'}, svg);
 
+  const visibleSet = new Set(layout.nodes.map(x => x.id));
   for(const n of layout.nodes){
     const {fill, stroke} = cardCol(n.id, n.role);
     const nx = n.x + offX, ny = n.y + offY;
@@ -576,7 +614,7 @@ function render(focalId){
 
     // social media indicator (top-left corner) — only for authenticated users
     if(ndata.social && _sessionPassword){
-      const si = svgEl('text',{x:nx+8,y:ny+15,'font-size':'11',
+      const si = svgEl('text',{x:nx+24,y:ny+15,'font-size':'11',
                                'pointer-events':'none'},g);
       si.textContent = '🔗';
     }
@@ -624,6 +662,25 @@ function render(focalId){
                                'direction':'rtl',
                                fill:'rgba(237,216,144,.55)','pointer-events':'none'},g);
       ht.textContent = heText;
+    }
+
+    // значки скрытых родственников (по углам карточки)
+    const hidden = computeHiddenRelatives(n.id, visibleSet);
+    for(const kind of Object.keys(BADGE_SLOTS)){
+      const list = hidden[kind];
+      if(!list.length) continue;
+      const [bx, by] = BADGE_SLOTS[kind];
+      const bg = svgEl('g', {}, g);
+      svgEl('circle', {cx:nx+bx, cy:ny+by, r:BADGE_R, fill:'#C09828',
+                       stroke:'#1C1208', 'stroke-width':'0.8'}, bg);
+      const bt = svgEl('text', {x:nx+bx, y:ny+by+3.5, 'text-anchor':'middle',
+                                'font-size':'10', 'font-weight':'bold',
+                                'font-family':'Segoe UI,sans-serif',
+                                fill:'#1C1208', 'pointer-events':'none'}, bg);
+      bt.textContent = BADGE_GLYPH[kind];
+      const ti = document.createElementNS(NS, 'title');
+      ti.textContent = badgeHint(kind, list.length, n.role);
+      bg.appendChild(ti);
     }
   }
 
