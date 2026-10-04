@@ -110,7 +110,7 @@ export default {
       if(!rawData) return err('Данные дерева не найдены. Загрузите начальный файл.', 404);
 
       const source = JSON.parse(rawData);
-      const publicFields = ['id', 'name', 'birth', 'death', 'birth_he', 'death_he',
+      const publicFields = ['id', 'name', 'name_en', 'name_he', 'birth', 'death', 'birth_he', 'death_he',
                             'hebrew_name', 'sex', 'gen', 'missing', 'rel', 'genitive',
                             'rel_en', 'rel_he', 'family_note', 'family_note_en',
                             'family_note_he', 'other_note', 'other_note_en', 'other_note_he'];
@@ -472,6 +472,10 @@ export default {
       if(!file || typeof file === 'string') return err('Файл фото не найден в запросе');
       if(!person) return err('Не указана персона (person)');
 
+      const treeRaw = await env.TREE_KV.get('tree_data');
+      if(!treeRaw) return err('Данные дерева не найдены', 404);
+      if(!JSON.parse(treeRaw).nodes[person]) return err('Персона не найдена: ' + person, 404);
+
       const MAX_SIZE = 8 * 1024 * 1024; // 8MB
       if(file.size > MAX_SIZE) return err('Файл слишком большой (максимум 8 МБ)', 413);
 
@@ -483,11 +487,12 @@ export default {
         ? file.name.split('.').pop().toLowerCase() : null;
       const ext = extFromType[contentType] || extFromName || 'jpg';
 
-      const key = `${person}-${Date.now()}.${ext}`;
+      const randomSuffix = crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+      const key = `${person}-${Date.now()}-${randomSuffix}.${ext}`;
       const bytes = await file.arrayBuffer();
       await env.PHOTOS_BUCKET.put(key, bytes, { httpMetadata: { contentType } });
 
-      return json({ ok: true, key, url: 'https://mostovoy-tree.slvm972.workers.dev/api/photo/' + key });
+      return json({ ok: true, key, url: new URL(request.url).origin + '/api/photo/' + key });
     }
 
     // ── GET /api/photo/:key ───────────────────────────────
@@ -531,7 +536,8 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen'];
+                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen',
+                       'genitive','family_note','other_note','family_note_en','family_note_he','other_note_en','other_note_he'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
         if(!ALLOWED.includes(field)) continue;
@@ -593,7 +599,8 @@ export default {
       // Same whitelist as PATCH /api/person/:id above — kept identical
       // deliberately (not re-derived) so the two endpoints can never drift.
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen'];
+                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen',
+                       'genitive','family_note','other_note','family_note_en','family_note_he','other_note_en','other_note_he'];
 
       // Normalizes a raw `gen` value into either {ok:true, value:<integer>}
       // or {ok:false, reason:<string>} — never throws, never signals
@@ -761,6 +768,13 @@ export default {
         ...(body.social      ? { social:      body.social }      : {}),
         ...(body.bio         ? { bio:         body.bio }         : {}),
         ...(body.photo       ? { photo:       body.photo }       : {}),
+        ...(body.genitive       ? { genitive:       body.genitive }       : {}),
+        ...(body.family_note    ? { family_note:    body.family_note }    : {}),
+        ...(body.other_note     ? { other_note:     body.other_note }     : {}),
+        ...(body.family_note_en ? { family_note_en: body.family_note_en } : {}),
+        ...(body.family_note_he ? { family_note_he: body.family_note_he } : {}),
+        ...(body.other_note_en  ? { other_note_en:  body.other_note_en }  : {}),
+        ...(body.other_note_he  ? { other_note_he:  body.other_note_he }  : {}),
       };
 
       // Initialize empty relatives entry
