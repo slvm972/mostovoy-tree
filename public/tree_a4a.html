@@ -313,7 +313,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
   <button class="btn" id="btn-backup" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать резервную копию (JSON)" data-title="tooltip_backup">📦</button>
-  <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Войти">🔑</button>
+  <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Выйти">🔑</button>
   <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика">⚙</button>
   <button class="btn" id="btn-help" style="padding:4px 8px;opacity:.7">?</button>
 </div>
@@ -3225,26 +3225,17 @@ function showToast(msg, isWarning){
 
 document.getElementById('btn-login').addEventListener('click', e => {
   e.stopPropagation();
-  // If already logged in — show logout popup
-  if(_sessionPassword && window._userRole){
-    if(confirm(
-      window._userRole === 'admin'
-        ? t('logout_confirm_admin')
-        : t('logout_confirm_guest')
-    )){
-      _sessionPassword = '';
-      window._userRole = null;
-      sessionStorage.removeItem('tree_pwd');
-      sessionStorage.removeItem('tree_role');
-      document.getElementById('btn-login').textContent = '🔑';
-      const editBtnOut = document.getElementById('btn-edit');
-      if(editBtnOut) editBtnOut.style.display = 'none';
-      showToast(currentLang==='he' ? 'יצאת' : currentLang==='en' ? 'Logged out' : 'Вы вышли', false);
-    }
-    return;
-  }
-  // Show login form
-  showLoginForm();
+  const q = currentLang==='he' ? 'לצאת?' : currentLang==='en' ? 'Sign out?' : 'Выйти?';
+  if(!confirm(q)) return;
+  _sessionPassword = '';
+  window._userRole = null;
+  sessionStorage.removeItem('tree_pwd');
+  sessionStorage.removeItem('tree_role');
+  try {
+    localStorage.removeItem('tree_pwd_saved');
+    localStorage.removeItem('tree_role_saved');
+  } catch(e) {}
+  location.replace('/');
 });
 
 document.getElementById('btn-contacts').addEventListener('click', () => {
@@ -4477,55 +4468,55 @@ function initTree(data, pwd) {
   if(loginBtnInit && _sessionPassword && window._userRole) loginBtnInit.textContent = window._userRole === 'admin' ? '🔓' : '👤';
 }
 
-// Главная функция загрузки
+// Главная функция загрузки.
+// Дерево доступно только после входа на стартовой странице (/): нет пароля
+// или сервер его не принял — возвращаем на стартовую. Публичного режима и
+// встроенной копии данных больше нет. Пароль берётся из sessionStorage, а
+// если там пусто — из localStorage (галочка «Запомнить на этом устройстве»).
 async function loadTree() {
-  // Проверим сохранённый пароль в sessionStorage
-  const savedPwd = sessionStorage.getItem('tree_pwd');
-  if (savedPwd) {
-    showLoader('Загрузка дерева…');
+  let savedPwd = sessionStorage.getItem('tree_pwd');
+  if (!savedPwd) {
     try {
-      const roleOk = await restoreSessionRole(savedPwd);
-      if (roleOk) {
-        const res = await fetch(WORKER_URL + '/api/tree', {
-          headers: { 'X-Password': savedPwd }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          initTree(data, savedPwd);
-          return;
-        }
+      const sp = localStorage.getItem('tree_pwd_saved');
+      if (sp) {
+        savedPwd = sp;
+        sessionStorage.setItem('tree_pwd', sp);
+        const sr = localStorage.getItem('tree_role_saved');
+        if (sr) sessionStorage.setItem('tree_role', sr);
       }
-      // Пароль устарел — очищаем
-      sessionStorage.removeItem('tree_pwd');
-      sessionStorage.removeItem('tree_role');
-      window._userRole = null;
-    } catch(e) {
-      console.warn('API недоступен, используем встроенные данные', e);
-      hideLoader();
-      initTree(await loadFallbackData(), savedPwd);
-      return;
-    }
-    hideLoader();
+    } catch(e) {}
   }
-
-  // Нет сохранённого пароля (гость ещё не логинился) — пробуем получить
-  // актуальные данные с публичного санитизированного эндпоинта, чтобы
-  // не показывать замороженный на момент сборки FALLBACK_DATA.
+  if (!savedPwd) { location.replace('/'); return; }
   showLoader('Загрузка дерева…');
   try {
-    const res = await fetch(WORKER_URL + '/api/tree/public');
-    if (res.ok) {
-      const data = await res.json();
-      initTree(data, '');
-      return;
+    const roleOk = await restoreSessionRole(savedPwd);
+    if (roleOk) {
+      const res = await fetch(WORKER_URL + '/api/tree', {
+        headers: { 'X-Password': savedPwd }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        initTree(data, savedPwd);
+        return;
+      }
     }
+    // сервер не принял пароль — стираем и сессию, и сохранённый пароль
+    sessionStorage.removeItem('tree_pwd');
+    sessionStorage.removeItem('tree_role');
+    try {
+      localStorage.removeItem('tree_pwd_saved');
+      localStorage.removeItem('tree_role_saved');
+    } catch(e) {}
+    window._userRole = null;
+    location.replace('/');
   } catch(e) {
-    console.warn('Публичный API недоступен, используем встроенные данные', e);
+    // сеть недоступна: без редиректа и без стирания сохранённого пароля
+    hideLoader();
+    showToast(currentLang==='he' ? '⚠ אין חיבור לשרת — רענן את הדף'
+            : currentLang==='en' ? '⚠ Cannot reach the server — reload the page'
+            : '⚠ Нет связи с сервером — обновите страницу', true);
   }
-  hideLoader();
-  initTree(await loadFallbackData(), '');
 }
-
 // Доп. защита от восстановления поля поиска браузером: если страница
 // показывается из bfcache (кнопка «Назад»/«Вперёд»), скрипт заново не
 // выполняется — initTree() не вызывается — а браузер может восстановить

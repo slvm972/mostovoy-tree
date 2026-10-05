@@ -33,4 +33,4 @@ if ($remoteUrl -notmatch [regex]::Escape($expected.Remote)) {
 
 Write-Host "✅ Проверка пройдена: $cwd ↔ $projectName ($remoteUrl)" -ForegroundColor Green
 Write-Host "Запускаю деплой..."
-npx wrangler pages deploy . --project-name $projectName
+npx wrangler pages deploy public --project-name $projectName

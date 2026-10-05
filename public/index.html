@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Семейное дерево · Мостовые</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+:root{--bg:#1C1208;--card:#FAF7F0;--ink:#28180A;--muted:#7A5828;--gold:#C09828;--goldhi:#EDD890;--err:#A03818}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(ellipse at 50% 30%,#2E1E0E,var(--bg) 70%);
+  color:var(--goldhi);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:20px}
+body.rtl{direction:rtl}
+.lang{display:flex;gap:4px;position:fixed;top:14px;right:14px;direction:ltr}
+.lang button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(237,216,144,.6);
+  padding:3px 10px;border-radius:3px;cursor:pointer;font:inherit;font-size:.72rem}
+.lang button.on{background:rgba(192,152,40,.5);border-color:var(--gold);color:var(--goldhi)}
+header{text-align:center;max-width:420px}
+.tree{font-size:2.6rem;line-height:1;margin-bottom:12px}
+h1{font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:1.9rem;letter-spacing:.01em}
+.sub{margin-top:8px;font-size:.88rem;color:rgba(237,216,144,.65);line-height:1.5}
+form{background:var(--card);color:var(--ink);border-radius:8px;padding:22px;width:100%;max-width:340px;
+  box-shadow:0 8px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:12px}
+label{font-size:.78rem;font-weight:600;color:var(--muted)}
+input{width:100%;padding:10px 12px;border:1px solid rgba(184,144,48,.4);border-radius:4px;font:inherit;
+  font-size:.95rem;background:#FFFDF7;color:var(--ink)}
+input:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.go{padding:10px;border:none;border-radius:4px;background:var(--gold);color:#fff;font:inherit;font-size:.92rem;cursor:pointer}
+.go:hover{background:#A07820}
+.go:disabled{opacity:.6;cursor:default}
+label.rem{display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer}
+label.rem input{width:auto;padding:0;margin:0;accent-color:var(--gold)}
+#err{min-height:1.1em;font-size:.8rem;color:var(--err)}
+footer{font-size:.72rem;color:rgba(237,216,144,.4);text-align:center;max-width:340px}
+</style>
+</head>
+<body>
+<div class="lang" role="group" aria-label="Language">
+  <button data-l="ru">РУС</button><button data-l="en">ENG</button><button data-l="he">עב</button>
+</div>
+<header>
+  <div class="tree" aria-hidden="true">🌳</div>
+  <h1 data-k="title"></h1>
+  <p class="sub" data-k="sub"></p>
+</header>
+<form id="f" autocomplete="on">
+  <label for="pwd" data-k="label"></label>
+  <input id="pwd" type="password" autocomplete="current-password" required autofocus>
+  <label class="rem"><input id="rem" type="checkbox" checked><span data-k="remember"></span></label>
+  <button class="go" id="go" type="submit" data-k="btn"></button>
+  <div id="err" role="alert"></div>
+</form>
+<footer data-k="foot"></footer>
+
+<script>
+const WORKER_URL = 'https://mostovoy-tree.slvm972.workers.dev';
+const TREE_URL = '/tree_a4a';
+const T = {
+  ru:{title:'Семейное дерево Мостовых',sub:'Закрытый семейный архив. Дерево открывается после ввода пароля.',label:'Пароль',remember:'Запомнить на этом устройстве',btn:'Войти',foot:'Пароль можно получить у составителя дерева.',bad:'Неверный пароль. Проверьте и попробуйте снова.',net:'Нет связи с сервером. Попробуйте ещё раз.',wait:'Проверяю…'},
+  en:{title:'Mostovoy Family Tree',sub:'A private family archive. Enter the password to open the tree.',label:'Password',remember:'Remember me on this device',btn:'Sign in',foot:'Ask the tree compiler for the password.',bad:'Wrong password. Check it and try again.',net:'Cannot reach the server. Please try again.',wait:'Checking…'},
+  he:{title:'עץ המשפחה מוסטובוי',sub:'ארכיון משפחתי פרטי. יש להזין סיסמה כדי לפתוח את העץ.',label:'סיסמה',remember:'זכור אותי במכשיר זה',btn:'כניסה',foot:'את הסיסמה אפשר לקבל ממחבר העץ.',bad:'סיסמה שגויה. נסו שוב.',net:'אין חיבור לשרת. נסו שוב.',wait:'בודק…'}
+};
+let lang = (()=>{let s=null; try{s=localStorage.getItem('tree_lang');}catch(e){} if(T[s]) return s;
+  const n=(navigator.language||'ru').toLowerCase();
+  return n.startsWith('he')||n.startsWith('iw')?'he':(n.startsWith('ru')||n.startsWith('uk'))?'ru':'en';})();
+
+function apply(){
+  document.documentElement.lang = lang;
+  document.body.classList.toggle('rtl', lang==='he');
+  document.querySelectorAll('[data-k]').forEach(e=>e.textContent=T[lang][e.dataset.k]);
+  document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on', b.dataset.l===lang));
+  document.title = T[lang].title;
+}
+document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>{
+  lang=b.dataset.l; try{localStorage.setItem('tree_lang',lang);}catch(e){} apply();
+}));
+apply();
+
+// уже есть сессия — дерево само проверит пароль и вернёт сюда, если он устарел
+// нет сессии, но есть сохранённый на устройстве пароль — переносим в сессию
+if(!sessionStorage.getItem('tree_pwd')){
+  try{
+    const sp=localStorage.getItem('tree_pwd_saved');
+    if(sp){
+      sessionStorage.setItem('tree_pwd',sp);
+      const sr=localStorage.getItem('tree_role_saved');
+      if(sr) sessionStorage.setItem('tree_role',sr);
+    }
+  }catch(e){}
+}
+if(sessionStorage.getItem('tree_pwd')) location.replace(TREE_URL);
+
+document.getElementById('f').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const pwd=document.getElementById('pwd').value, err=document.getElementById('err'), go=document.getElementById('go');
+  if(!pwd) return;
+  err.textContent=''; go.disabled=true; go.textContent=T[lang].wait;
+  try{
+    const r=await fetch(WORKER_URL+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    const d=await r.json().catch(()=>null);
+    if(d && d.ok){
+      sessionStorage.setItem('tree_pwd',pwd);
+      sessionStorage.setItem('tree_role',d.role);
+      try{
+        if(document.getElementById('rem').checked){
+          localStorage.setItem('tree_pwd_saved',pwd);
+          localStorage.setItem('tree_role_saved',d.role);
+        }else{
+          localStorage.removeItem('tree_pwd_saved');
+          localStorage.removeItem('tree_role_saved');
+        }
+      }catch(x){}
+      location.replace(TREE_URL);
+      return;
+    }
+    err.textContent = r.status===401 ? T[lang].bad : T[lang].net;
+  }catch(x){ err.textContent=T[lang].net; }
+  go.disabled=false; go.textContent=T[lang].btn;
+});
+</script>
+<!-- Cloudflare Web Analytics --><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "06912e908bee445d96ca684663a2df9b"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
