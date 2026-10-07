@@ -1640,12 +1640,9 @@ function noteText(n, field){
 // Falls back to Russian name from IDX if not in dict
 function pname(id) {
   const n = IDX.nodes[id]; if(!n) return id;
-  if(currentLang === 'ru') return n.name;
-  const manual = n['name_' + currentLang];
-  if(manual) return manual;
-  const d = NAMES[id];
-  if(!d) return n.name;
-  return d[currentLang] || n.name;
+  // Единая логика выбора имени (ручные поля -> NAMES -> автотранслитерация -> оригинал)
+  // живёт в tree-translit.js
+  return resolveName(n, id, currentLang, NAMES);
 }
 
 // B2.3: genitive (родительный падеж) form for RU relationship phrasing
