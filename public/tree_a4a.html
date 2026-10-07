@@ -886,7 +886,7 @@ function showPanel(id){
 
   // ── Column 1: name, rel, dates ──
   const relForId = IDX.relatives[id];
-  const canEdit = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
+  const canEdit = !!(_sessionPassword && WORKER_URL); // любой вошедший: гость отправляет предложение, админ сохраняет напрямую
   const canDelete = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
   const isAuth = !!(_sessionPassword);
   let col1 = `<h2 style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
