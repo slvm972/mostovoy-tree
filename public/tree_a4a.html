@@ -37,9 +37,10 @@ svg { transition: opacity 0.22s ease-out; }
 svg.fading { opacity: 0 !important; }
 
 /* ── BOTTOM INFO PANEL ── */
+:root { --panel-h: 220px; }
 #panel {
   position: fixed; left: 0; right: 0;
-  bottom: -220px; height: 220px;
+  bottom: calc(-1 * var(--panel-h)); height: var(--panel-h);
   background: #FAF7F0;
   border-top: 1px solid rgba(184,144,48,.28);
   box-shadow: 0 -3px 20px rgba(40,24,10,.13);
@@ -50,6 +51,18 @@ svg.fading { opacity: 0 !important; }
 #panel.open { bottom: 32px; }
 #panel::-webkit-scrollbar { height: 3px; }
 #panel::-webkit-scrollbar-thumb { background: rgba(184,144,48,.3); border-radius: 2px; }
+/* resize handle (drag the panel's top edge) */
+#panel-resize {
+  position: absolute; top: 0; left: 0; right: 0; height: 10px;
+  cursor: ns-resize; touch-action: none; z-index: 0;
+}
+#panel-resize::after {
+  content: ''; position: absolute; top: 3px; left: 50%; width: 40px; height: 3px;
+  margin-left: -20px; border-radius: 2px; background: #B89030; opacity: .55;
+}
+#panel-resize:hover::after { opacity: .9; }
+body.panel-resizing { user-select: none; cursor: ns-resize; }
+body.panel-resizing #panel, body.panel-resizing #vp { transition: none !important; }
 
 /* panel inner layout: horizontal flex */
 #panel-inner {
@@ -83,7 +96,7 @@ svg.fading { opacity: 0 !important; }
   line-height: 1.35; padding-right: 20px; margin-bottom: 3px;
 }
 /* viewport shrinks when panel open */
-#vp.panel-open { bottom: 252px; }
+#vp.panel-open { bottom: calc(32px + var(--panel-h)); }
 .p-rel {
   font-size: .6rem; text-transform: uppercase; letter-spacing: .09em;
   color: #B89030; font-weight: 700; margin-bottom: 10px; display: block;
@@ -235,9 +248,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   .lang-btns { flex-shrink: 0; }
   #info { min-width: 0; }
 
-  #panel { height: 160px; bottom: -160px; }
-  #panel.open { bottom: 32px; }
-  #vp.panel-open { bottom: 192px; }
+  :root { --panel-h: 160px; }
   #panel-col1, #panel-col2 { padding: 8px 10px; }
 }
 
@@ -333,6 +344,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 <div id="canvas-vscroll"><div id="canvas-vscroll-thumb"></div></div>
 <!-- ── BOTTOM INFO PANEL ── -->
 <div id="panel" class="open">
+  <div id="panel-resize" role="separator" aria-orientation="horizontal"></div>
   <button id="panel-close">×</button>
   <div id="panel-inner">
     <div id="panel-col1"></div><div id="panel-col2"></div>
@@ -1142,6 +1154,73 @@ function closePanel(){
 }
 
 document.getElementById('panel-close').addEventListener('click', closePanel);
+
+// ── Panel resize: перетаскивание верхней границы #panel (мышь + палец) ──
+(function initPanelResize(){
+  const DEFAULT_H = 220, MIN_H = 120, MAX_FRAC = 0.7, KEY = 'treePanelH';
+  const root   = document.documentElement;
+  const panel  = document.getElementById('panel');
+  const handle = document.getElementById('panel-resize');
+  if(!panel || !handle) return;
+
+  const maxH   = () => Math.max(MIN_H, Math.floor(window.innerHeight * MAX_FRAC));
+  const clamp  = h => Math.min(maxH(), Math.max(MIN_H, h));
+  const curH   = () => panel.getBoundingClientRect().height;
+  function setH(h){ root.style.setProperty('--panel-h', Math.round(clamp(h)) + 'px'); }
+  function save(){ try { localStorage.setItem(KEY, String(Math.round(curH()))); } catch(e){} }
+  function reset(){
+    root.style.removeProperty('--panel-h');           // вернуться к значению из CSS (220px)
+    try { localStorage.removeItem(KEY); } catch(e){}
+    afterChange();
+  }
+  // карта не масштабируется и не двигается: меняется только видимая область #vp;
+  // resize нужен лишь чтобы пересчитались индикаторы прокрутки
+  function afterChange(){ window.dispatchEvent(new Event('resize')); }
+
+  // применить сохранённое значение при загрузке
+  try {
+    const saved = parseFloat(localStorage.getItem(KEY));
+    if(isFinite(saved)) setH(saved);
+  } catch(e){}
+
+  let dragging = false, moved = false, startY = 0, startH = 0, lastDown = 0;
+
+  handle.addEventListener('pointerdown', e => {
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    const now = Date.now();
+    if(now - lastDown < 320){ lastDown = 0; reset(); e.preventDefault(); return; } // двойной клик/тап
+    lastDown = now;
+    dragging = true; moved = false;
+    startY = e.clientY;
+    startH = curH();
+    document.body.classList.add('panel-resizing');
+    try { handle.setPointerCapture(e.pointerId); } catch(err){}
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    if(Math.abs(startY - e.clientY) > 3) moved = true;
+    setH(startH + (startY - e.clientY));              // тянем вверх → выше
+  });
+  function end(e){
+    if(!dragging) return;
+    dragging = false;
+    if(moved) lastDown = 0;                            // перетаскивание — не часть двойного клика
+    document.body.classList.remove('panel-resizing');
+    try { handle.releasePointerCapture(e.pointerId); } catch(err){}
+    save();
+    afterChange();
+  }
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+
+  // при изменении размера окна — зажать текущее значение в новые пределы
+  window.addEventListener('resize', () => {
+    if(dragging) return;
+    const h = curH(), c = clamp(h);
+    if(Math.abs(h - c) > 0.5) setH(c);
+  });
+})();
 
 // ── hook showPanel into card clicks ───────────────────────
 // Patch: when a non-focal card is clicked, also show its panel
