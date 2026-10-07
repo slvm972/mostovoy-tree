@@ -40,7 +40,7 @@ async function checkPassword(provided, storedHash) {
 // Применяется только к входящим значениям; уже сохранённые в KV значения
 // НЕ проверяются и не мигрируются.
 const DATE_FULL_RE = /^([1-9]|[12]\d|3[01]) (JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC) \d{4}$/;
-function isValidDateField(value) {
+function isValidDateField(value, field) { if(field === 'death' && value === 'ум.') return true; // умер(ла), дата неизвестна
   if(typeof value !== 'string') return false;
   return value === '' || /^\d{4}$/.test(value) || DATE_FULL_RE.test(value);
 }
@@ -507,7 +507,7 @@ export default {
         if(field === 'gen' && val !== null && val !== undefined && !Number.isInteger(val)) {
           return err('Поле gen должно быть целым числом');
         }
-        if((field === 'birth' || field === 'death') && val !== null && val !== undefined && !isValidDateField(val)) {
+        if((field === 'birth' || field === 'death') && val !== null && val !== undefined && !isValidDateField(val, field)) {
           return err(dateFieldError(field, val));
         }
         if(val === null || val === undefined) {
@@ -637,7 +637,7 @@ export default {
             // D3: null/undefined = delete (as for every field); otherwise the
             // value must pass isValidDateField. A bad value rejects ONLY this
             // field — the person's other fields are still applied.
-            if(val !== null && val !== undefined && !isValidDateField(val)) {
+            if(val !== null && val !== undefined && !isValidDateField(val, field)) {
               rejectedFields.push({ field, reason: dateFieldError(field, val) });
               continue;
             }
@@ -703,7 +703,7 @@ export default {
       // D3: birth/death, если переданы непустыми, должны быть в допустимом формате
       for(const f of ['birth', 'death']) {
         const v = body[f];
-        if(v !== undefined && v !== null && v !== '' && !isValidDateField(v)) {
+        if(v !== undefined && v !== null && v !== '' && !isValidDateField(v, f)) {
           return err(dateFieldError(f, v));
         }
       }

@@ -61,7 +61,7 @@ function cardCol(id, role){
   if(role === 'focal') return {fill:'#1C4060', stroke:'#0C2840'};
   const n = IDX.nodes[id];
   if(!n) return {fill:'#888', stroke:'#555'};
-  const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
+  const dead = !!(n.death && n.death !== '');
   if(dead) return {fill:'#3A4A55', stroke:'#1A2A35'};
   return n.sex === 'M'
     ? {fill:'#1E4870', stroke:'#122840'}
@@ -631,7 +631,7 @@ function render(focalId){
 
     // birth year + death year + Hebrew dates
     const by = ndata.birth ? (ndata.birth.match(/\d{4}/)||[''])[0] : '';
-    const dy = ndata.death && ndata.death !== 'ум.' ? (ndata.death.match(/\d{4}/)||[''])[0] : '';
+    const dy = ndata.death === 'ум.' ? '?' : (ndata.death ? (ndata.death.match(/\d{4}/)||[''])[0] : '');
     const bhe = ndata.birth_he || '';
     const dhe = ndata.death_he || '';
 
