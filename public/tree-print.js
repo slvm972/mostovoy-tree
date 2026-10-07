@@ -426,7 +426,7 @@ function buildAndPrint() {
       const n = IDX.nodes[id];
       const x = r.localX[id];
       const y = 0;
-      const dead = !!(n.death && n.death !== '' && n.death !== 'ум.');
+      const dead = !!(n.death && n.death !== '');
       const fill = dead ? '#3A4A55' : (SEX_FILL[n.sex] || '#444');
       const name = pname(id);
       const parts = name.split(' ');
@@ -434,7 +434,7 @@ function buildAndPrint() {
       const l1 = parts.slice(0, mid).join(' ');
       const l2 = parts.slice(mid).join(' ');
       const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
-      const dy = dead ? (n.death.match(/\d{4}/)||[''])[0] : '';
+      const dy = dead ? (n.death === 'ум.' ? '?' : (n.death.match(/\d{4}/)||[''])[0]) : '';
       const bhe = n.birth_he || '';
       const dhe = n.death_he || '';
 
@@ -448,10 +448,10 @@ function buildAndPrint() {
         ${l2 ? `<tspan x="${x+PCW/2}" dy="14">${l2}</tspan>` : ''}
       </text>`;
       let dateY = y + (l2 ? 68 : 58);
-      if (by) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.7)" font-size="8.5" text-anchor="middle">р. ${by}${dy ? '  † '+dy : ''}</text>`; dateY += 13; }
-      else if (dy) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="8.5" text-anchor="middle">† ${dy}</text>`; dateY += 13; }
+      if (by) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.7)" font-size="8.5" text-anchor="middle">${t('born_abbr')} ${by}${dy ? '  '+t('died')+' '+dy : ''}</text>`; dateY += 13; }
+      else if (dy) { rowCards += `<text x="${x+PCW/2}" y="${dateY}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="8.5" text-anchor="middle">${t('died')} ${dy}</text>`; dateY += 13; }
       if (bhe || dhe) {
-        const heStr = [bhe, dhe ? '† '+dhe : ''].filter(Boolean).join('  ');
+        const heStr = [bhe, dhe ? t('died')+' '+dhe : ''].filter(Boolean).join('  ');
         rowCards += `<text x="${x+PCW/2}" y="${y+PCH-7}" font-family="Segoe UI,Arial,sans-serif" fill="rgba(237,216,144,.5)" font-size="7.5" text-anchor="middle" direction="rtl">${heStr}</text>`;
       }
     }
