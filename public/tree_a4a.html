@@ -1274,7 +1274,7 @@ function goToSearchResult(){
     // Fallback: try matching by name substring (case-insensitive) across current language
     const lower = val.toLowerCase();
     const found = Object.keys(IDX.nodes).find(id =>
-      pname(id).toLowerCase().includes(lower) || IDX.nodes[id].name.toLowerCase().includes(lower)
+      nameVariants(IDX.nodes[id], id, NAMES).some(v => v.toLowerCase().includes(lower))
     );
     if(found){
       navigateTo(found);
@@ -1793,7 +1793,7 @@ function buildDatalist(){
   for(const [id, n] of Object.entries(IDX.nodes)){
     const opt = document.createElement('option');
     const by  = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
-    opt.value = pname(id) + (by ? ' (' + by + ')' : '') + ' [' + id + ']';
+    opt.value = pname(id) + (by ? ' (' + by + ')' : '') + ' [' + id + ']'; const _shown = pname(id); for(const v of nameVariants(n, id, NAMES)){ if(v !== _shown){ const o2 = document.createElement('option'); o2.value = v + (by ? ' (' + by + ')' : '') + ' [' + id + ']'; dl.appendChild(o2); } }
     dl.appendChild(opt);
   }
 }
