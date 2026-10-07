@@ -1636,6 +1636,10 @@ function buildDatalist(){
 //  один из трёх вариантов. Серверный контракт не меняется — наружу
 //  уходит та же строка (dateWidgetRead().value).
 // ════════════════════════════════════════════════════════
+(function(){
+  const S = { ru:'Умер(ла), дата неизвестна', en:'Deceased, date unknown', he:'נפטר/ה, תאריך לא ידוע' };
+  for (const l in S) { if (typeof UI !== 'undefined' && UI[l] && !UI[l].date_mode_deceased) UI[l].date_mode_deceased = S[l]; }
+})();
 const DW_MONTHS  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const DW_YEAR_MIN = 1700;
 const DW_FULL_RE = /^([1-9]|[12]\d|3[01]) (JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC) (\d{4})$/;
@@ -1656,6 +1660,7 @@ function buildDateWidget(id){
     <label class="dw-opt"><input type="radio" name="${grp}" value="full"><span data-i="date_mode_full"></span></label>
     <label class="dw-opt"><input type="radio" name="${grp}" value="year"><span data-i="date_mode_year"></span></label>
     <label class="dw-opt"><input type="radio" name="${grp}" value="unknown"><span data-i="date_mode_unknown_${kind}"></span></label>
+    ${kind === 'death' ? `<label class="dw-opt"><input type="radio" name="${grp}" value="deceased"><span data-i="date_mode_deceased"></span></label>` : ''}
     <div class="dw-panel dw-p-legacy" style="display:none">
       <input type="text" class="dw-legacy-val" readonly>
       <div class="dw-hint" data-i="date_legacy_hint"></div>
@@ -1701,7 +1706,9 @@ function dateWidgetSet(id, rawValue){
   host._dw.legacyRaw = null;
 
   let m;
-  if(raw === ''){
+  if(raw === 'ум.' && host._dw.kind === 'death'){
+    dwSetMode(host, 'deceased');
+  } else if(raw === ''){
     dwSetMode(host, 'unknown');
   } else if(DW_YEAR_RE.test(raw)){
     host.querySelector('.dw-year-only').value = raw;
@@ -1733,6 +1740,7 @@ function dateWidgetRead(id){
 
   if(st.mode === 'legacy')  return { ok:true, value: st.legacyRaw };   // as-is: не меняет существующее
   if(st.mode === 'unknown') return { ok:true, value: '' };
+  if(st.mode === 'deceased') return { ok:true, value: 'ум.' };
 
   if(st.mode === 'year'){
     const y = host.querySelector('.dw-year-only').value.trim();
