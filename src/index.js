@@ -499,7 +499,7 @@ export default {
 
       // Allowed fields for direct update (guards against injecting structural fields)
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen',
+                       'sex','rel','rel_en','rel_he','name_ru','name_en','name_he','phone','email','social','bio','photo','missing','gen',
                        'genitive','family_note','other_note','family_note_en','family_note_he','other_note_en','other_note_he'];
       const applied = {};
       for(const [field, val] of Object.entries(updates)){
@@ -562,7 +562,7 @@ export default {
       // Same whitelist as PATCH /api/person/:id above — kept identical
       // deliberately (not re-derived) so the two endpoints can never drift.
       const ALLOWED = ['name','birth','death','birth_he','death_he','hebrew_name',
-                       'sex','rel','rel_en','rel_he','name_en','name_he','phone','email','social','bio','photo','missing','gen',
+                       'sex','rel','rel_en','rel_he','name_ru','name_en','name_he','phone','email','social','bio','photo','missing','gen',
                        'genitive','family_note','other_note','family_note_en','family_note_he','other_note_en','other_note_he'];
 
       // Normalizes a raw `gen` value into either {ok:true, value:<integer>}
