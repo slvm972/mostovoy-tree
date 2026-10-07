@@ -651,11 +651,11 @@ function render(focalId){
                                'text-anchor':'middle','font-size':'9',
                                'font-family':'Segoe UI,sans-serif',
                                fill:'rgba(255,255,255,.45)','pointer-events':'none'},g);
-      dt.textContent = '† ' + dy;
+      dt.textContent = t('died') + ' ' + dy;
       dateY += 12;
     }
     if(bhe || dhe){
-      const heText = [bhe ? bhe : null, dhe ? '† '+dhe : null].filter(Boolean).join('  ');
+      const heText = [bhe ? bhe : null, dhe ? t('died')+' '+dhe : null].filter(Boolean).join('  ');
       const ht = svgEl('text',{x:nx+CW/2, y:ny+CH-6,
                                'text-anchor':'middle','font-size':'7.5',
                                'font-family':'Segoe UI,Arial,sans-serif',

@@ -3067,7 +3067,7 @@ function diagItemsHtml(r){
     const n = IDX.nodes[it.id];
     const name = n ? pname(it.id) : it.id;
     const meta = n
-      ? [ 'gen ' + (n.gen ?? '?'), n.rel ? trel(n.rel) : '', [yr(n.birth), yr(n.death) ? '† ' + yr(n.death) : ''].filter(Boolean).join(' ') ].filter(Boolean).join(' · ')
+      ? [ 'gen ' + (n.gen ?? '?'), n.rel ? trel(n.rel) : '', [yr(n.birth), yr(n.death) ? t('died') + ' ' + yr(n.death) : ''].filter(Boolean).join(' ') ].filter(Boolean).join(' · ')
       : 'нет в IDX.nodes';
     return `<div style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 18px;border-bottom:1px dotted rgba(255,255,255,.08)">
       <div style="flex:1;min-width:0">
