@@ -3487,7 +3487,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     // Первое будущее событие — в этом или следующем году
     const age = NOW_YEAR - d.year;
     const uid = `birthday-${p.id}@mostovoy-tree`;
-    const summary = `🎂 ${p.name} (${age} лет)`;
+    const summary = `🎂 ${pname(p.id)} (${age} лет)`;
     const dtstart = `${NOW_YEAR}${mm}${dd}`;
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${uid}`);
@@ -3502,7 +3502,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     lines.push(`BEGIN:VALARM`);
     lines.push(`TRIGGER:-P1D`);
     lines.push(`ACTION:DISPLAY`);
-    lines.push(`DESCRIPTION:Завтра день рождения: ${p.name}`);
+    lines.push(`DESCRIPTION:Завтра день рождения: ${pname(p.id)}`);
     lines.push(`END:VALARM`);
     lines.push('END:VEVENT');
     count++;
