@@ -3359,7 +3359,7 @@ function generateVCF() {
     // Skip deceased
     if(n.death && n.death.trim() !== '') continue;
 
-    const name = n.name || '';
+    const name = pname(id) || n.name || '';
     const parts = name.trim().split(/\s+/);
     const lastName  = parts.length > 1 ? parts[parts.length - 1] : '';
     const firstName = parts.length > 1 ? parts.slice(0,-1).join(' ') : parts[0] || '';
