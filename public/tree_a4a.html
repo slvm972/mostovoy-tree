@@ -292,6 +292,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 <script src="tree-names.js"></script>
 <script src="tree-print.js"></script>
 <script src="tree-layout.js"></script>
+<script src="tree-kinship.js"></script>
 </head>
 <body>
 <div id="tb">
@@ -855,6 +856,75 @@ function panelNavigate(id){
   navigateTo(id);
 }
 
+/** Resolve a typed name / "Name (year) [Pid]" from the datalist to a person id. */
+function resolvePersonQuery(q) {
+  if (!q || !IDX || !IDX.nodes) return null;
+  q = q.trim();
+  if (!q) return null;
+  // Exact id
+  if (IDX.nodes[q]) return q;
+  // Trailing [Pid]
+  const m = q.match(/\[(P\d+)\]\s*$/i);
+  if (m && IDX.nodes[m[1]]) return m[1];
+  // Exact name match (case-insensitive)
+  const lower = q.toLowerCase();
+  for (const [id, n] of Object.entries(IDX.nodes)) {
+    if ((n.name || '').toLowerCase() === lower) return id;
+  }
+  // Starts-with name
+  for (const [id, n] of Object.entries(IDX.nodes)) {
+    if ((n.name || '').toLowerCase().startsWith(lower)) return id;
+  }
+  // Contains
+  for (const [id, n] of Object.entries(IDX.nodes)) {
+    if ((n.name || '').toLowerCase().includes(lower)) return id;
+  }
+  return null;
+}
+
+/**
+ * Panel action: show how the currently viewed person (idB) is related
+ * to the person typed in #kin-other (idA). Message uses explainKinship:
+ * «A is <term> of B» + optional path «через …».
+ */
+function panelCheckKinship(idB) {
+  const input = document.getElementById('kin-other');
+  const out = document.getElementById('kin-result');
+  if (!out) return;
+  const q = input ? input.value : '';
+  const idA = resolvePersonQuery(q);
+  if (!idA) {
+    out.style.color = '#A03818';
+    out.textContent = currentLang === 'he' ? 'לא נמצא אדם כזה'
+                    : currentLang === 'en' ? 'Person not found'
+                    : 'Человек не найден — выберите из списка';
+    return;
+  }
+  if (typeof TreeKinship === 'undefined' || !TreeKinship.explainKinship) {
+    out.style.color = '#A03818';
+    out.textContent = 'tree-kinship.js not loaded';
+    return;
+  }
+  // X (открытая персона) — <term> для Y (введённая): X = idB, Y = idA
+  const r = TreeKinship.explainKinship(IDX, idB, idA, currentLang || 'ru', pname);
+  out.style.color = r.found ? '#28180A' : '#A03818';
+  out.textContent = r.message;
+  // Remember last query person for convenience when switching cards
+  try { sessionStorage.setItem('kin_last_query', q); } catch (e) {}
+}
+
+// Kinship panel: Enter in #kin-other triggers check
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const el = document.getElementById('kin-other');
+  if (!el || document.activeElement !== el) return;
+  e.preventDefault();
+  // idB is the person currently shown in the panel — stored as data attribute
+  const idB = el.getAttribute('data-panel-id');
+  if (idB) panelCheckKinship(idB);
+});
+
+
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
@@ -951,6 +1021,27 @@ function showPanel(id){
   }
   if(!isFocal) col1 += `<button class="p-nav-btn" onclick="navigateTo('${id}')">${t('show_tree')}</button>`;
 
+  // ── Kinship checker: who is this person to someone else ──
+  col1 += `<div class="p-sec" id="kin-block" style="margin-top:10px">
+    <h3>${currentLang==='he'?'קרבה משפחתית':currentLang==='en'?'Relationship':'Кем приходится'}</h3>
+    <div style="font-size:.68rem;color:#7A5828;margin-bottom:4px">
+      ${currentLang==='he'?'ביחס ל:':currentLang==='en'?'Relative to:':'Относительно:'}
+    </div>
+    <div style="display:flex;gap:4px;align-items:center">
+      <input id="kin-other" type="text" list="names-list" autocomplete="off"
+        data-panel-id="${id}"
+        placeholder="${currentLang==='he'?'הקלד שם...':currentLang==='en'?'Type a name...':'Введите имя...'}"
+        style="flex:1;min-width:0;padding:4px 7px;border:1px solid rgba(184,144,48,.35);border-radius:3px;
+               font-size:.72rem;font-family:inherit;background:#FFFDF7;color:#28180A">
+      <button type="button" onclick="panelCheckKinship('${id}')"
+        style="flex-shrink:0;padding:4px 8px;font-size:.68rem;background:#1E4870;color:#fff;border:none;
+               border-radius:3px;cursor:pointer;font-family:inherit">
+        ${currentLang==='he'?'בדוק':currentLang==='en'?'Check':'Показать'}
+      </button>
+    </div>
+    <div id="kin-result" style="margin-top:6px;font-size:.72rem;line-height:1.55;color:#28180A;white-space:pre-wrap"></div>
+  </div>`;
+
   // ── Column 2: relatives ──
   let col2 = '';
   const isAdminForFamilies = !!(_sessionPassword && window._userRole === 'admin' && WORKER_URL);
@@ -1021,6 +1112,11 @@ function showPanel(id){
 
   document.getElementById('panel-col1').innerHTML = col1;
   document.getElementById('panel-col2').innerHTML = col2;
+  try {
+    const lastQ = sessionStorage.getItem('kin_last_query');
+    const kinInput = document.getElementById('kin-other');
+    if (lastQ && kinInput) kinInput.value = lastQ;
+  } catch (e) {}
   document.getElementById('panel').classList.add('open');
   document.getElementById('vp').classList.add('panel-open');
 }

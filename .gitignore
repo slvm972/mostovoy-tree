@@ -4,3 +4,4 @@ node_modules/
 desktop.ini
 *.ini
 .aider*
+tools/tree-fallback.json
