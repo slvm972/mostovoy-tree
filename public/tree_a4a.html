@@ -3132,13 +3132,23 @@ function runDiagnostics(){
 
   // NAMES dict coverage
   const namesCount = Object.keys(NAMES).length;
-  const nodeMissing = Object.keys(IDX.nodes).filter(id => {
-    const n = IDX.nodes[id];
-    const hasManual = !!(n.name_en && n.name_he);
-    return !NAMES[id] && !hasManual;
-  }).length;
-  nodeMissing === 0 ? ok('NAMES покрывает все персоны', namesCount + ' записей')
-                    : warn('Персон без EN/HE перевода', nodeMissing);
+  const autoItems = [];
+  for(const [id, n] of Object.entries(IDX.nodes)){
+    const d  = NAMES[id] || {};
+    const sc = detectScript(n.name);
+    const hasEn = !!(n.name_en || d.en) || sc === 'latin';
+    const hasHe = !!(n.name_he || d.he) || sc === 'hebrew';
+    if(hasEn && hasHe) continue;
+    const parts = [];
+    if(!hasEn){
+      const en = resolveName(n, id, 'en', NAMES);
+      parts.push(en === n.name ? 'EN: автоматика не уверена — показывается оригинал' : 'EN (авто): ' + en);
+    }
+    if(!hasHe) parts.push('HE: показывается английский вариант');
+    autoItems.push({ id, reason: parts.join(' · ') });
+  }
+  autoItems.length === 0 ? ok('NAMES покрывает все персоны', namesCount + ' записей')
+                         : warn('Персон с автоматическим переводом имени (проверьте)', autoItems.length, autoItems);
 
   // ── 4. DOM ELEMENTS ─────────────────────────────────
   const requiredEls = ['tb','vp','world','svg','panel','bbar','modal-overlay',
