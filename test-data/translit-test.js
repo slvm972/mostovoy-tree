@@ -6,6 +6,11 @@ const eq = (label, got, exp) => { if(got !== exp){ fail++; console.log('✗', la
 // 1. ru -> en
 eq('ru→en Мостовой', T.autoEnglish('Мирослав Мостовой'), 'Miroslav Mostovoy');
 eq('ru→en Щиглик', T.autoEnglish('Фима Щиглик'), 'Fima Shchiglik');
+eq('ru→en -ий', T.autoEnglish('Борис Рогинский'), 'Boris Roginsky');
+eq('ru→en Дмитрий', T.autoEnglish('Дмитрий'), 'Dmitry');
+eq('ru→en Евгений', T.autoEnglish('Евгений Гинзбург'), 'Evgeny Ginzburg');
+eq('ru→en Юрий короткое', T.autoEnglish('Ий'), 'Iy');
+eq('ru→en дефис', T.autoEnglish('Анна-Мария Рогинская'), 'Anna-Mariya Roginskaya');
 // 2. en -> ru
 eq('en→ru Mikhail', T.autoRussian('Mikhail Berman'), 'Михаил Берман');
 eq('en→ru dict Alexander', T.autoRussian('Alexander Goldberg'), 'Александр Голдберг');

@@ -29,9 +29,17 @@ const TRANSLIT_LAT = {
   'П':'P','Р':'R','С':'S','Т':'T','У':'U','Ф':'F','Х':'Kh','Ц':'Ts',
   'Ч':'Ch','Ш':'Sh','Щ':'Shch','Ъ':'','Ы':'Y','Ь':'','Э':'E','Ю':'Yu','Я':'Ya'
 };
+// Окончания слова: -ий/-ый -> -y (Рогинский -> Roginsky, Дмитрий -> Dmitry,
+// Евгений -> Evgeny) — так же пишутся имена в словаре NAMES.
+function cyrillicWordToEnglish(w){
+  let tail = '';
+  const m = w.match(/^(.*[А-Яа-яЁё])([иы]й)$/);
+  if(m && m[1].length >= 2){ w = m[1]; tail = 'y'; }
+  return w.split('').map(c => TRANSLIT_LAT[c] !== undefined ? TRANSLIT_LAT[c] : c).join('') + tail;
+}
 function cyrillicToEnglish(name){
   if(!name) return name;
-  return name.split('').map(c => TRANSLIT_LAT[c] !== undefined ? TRANSLIT_LAT[c] : c).join('');
+  return name.split(/(\s+|-)/).map(tok => (/^(\s+|-)$/.test(tok) ? tok : cyrillicWordToEnglish(tok))).join('');
 }
 
 // ── en -> ru ──────────────────────────────────────────────
