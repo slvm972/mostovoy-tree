@@ -3475,6 +3475,16 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
   const MONTH = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
   const NOW_YEAR = new Date().getFullYear();
   const MAX_AGE = 100;
+  const calName  = currentLang==='he' ? 'ימי הולדת של המשפחה' : currentLang==='en' ? 'Family birthdays' : 'Дни рождения семьи';
+  const calAlarm = currentLang==='he' ? 'מחר יום הולדת: ' : currentLang==='en' ? 'Birthday tomorrow: ' : 'Завтра день рождения: ';
+  function calAge(n){
+    if(currentLang==='he') return 'גיל ' + n;
+    if(currentLang==='en') return 'age ' + n;
+    const m10 = n % 10, m100 = n % 100;
+    const w = (m10 === 1 && m100 !== 11) ? 'год'
+            : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? 'года' : 'лет';
+    return n + ' ' + w;
+  }
 
   function pad(n){ return String(n).padStart(2,'0'); }
 
@@ -3487,7 +3497,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     return null;
   }
 
-  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mostovoy Family Tree//RU','CALSCALE:GREGORIAN','X-WR-CALNAME:Дни рождения семьи','X-WR-TIMEZONE:Asia/Jerusalem'];
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mostovoy Family Tree//RU','CALSCALE:GREGORIAN','X-WR-CALNAME:' + calName,'X-WR-TIMEZONE:Asia/Jerusalem'];
 
   let count = 0;
   Object.values(IDX.nodes).forEach(p => {
@@ -3500,7 +3510,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     // Первое будущее событие — в этом или следующем году
     const age = NOW_YEAR - d.year;
     const uid = `birthday-${p.id}@mostovoy-tree`;
-    const summary = `🎂 ${pname(p.id)} (${age} лет)`;
+    const summary = `🎂 ${pname(p.id)} (${calAge(age)})`;
     const dtstart = `${NOW_YEAR}${mm}${dd}`;
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${uid}`);
@@ -3510,12 +3520,12 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     lines.push(`DTEND;VALUE=DATE:${dtend_str}`);
     lines.push(`RRULE:FREQ=YEARLY`);
     lines.push(`SUMMARY:${summary}`);
-    if(p.rel) lines.push(`DESCRIPTION:${p.rel}`);
+    if(p.rel) lines.push(`DESCRIPTION:${trel(p.rel)}`);
     lines.push(`TRANSP:TRANSPARENT`);
     lines.push(`BEGIN:VALARM`);
     lines.push(`TRIGGER:-P1D`);
     lines.push(`ACTION:DISPLAY`);
-    lines.push(`DESCRIPTION:Завтра день рождения: ${pname(p.id)}`);
+    lines.push(`DESCRIPTION:${calAlarm}${pname(p.id)}`);
     lines.push(`END:VALARM`);
     lines.push('END:VEVENT');
     count++;
