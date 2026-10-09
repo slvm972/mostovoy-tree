@@ -172,6 +172,7 @@ function heWordHeuristic(raw){
       case 'ו':
         if(nextL === 'ו'){ out += 'v'; i++; li++; break; }       // וו -> v
         if(li === 0) out += 'v';
+        else if(prevL === 'י' && li === 1) out += 'o';          // יו- в начале слова: Yosi, Yoel
         else if(prevL === 'א' || prevL === 'י') out += 'v';
         else out += 'o';
         break;

@@ -11,6 +11,8 @@ eq('ru→en Дмитрий', T.autoEnglish('Дмитрий'), 'Dmitry');
 eq('ru→en Евгений', T.autoEnglish('Евгений Гинзбург'), 'Evgeny Ginzburg');
 eq('ru→en Юрий короткое', T.autoEnglish('Ий'), 'Iy');
 eq('ru→en дефис', T.autoEnglish('Анна-Мария Рогинская'), 'Anna-Mariya Roginskaya');
+eq('he יוסי', T.autoEnglish('יוסי לוי'), 'Yosi Levi');
+eq('he נועה סוקולוב', T.autoEnglish('נועה סוקולוב'), 'Noa Sokolov');
 // 2. en -> ru
 eq('en→ru Mikhail', T.autoRussian('Mikhail Berman'), 'Михаил Берман');
 eq('en→ru dict Alexander', T.autoRussian('Alexander Goldberg'), 'Александр Голдберг');
