@@ -46,6 +46,12 @@ const T = [ // [A, B, lang, expected substring]
   ['P111','P3','ru','двоюродный дядя'], ['P3','P111','ru','двоюродный племянник'],
   ['P233','P3','ru','двоюродная тётя'], ['P3','P233','ru','двоюродный племянник'],
   ['P3','P28','ru','племянник'], ['P27','P1','ru','племянница'],
+  // --- свойство общего вида (родство через браки) ---
+  ['P163','P3','ru','жена двоюродного дяди'], ['P3','P163','ru','двоюродный племянник мужа'],
+  ['P23','P111','ru','сестра жены дяди'],     // сестра жены дяди
+  ['P2','P28','ru','жена брата жены'], ['P2','P40','ru','жена дяди мужа'],
+  ['P4','P56','ru','муж сестры мужа'], ['P2','P57','ru','жена двоюродного брата'],
+  ['P163','P3','en','wife of first cousin once removed'], ['P163','P3','he','אשת'],
 ];
 let fail = 0, skipped = 0; const failList = [];
 for (const [a,b,l,exp] of T) {
@@ -69,6 +75,20 @@ for (const a of ids) for (const b of ids) {
     asym++; failList.push('ASYM kind '+a+'/'+b); if (asym<=8) console.log('ASYM kind', a, b, r.term, '|', q.term);
   }
   if (r.term.startsWith('дальн')) distant++;
+}
+// Связанные графом (родители/дети/супруги) люди не должны получать «не найдено»
+{
+  const comp = {}; let nc = 0;
+  const adj = (id) => [].concat(G.parentsOf[id]||[], G.childrenOf[id]||[], (G.spousesOf[id]||[]).map(s=>s.id), G.stepParentsOf[id]||[]);
+  for (const id of ids) { if (comp[id]) continue; nc++; const q=[id]; comp[id]=nc; while(q.length){ const x=q.pop(); for(const y of adj(x)) if(!comp[y]&&idx.nodes[y]){comp[y]=nc;q.push(y);} } }
+  let gap = 0;
+  for (const a of ids) for (const b of ids) {
+    if (a===b || comp[a]!==comp[b]) continue;
+    const r = res[a+'|'+b];
+    if (r && !r.found) { gap++; if (gap<=5) failList.push('GAP '+a+'->'+b); }
+  }
+  if (gap) { console.log('GAP (связаны, но не найдено):', gap); fail += gap; }
+  stats.components = nc;
 }
 console.log('persons', ids.length, 'pairs', ids.length**2, 'stats', JSON.stringify(stats), 'thrown', thrown, 'asym', asym, 'distant', distant, 'skipped', skipped);
 console.log('time_sec', ((Date.now()-T0)/1000).toFixed(2));
