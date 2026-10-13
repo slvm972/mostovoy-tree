@@ -49,6 +49,7 @@ const TERMS = {
     cousin_m: 'двоюродный брат', cousin_f: 'двоюродная сестра',
     cousin2_m: 'троюродный брат', cousin2_f: 'троюродная сестра',
     distant: 'дальний родственник',
+    related_by_marriage: 'родственники по браку',
     // spouses / former
     husband: 'муж', wife: 'жена',
     ex_husband: 'бывший муж', ex_wife: 'бывшая жена',
@@ -91,6 +92,7 @@ const TERMS = {
     cousin_m: 'first cousin', cousin_f: 'first cousin',
     cousin2_m: 'second cousin', cousin2_f: 'second cousin',
     distant: 'distant relative',
+    related_by_marriage: 'related by marriage',
     husband: 'husband', wife: 'wife',
     ex_husband: 'ex-husband', ex_wife: 'ex-wife',
     father_in_law: 'father-in-law', mother_in_law: 'mother-in-law',
@@ -129,6 +131,7 @@ const TERMS = {
     cousin_m: 'בן דוד', cousin_f: 'בת דודה',
     cousin2_m: 'בן דוד שני', cousin2_f: 'בת דודה שנייה',
     distant: 'קרוב רחוק',
+    related_by_marriage: 'קרובים בנישואין', // TODO: уточнить у носителя иврита
     husband: 'בעל', wife: 'אישה',
     ex_husband: 'בעל לשעבר', ex_wife: 'אישה לשעבר',
     father_in_law: 'חם', mother_in_law: 'חמות',
@@ -400,6 +403,10 @@ function computeKinshipWithGraph(idx, g, idA, idB, lang) {
   // e.g. P28 (husband of P8) → P3: P8 is aunt of P3, so P28 is uncle by marriage
   const affByMarriage = affineByMarriage(idx, idA, idB, g, lang);
   if (affByMarriage) return affByMarriage;
+
+  // ── Свойство общего вида: супруг(а) родственника, родственник супруга(и), цепочки через браки ──
+  const gen = generalAffine(idx, g, idA, idB, lang);
+  if (gen) return gen;
 
   return empty(T(lang, 'not_found'), 'none', 'none');
 }
@@ -754,6 +761,24 @@ function explainKinshipWithGraph(idx, g, idA, idB, lang, nameFn) {
     }
   }
 
+  // Новые правила свойства: цепочка уже посчитана (r.via — полный путь A → … → B)
+  if (r.via && r.via.length) {
+    via = r.via;
+    viaNames = via.map(nameFn);
+    const sep = (i) => ((g.spousesOf[via[i - 1]] || []).some(x => x.id === via[i]) ? ' ⚭ ' : ' → ');
+    let chain = viaNames[0];
+    if (via.length > 10) {
+      // очень длинную цепочку показываем сжато: 4 первых … 4 последних
+      for (let i = 1; i < 4; i++) chain += sep(i) + viaNames[i];
+      chain += ' → … (' + (via.length - 1) + (lang === 'en' ? ' steps' : lang === 'he' ? ' צעדים' : ' шагов') + ') … → ' + viaNames[via.length - 4];
+      for (let i = via.length - 3; i < via.length; i++) chain += sep(i) + viaNames[i];
+    } else {
+      for (let i = 1; i < via.length; i++) chain += sep(i) + viaNames[i];
+    }
+    if (lang === 'he') message += '\n' + chain;
+    else if (lang === 'en') message += '\nvia: ' + chain;
+    else message += '\nчерез: ' + chain;
+  } else
   // For in-laws / affine, mention the linking spouse when possible
   if ((r.type === 'inlaw' || r.type === 'affine') && r.kind !== 'spouse') {
     const spA = g.spousesOf[idA] || [];
@@ -781,6 +806,219 @@ function explainKinshipWithGraph(idx, g, idA, idB, lang, nameFn) {
   }
 
   return Object.assign({}, r, { message: message, via: via, viaNames: viaNames });
+}
+
+
+// ─── свойство общего вида (родство через браки) ───────────────────
+
+// Родительный падеж русских терминов родства (только для составных фраз).
+const GEN_RU = {
+  'брат':'брата','сестра':'сестры','дядя':'дяди','тётя':'тёти','дедушка':'дедушки','бабушка':'бабушки',
+  'прадедушка':'прадедушки','прабабушка':'прабабушки','прапрадедушка':'прапрадедушки','прапрабабушка':'прапрабабушки',
+  'племянник':'племянника','племянница':'племянницы','отец':'отца','мать':'матери','сын':'сына','дочь':'дочери',
+  'внук':'внука','внучка':'внучки','правнук':'правнука','правнучка':'правнучки','праправнук':'праправнука','праправнучка':'праправнучки',
+  'предок':'предка','предкиня':'предкини','потомок':'потомка','потомкиня':'потомкини','родственник':'родственника',
+  'отчим':'отчима','мачеха':'мачехи','пасынок':'пасынка','падчерица':'падчерицы','муж':'мужа','жена':'жены',
+  'зять':'зятя','невестка':'невестки','тесть':'тестя','тёща':'тёщи','свёкор':'свёкра','свекровь':'свекрови',
+  'шурин':'шурина','золовка':'золовки','деверь':'деверя','свояченица':'свояченицы'
+};
+function genRu(term) {
+  return String(term).split(' ').map(w => {
+    if (GEN_RU[w]) return GEN_RU[w];
+    if (/ый$/.test(w)) return w.replace(/ый$/, 'ого');
+    if (/ий$/.test(w)) return w.replace(/ий$/, 'его');
+    if (/ая$/.test(w)) return w.replace(/ая$/, 'ой');
+    return w;
+  }).join(' ');
+}
+
+// Мн.: компоненты связности и множество «кровных» (общий предок) для каждого человека.
+function activeSpouses(g, id) {
+  return (g.spousesOf[id] || []).filter(s => s.status !== 'divorced').map(s => s.id);
+}
+function descendantsOf(g, id) {
+  g._desc = g._desc || {};
+  if (g._desc[id]) return g._desc[id];
+  const out = new Set(), q = [id];
+  while (q.length) {
+    const x = q.pop();
+    for (const c of g.childrenOf[x] || []) if (!out.has(c)) { out.add(c); q.push(c); }
+  }
+  return (g._desc[id] = out);
+}
+function bloodSet(g, id) {
+  g._bs = g._bs || {};
+  if (g._bs[id]) return g._bs[id];
+  const set = new Set([id]);
+  const anc = ancestorDistances(id, g.parentsOf);
+  anc[id] = 0;
+  for (const a of Object.keys(anc)) {
+    set.add(a);
+    for (const d of descendantsOf(g, a)) set.add(d);
+  }
+  return (g._bs[id] = set);
+}
+function components(g) {
+  if (g._comp) return g._comp;
+  const comp = {};
+  const nbrs = (id) => [].concat(
+    g.parentsOf[id] || [], g.childrenOf[id] || [],
+    (g.spousesOf[id] || []).map(s => s.id), g.stepParentsOf[id] || []);
+  let n = 0;
+  const all = new Set();
+  for (const id of Object.keys(g.parentsOf)) all.add(id);
+  for (const id of Object.keys(g.childrenOf)) all.add(id);
+  for (const id of Object.keys(g.spousesOf)) all.add(id);
+  for (const id of all) {
+    if (comp[id] != null) continue;
+    n++;
+    const q = [id]; comp[id] = n;
+    while (q.length) {
+      const x = q.pop();
+      for (const y of nbrs(x)) if (comp[y] == null) { comp[y] = n; q.push(y); }
+    }
+  }
+  return (g._comp = comp);
+}
+function shortestPath(g, idA, idB) {
+  const prev = {}; prev[idA] = null;
+  const q = [idA];
+  const nbrs = (id) => [].concat(
+    g.parentsOf[id] || [], g.childrenOf[id] || [],
+    (g.spousesOf[id] || []).map(s => s.id), g.stepParentsOf[id] || []);
+  while (q.length) {
+    const x = q.shift();
+    if (x === idB) {
+      const path = [];
+      for (let c = idB; c != null; c = prev[c]) path.push(c);
+      return path.reverse();
+    }
+    for (const y of nbrs(x)) if (!(y in prev)) { prev[y] = x; q.push(y); }
+  }
+  return null;
+}
+// Путь по кровным связям X → общий предок → Y (включая X и Y).
+function bloodPath(g, idX, idY) {
+  const ancX = ancestorDistances(idX, g.parentsOf), ancY = ancestorDistances(idY, g.parentsOf);
+  ancX[idX] = 0; ancY[idY] = 0;
+  let lca = null, best = 1e9;
+  for (const [anc, da] of Object.entries(ancX)) {
+    if (ancY[anc] == null) continue;
+    const sc = da + ancY[anc];
+    if (sc < best) { best = sc; lca = anc; }
+  }
+  if (lca == null) return [idX, idY];
+  const pa = pathToAncestor(idX, lca, g.parentsOf) || [idX];
+  const pb = pathToAncestor(idY, lca, g.parentsOf) || [idY];
+  return pa.concat(pb.slice(0, -1).reverse());
+}
+
+function spouseWord(idx, id, lang) {            // «жена/муж» для A
+  const f = isFemale(idx, id), m = isMale(idx, id);
+  if (lang === 'en') return f ? 'wife' : m ? 'husband' : 'spouse';
+  if (lang === 'he') return f ? 'אשת' : m ? 'בעל' : 'בן/בת זוג של';
+  return f ? 'жена' : m ? 'муж' : 'супруг(а)';
+}
+function spouseGenWord(idx, id, lang) {         // «жены/мужа» (родительный)
+  const f = isFemale(idx, id), m = isMale(idx, id);
+  if (lang === 'en') return f ? "wife's" : m ? "husband's" : "spouse's";
+  if (lang === 'he') return f ? 'אשתו' : m ? 'בעלה' : 'בן/בת הזוג';
+  return f ? 'жены' : m ? 'мужа' : 'супруга(и)';
+}
+
+// Кровное родство из bloodRel без побочных эффектов.
+function bl_(idx, g, x, y, lang) {
+  // кэш по паре и языку внутри одного графа g (граф пересоздаётся при каждом computeKinship)
+  g._blc = g._blc || {};
+  const key = x + '|' + y + '|' + lang;
+  if (key in g._blc) return g._blc[key];
+  const r = bloodRel(idx, g, x, y, lang);
+  return (g._blc[key] = (r && r.type === 'blood') ? r : null);
+}
+const dist_ = (r) => r.a + r.b;
+const MAX_SEG = 3;   // в составных фразах (F_C, F_D) каждый кровный отрезок — не дальше дяди/племянника/деда
+
+function generalAffine(idx, g, idA, idB, lang) {
+  const cand = [];
+  const bsA = bloodSet(g, idA), bsB = bloodSet(g, idB);
+
+  // F_A: супруг(а) A — кровный родственник B → «жена двоюродного дяди»
+  for (const S of activeSpouses(g, idA)) {
+    if (S === idB || !bsB.has(S)) continue;
+    const r = bl_(idx, g, S, idB, lang); if (!r) continue;
+    cand.push({ score: dist_(r) + 1, rule: 0, S, r });
+  }
+  // F_B: B состоит в браке с S, A — кровный родственник S → «сестра жены»
+  for (const S of activeSpouses(g, idB)) {
+    if (S === idA || !bsA.has(S)) continue;
+    const r = bl_(idx, g, idA, S, lang); if (!r) continue;
+    cand.push({ score: dist_(r) + 1, rule: 1, S, r });
+  }
+  // F_C: A — кровный родственник S, S в браке с Y, Y — кровный родственник B → «сестра жены дяди»
+  // (минимальный score у F_C равен 3, а при равенстве выигрывают F_A/F_B — поэтому F_C считаем,
+  //  только если среди них нет кандидата с score ≤ 3)
+  const bestAB = cand.reduce((m, c) => Math.min(m, c.score), 1e9);
+  if (bestAB > 3) for (const S of bsA) {
+    if (S === idA || S === idB) continue;
+    for (const Y of activeSpouses(g, S)) {
+      if (Y === idA || Y === idB || !bsB.has(Y)) continue;
+      const r1 = bl_(idx, g, idA, S, lang), r2 = bl_(idx, g, Y, idB, lang);
+      if (!r1 || !r2 || dist_(r1) > MAX_SEG || dist_(r2) > MAX_SEG) continue;
+      cand.push({ score: dist_(r1) + dist_(r2) + 1, rule: 2, S, Y, r1, r2 });
+    }
+  }
+  // F_D: A в браке с S, S — кровный родственник Y, Y в браке с B → «жена брата жены»
+  for (const S of activeSpouses(g, idA)) {
+    if (S === idB) continue;
+    const bsS = bloodSet(g, S);
+    for (const Y of activeSpouses(g, idB)) {
+      if (Y === idA || Y === S || !bsS.has(Y)) continue;
+      const r = bl_(idx, g, S, Y, lang); if (!r || dist_(r) > MAX_SEG) continue;
+      cand.push({ score: dist_(r) + 2, rule: 3, S, Y, r });
+    }
+  }
+
+  if (cand.length) {
+    cand.sort((x, y) => x.score - y.score || x.rule - y.rule);
+    const c = cand[0];
+    let term, via;
+    if (c.rule === 0) {
+      const w = spouseWord(idx, idA, lang);
+      term = lang === 'en' ? w + ' of ' + c.r.term
+           : lang === 'he' ? w + ' ' + c.r.term
+           : w + ' ' + genRu(c.r.term);
+      via = [idA].concat(bloodPath(g, c.S, idB));
+    } else if (c.rule === 1) {
+      const w = spouseGenWord(idx, c.S, lang);
+      term = lang === 'en' ? w + ' ' + c.r.term
+           : lang === 'he' ? c.r.term + ' של ' + w
+           : c.r.term + ' ' + w;
+      via = bloodPath(g, idA, c.S).concat([idB]);
+    } else if (c.rule === 2) {
+      const w = spouseGenWord(idx, c.S, lang);
+      term = lang === 'en' ? c.r1.term + ' of ' + (isFemale(idx, c.S) ? "wife" : isMale(idx, c.S) ? "husband" : "spouse") + ' of ' + c.r2.term
+           : lang === 'he' ? c.r1.term + ' של ' + w + ' ' + c.r2.term
+           : c.r1.term + ' ' + w + ' ' + genRu(c.r2.term);
+      via = bloodPath(g, idA, c.S).concat(bloodPath(g, c.Y, idB));
+    } else {
+      const w = spouseWord(idx, idA, lang);
+      const wy = spouseGenWord(idx, c.Y, lang);
+      term = lang === 'en' ? w + ' of ' + wy + ' ' + c.r.term
+           : lang === 'he' ? w + ' ' + c.r.term + ' ' + wy
+           : w + ' ' + genRu(c.r.term) + ' ' + wy;
+      via = [idA].concat(bloodPath(g, c.S, c.Y)).concat([idB]);
+    }
+    return { found: true, type: 'affine', kind: 'marriage', a: 0, b: 0, term, via };
+  }
+
+  // Резерв: связаны графом (с браками), но короткого названия нет.
+  const comp = components(g);
+  if (comp[idA] != null && comp[idA] === comp[idB]) {
+    const path = shortestPath(g, idA, idB);
+    if (path) return { found: true, type: 'affine', kind: 'related', a: 0, b: 0,
+                       term: T(lang, 'related_by_marriage'), via: path };
+  }
+  return null;
 }
 
 
