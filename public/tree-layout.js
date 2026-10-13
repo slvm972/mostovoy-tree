@@ -109,7 +109,16 @@ function placeCouple(husband, wife, anchorX, y, role){
 // ════════════════════════════════════════════════════════
 function getCenteredLayout(focalId){
   const nmap = IDX.nodes;
-  const rel  = IDX.relatives[focalId];
+  const relRaw = IDX.relatives[focalId];
+  // Защита от «серых карточек»: в списках родственников могут остаться id людей,
+  // которых уже нет в IDX.nodes (удалены, кэш не пересчитан). Рисуем только существующих.
+  const rel = relRaw && {
+    ...relRaw,
+    parents:  (relRaw.parents  || []).filter(x => nmap[x]),
+    siblings: (relRaw.siblings || []).filter(x => nmap[x]),
+    spouses:  (relRaw.spouses  || []).filter(x => nmap[x]),
+    children: (relRaw.children || []).filter(x => nmap[x])
+  };
   // NB: IDX.grandparents намеренно не читаем — см. комментарий у LEVEL −2 ниже.
   const fams = IDX.families;
   if(!rel) {
@@ -278,7 +287,7 @@ function getCenteredLayout(focalId){
         ? (fNode.x + CW/2 + spouseNode.x + CW/2) / 2
         : fNode.x + CW/2;
       const kids = [...(fam.children||[])]
-        .filter(c => !placed.has(c))
+        .filter(c => nmap[c] && !placed.has(c))
         .sort((a,b) => py(nmap[a]?.birth) - py(nmap[b]?.birth));
       if(kids.length) familyGroups.push({ anchorX, kids });
     }

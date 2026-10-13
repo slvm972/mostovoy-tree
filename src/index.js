@@ -783,6 +783,21 @@ export default {
         r.siblings = (r.siblings||[]).filter(s => s !== personId);
         r.spouses  = (r.spouses ||[]).filter(s => s !== personId);
         r.parents  = (r.parents ||[]).filter(s => s !== personId);
+        // children: раньше НЕ чистились — удалённый ребёнок оставался в списке
+        // детей родителя и рисовался «серой карточкой-призраком»
+        r.children = (r.children||[]).filter(s => s !== personId);
+      }
+
+      // grandparents-кэш: убрать запись самого человека и упоминания в чужих записях
+      if(IDX.grandparents){
+        delete IDX.grandparents[personId];
+        for(const [gid, list] of Object.entries(IDX.grandparents)){
+          IDX.grandparents[gid] = (list||[]).map(g => ({
+            ...g,
+            husband: g.husband === personId ? null : g.husband,
+            wife:    g.wife    === personId ? null : g.wife
+          })).filter(g => g.husband || g.wife);
+        }
       }
 
       // Remove from all family references

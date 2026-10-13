@@ -836,30 +836,33 @@ function computeRelLabel(id){
   // use pname() as-is — "of"/"של" don't need a case change.
   const names = ids => ids.map(pid => currentLang==='ru' ? genitive(pid) : pname(pid)).join(', ');
   const lines = [];
+  // игнорируем id людей, которых уже нет в IDX.nodes (иначе в тексте виден «Мать P346»)
+  const alive = arr => (arr || []).filter(pid => IDX.nodes[pid]);
+  const relParents = alive(rel.parents), relChildren = alive(rel.children), relSiblings = alive(rel.siblings);
 
-  if(rel.parents && rel.parents.length){
+  if(relParents.length){
     const role = currentLang==='he' ? (isMale ? 'בן' : 'בת')
                : currentLang==='en' ? (isMale ? 'Son' : 'Daughter')
                : (isMale ? 'Сын' : 'Дочь');
-    lines.push(currentLang==='he' ? `${role} של ${names(rel.parents)}`
-             : currentLang==='en' ? `${role} of ${names(rel.parents)}`
-             : `${role} ${names(rel.parents)}`);
+    lines.push(currentLang==='he' ? `${role} של ${names(relParents)}`
+             : currentLang==='en' ? `${role} of ${names(relParents)}`
+             : `${role} ${names(relParents)}`);
   }
-  if(rel.children && rel.children.length){
+  if(relChildren.length){
     const role = currentLang==='he' ? (isMale ? 'אב' : 'אם')
                : currentLang==='en' ? (isMale ? 'Father' : 'Mother')
                : (isMale ? 'Отец' : 'Мать');
-    lines.push(currentLang==='he' ? `${role} של ${names(rel.children)}`
-             : currentLang==='en' ? `${role} of ${names(rel.children)}`
-             : `${role} ${names(rel.children)}`);
+    lines.push(currentLang==='he' ? `${role} של ${names(relChildren)}`
+             : currentLang==='en' ? `${role} of ${names(relChildren)}`
+             : `${role} ${names(relChildren)}`);
   }
-  if(rel.siblings && rel.siblings.length){
+  if(relSiblings.length){
     const role = currentLang==='he' ? (isMale ? 'אח' : 'אחות')
                : currentLang==='en' ? (isMale ? 'Brother' : 'Sister')
                : (isMale ? 'Брат' : 'Сестра');
-    lines.push(currentLang==='he' ? `${role} של ${names(rel.siblings)}`
-             : currentLang==='en' ? `${role} of ${names(rel.siblings)}`
-             : `${role} ${names(rel.siblings)}`);
+    lines.push(currentLang==='he' ? `${role} של ${names(relSiblings)}`
+             : currentLang==='en' ? `${role} of ${names(relSiblings)}`
+             : `${role} ${names(relSiblings)}`);
   }
   return lines;
 }
