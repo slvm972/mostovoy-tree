@@ -1763,9 +1763,16 @@ window.applyLang = function(lang){
 // ════════════════════════════════════════════════════════
 
 (function detectLang(){
-  const nav = (navigator.language || navigator.userLanguage || 'ru').toLowerCase();
-  if(nav.startsWith('he') || nav.startsWith('iw')) currentLang = 'he';
-  else if(!nav.startsWith('ru') && !nav.startsWith('uk')) currentLang = 'en';
+  // Язык, выбранный кнопками РУС/ENG/עב, запоминается (ключ tree_lang, общий для всех страниц сайта);
+  // если его нет — язык браузера: иврит → he, русский/украинский → ru, остальные → en.
+  let saved = null;
+  try { saved = localStorage.getItem('tree_lang'); } catch(e) {}
+  if(saved === 'ru' || saved === 'en' || saved === 'he') currentLang = saved;
+  else {
+    const nav = (navigator.language || navigator.userLanguage || 'ru').toLowerCase();
+    if(nav.startsWith('he') || nav.startsWith('iw')) currentLang = 'he';
+    else if(!nav.startsWith('ru') && !nav.startsWith('uk')) currentLang = 'en';
+  }
   document.querySelectorAll('.lbtn').forEach(b => {
     b.classList.toggle('active', b.dataset.lang === currentLang);
   });
@@ -1775,6 +1782,7 @@ window.applyLang = function(lang){
 document.querySelectorAll('.lbtn').forEach(btn => {
   btn.addEventListener('click', () => {
     currentLang = btn.dataset.lang;
+    try { localStorage.setItem('tree_lang', currentLang); } catch(e) {}
     document.querySelectorAll('.lbtn').forEach(b => b.classList.toggle('active', b.dataset.lang === currentLang));
     document.body.classList.toggle('rtl', currentLang === 'he');
     if(window.applyLang) window.applyLang(currentLang);
