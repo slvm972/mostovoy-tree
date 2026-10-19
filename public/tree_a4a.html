@@ -131,6 +131,7 @@ body.rtl #panel-col1 { border-right: none; border-left: 1px solid rgba(184,144,4
 body.rtl #panel-close { right: auto; left: 11px; }
 body.rtl #modal { direction: rtl; }
 body.rtl #help-bubble { direction: rtl; text-align: right; }
+body.rtl #help-bubble ul { padding-left: 0; padding-right: 16px; }
 body.rtl #bbar { direction: ltr; } /* keep lang buttons on right */
 body.rtl #info { direction: rtl; text-align: right; }
 @keyframes cardIn {
@@ -219,14 +220,17 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 .mbtn-close{margin-right:auto;background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 4px}
 .mbtn-close:hover{color:#555}
 /* help tooltip */
-#help-bubble{display:none;position:fixed;top:52px;right:14px;width:280px;background:#1C1208;
-             color:#EDD890;font-size:.75rem;padding:12px 14px;border-radius:6px;z-index:600;
+#help-bubble{display:none;position:fixed;top:52px;right:14px;width:340px;max-width:calc(100vw - 28px);
+             background:#1C1208;color:#EDD890;font-size:.75rem;padding:12px 14px;border-radius:6px;z-index:600;
              box-shadow:0 4px 20px rgba(0,0,0,.4);line-height:1.5;
              max-height:calc(100vh - 70px);overflow-y:auto}
 #help-bubble.open{display:block}
-#help-bubble b{display:block;margin-bottom:4px;font-size:.8rem}
-#help-bubble ol{padding-left:16px;margin-top:4px}
-#help-bubble li{margin-bottom:3px}
+#help-bubble .hb-title{font-size:.9rem;font-weight:700;margin-bottom:2px}
+#help-bubble .hb-sec{margin-top:10px}
+#help-bubble .hb-h{font-size:.8rem;font-weight:700;color:#C09828;margin-bottom:3px}
+#help-bubble ul{padding-left:16px;margin:0}
+#help-bubble li{margin-bottom:4px}
+#help-bubble strong{color:#FFF3C4}
 #help-bubble .lg-title{margin-top:10px;padding-top:8px;border-top:1px solid rgba(237,216,144,.25)}
 #help-bubble .lg-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 #help-bubble .lg-b{flex:0 0 auto;width:16px;height:16px;border-radius:50%;background:#C09828;color:#1C1208;
@@ -587,17 +591,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 </div>
 
 <!-- ── HELP BUBBLE ── -->
-<div id="help-bubble">
-  <b>Как дополнить дерево?</b>
-  <ol>
-    <li>Нажмите «✏️ Дополнить» и заполните форму</li>
-    <li>Скопируйте сформированный запрос</li>
-    <li>Откройте <b>claude.ai</b></li>
-    <li>Загрузите этот HTML-файл</li>
-    <li>Вставьте скопированный текст и отправьте</li>
-    <li>Скачайте обновлённый файл</li>
-  </ol>
-</div>
+<div id="help-bubble"></div>
 
 <!-- ── DIAGNOSTIC PANEL ── -->
 <div id="diag-overlay">
@@ -1685,17 +1679,23 @@ function buildHelpBubble(lang){
   if(!hb) return;
   const M = UI[lang] || UI.ru;
   const L = k => M[k] || UI.ru[k] || k;
-  const steps = M.help_steps || UI.ru.help_steps;
+  const sections = M.help_sections || UI.ru.help_sections || [];
+  let html = '<div class="hb-title">' + L('help_title') + '</div>';
+  for(const s of sections){
+    html += '<div class="hb-sec"><div class="hb-h">' + s.h + '</div><ul>' +
+            s.items.map(x => '<li>' + x + '</li>').join('') + '</ul></div>';
+  }
   const rows = [['\u2665','legend_spouses'],['\u2191','legend_parents'],
                 ['\u2194','legend_siblings'],['\u2193','legend_children']];
-  let legend = '<b class="lg-title">' + L('legend_title') + '</b>';
+  html += '<div class="hb-sec lg-title"><div class="hb-h">' + L('legend_title') + '</div>';
   for(const [glyph, key] of rows){
-    legend += '<div class="lg-row"><span class="lg-b">' + glyph + '</span><span>' + L(key) + '</span></div>';
+    html += '<div class="lg-row"><span class="lg-b">' + glyph + '</span><span>' + L(key) + '</span></div>';
   }
-  legend += '<div class="lg-row"><span class="lg-s">\uD83D\uDD17</span><span>' + L('legend_social') + '</span></div>';
-  legend += '<div class="lg-tip">' + L('legend_tip') + '</div>';
-  hb.innerHTML = '<b>' + (M.help_title || '') + '</b><ol>' +
-                 steps.map(x => '<li>' + x + '</li>').join('') + '</ol>' + legend;
+  html += '<div class="lg-row"><span class="lg-s">\uD83D\uDD17</span><span>' + L('legend_social') + '</span></div>';
+  html += '<div class="lg-tip">' + L('legend_tip') + '</div></div>';
+  hb.innerHTML = html;
+  // клики внутри справки не должны закрывать её (document-обработчик закрывает по любому клику)
+  if(!hb._stopBound){ hb.addEventListener('click', e => e.stopPropagation()); hb._stopBound = true; }
 }
 
 // Apply language to all static UI elements and re-render

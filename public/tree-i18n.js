@@ -70,8 +70,61 @@ const UI = {
     btn_generate:'✉ Сформировать и отправить по email', btn_copy:'📋 Копировать', btn_copied:'✓ Скопировано', btn_email:'✉️ Отправить по email',
     btn_cancel:'Отмена',
     rel_labels:{'Отец':'Отец','Мать':'Мать','Сестра':'Сестра','Зять':'Зять','Составитель':'Составитель','Племянник':'Племянник','Племянница':'Племянница','Тётя':'Тётя','Прабабушка':'Прабабушка','Прадедушка':'Прадедушка','Бабушка (по отцу)':'Бабушка (по отцу)','Бабушка (по матери)':'Бабушка (по матери)','Дедушка (по отцу)':'Дедушка (по отцу)','Дедушка (по матери)':'Дедушка (по матери)'},
-    help_title:'Как дополнить дерево?',
-    help_steps:['Нажмите «✏️ Дополнить» и заполните форму','Скопируйте сформированный запрос','Откройте claude.ai','Загрузите этот HTML-файл','Вставьте скопированный текст и отправьте','Скачайте обновлённый файл'],
+    help_title:'Справка по дереву',
+    help_sections:[
+      {h:'Начало работы',items:[
+        'Чтобы открыть дерево, введите пароль на стартовой странице. Пароль вам даёт тот, кто ведёт дерево.',
+        'Нажмите на карточку — дерево перестроится вокруг этого человека, а внизу откроется панель с датами и родственниками. «◀ Назад» возвращает на предыдущий шаг.',
+        'Поиск по имени — в верхней строке: начните вводить имя, выберите из списка и нажмите «→».',
+        'Колесо мыши или щипок двумя пальцами — масштаб, перетаскивание — сдвиг.',
+        'Кнопки с именами в верхней панели (★ Мирослав, Яков, Левик, Евгений) переносят дерево к этим людям.'
+      ]},
+      {h:'Кто что может',items:[
+        '<strong>Гость</strong> (пароль для родственников): видит дерево и контакты, скачивает контакты и календарь, печатает и предлагает правки администратору.',
+        '<strong>Администратор</strong>: сохраняет правки сразу, управляет связями, загружает файлы и делает резервные копии.'
+      ]},
+      {h:'Кнопки верхней панели',items:[
+        '<strong>🔑</strong> — вход и выход. Значок показывает роль: 🔓 администратор, 👤 гость.',
+        '<strong>📇 Контакты</strong> — файл .vcf с живыми родственниками, у которых указан телефон, email или страница в соцсети. iPhone: откройте файл в «Файлах» или в письме и нажмите «Добавить все контакты». Android: приложение «Контакты» → «Исправить и управлять» → «Импорт из файла» (на Samsung: меню → «Управление контактами» → «Импорт»). Компьютер: contacts.google.com → «Импорт». Повторная загрузка того же файла может создать дубли, поэтому скачивайте и добавляйте его заново только когда в дереве появились новые контакты.',
+        '<strong>📅 Календарь</strong> — файл .ics с днями рождения ныне живых родственников; событие повторяется каждый год, напоминание приходит за день. Надёжнее всего добавлять с компьютера: Google Календарь (calendar.google.com) → «Настройки» → «Импорт и экспорт»; на Mac — «Файл → Импорт»; в Outlook — «Импорт». События затем сами появятся на телефоне. В приложении Google Календарь на телефоне файл загрузить нельзя, на iPhone он может открыться не полностью. Это файл, а не подписка: после добавления новых людей скачайте его заново. Повторная загрузка в Google Календарь обновляет уже добавленные дни рождения, не дублируя их.',
+        '<strong>🖨 Печать</strong> — выберите формат A0, A1 или A2 (альбомная ориентация), скачается HTML-файл. Откройте его в браузере, нажмите Ctrl+P (⌘P на Mac) и выберите принтер или «Сохранить как PDF».',
+        '<strong>📦 Резервная копия</strong> (после входа) — скачивает всё дерево одним файлом .json. Делайте её перед крупными правками.',
+        '<strong>Страница администратора</strong> — отдельная страница admin.html (тот же сайт, в конце адреса /admin.html), вход паролем администратора. Вкладки: «Предложения» — правки от гостей, их можно принять (текст правки копируется, чтобы внести её) или отклонить; «Загрузить дерево» — файл .json (или старый .html), перед заменой показывается, что изменится, и можно отказаться, а прежняя версия сохраняется как копия; «Резервные копии» — список и скачивание; «Обслуживание» — пересчёт связей; «Настройки» — смена пароля для гостей; «Массовое обновление полей» — загрузка .json с правками: таблица «Было — Станет», ненужные строки можно исключить, затем «Применить».',
+        '<strong>⚙</strong> — диагностика данных (битые связи, даты). Администратору рядом с проблемным человеком показываются кнопки 🔧 «Исправить» и (для человека без единой связи) 🔗 «Прикрепить». <strong>?</strong> — эта справка.'
+      ]},
+      {h:'Личные данные и соцсети',items:[
+        'Телефон, email и ссылка на страницу в соцсетях хранятся в карточке человека. Значок 🔗 на карточке означает, что страница в соцсетях указана.',
+        'Фото человека видно только после входа; щелчок по фото открывает его крупно.',
+        'Правки <strong>частичные</strong>: в «Исправить» форма заполнена текущими значениями, и отправляются только изменённые поля. А загрузка файла .json на странице администратора заменяет <strong>всё дерево целиком</strong> (с предпросмотром и копией); слияния нет.'
+      ]},
+      {h:'Как добавить человека и исправить данные',items:[
+        '«✏️ Дополнить» (верхняя панель, видна только администратору) открывает окно с вкладками: 👤 Новый человек, 📷 Фото, 📝 Биография, 📅 Дата / место, 🔧 Исправить, 🔗 Прикрепить. «🔧 Исправить» и «➕ Добавить» в панели человека (их видят все после входа) открывают то же окно сразу для него.',
+        'Что есть в каждой вкладке:<ul><li><strong>Новый человек</strong> — имя, имя в родительном падеже (необязательно; нужно для фраз в «Кем приходится», можно не заполнять), пол, даты рождения и смерти, «Отец» и «Мать», «Связь с кем» и «Тип связи» (для брата и сестры ещё «Общий родитель»), телефон, email, страница в соцсетях.</li><li><strong>Фото</strong> — человек, файл фотографии или ссылка, подпись.</li><li><strong>Биография</strong> — человек, текст, ссылка на подробный документ.</li><li><strong>Дата / место</strong> — человек и уточнение текстом; всегда уходит администратору как предложение.</li><li><strong>Исправить</strong> — имя, имя в родительном падеже, даты (в том числе еврейские), телефон, email, соцсети, пол, номер поколения, степень родства (подпись вроде «Зять» или «Тётя»), «Отец» и «Мать», комментарий; «Семейная связь» и «Другое» — только текстом, как предложение.</li></ul>',
+        '<strong>«Отец» и «Мать»</strong>: здесь можно указать только людей, которые уже есть в дереве. Начните вводить имя и выберите из списка. Если родителя в дереве ещё нет, сначала добавьте его отдельно. Так добавить ребёнка проще всего: связь создаётся сама. В «Исправить» эти поля уже заполнены нынешними родителями: выберите другого человека, чтобы сменить родителя, или очистите поле, чтобы родитель стал неизвестным (программа попросит подтверждение).',
+        '<strong>«Связь с кем»</strong> и «Тип связи» (кем новый человек приходится выбранному: жена, муж, ребёнок, родитель, брат или сестра) нужны, когда указывать родителей не надо: например, добавить жену, мужа или брата. Если заполнены «Отец» или «Мать», тип «ребёнок», «брат» и «сестра» выбирать не нужно: родителей такого человека определяет выбранный человек. Перед добавлением найдите человека в поиске: возможно, он уже есть.',
+        '<strong>Брат или сестра</strong>: при типе «брат» или «сестра» появляется поле «Общий родитель»: «Оба родителя» (родные брат или сестра) либо только отец или только мать, если общий только один из родителей.',
+        '<strong>Гость</strong>: пользуется кнопками «Исправить» и «Добавить» в панели человека. После «Сформировать и отправить по email» правка уходит администратору — попадает на странице администратора во вкладку «Предложения» и может быть отправлена письмом (кнопки «Копировать» и «Отправить по email»). В дереве она появится после проверки администратором.',
+        '<strong>Администратор</strong>: «Новый человек», «Фото», «Биография», «Исправить» и «Прикрепить» сохраняются сразу (кнопка «Сохранить напрямую»). «Дата / место» и изменения семейных связей текстом всегда идут как предложения.',
+        'Ошибся? Неверные данные у человека исправляйте через «🔧 Исправить». Неверные связи и лишних людей убирают значками в панели: ✂, ✕, 🗑 (их видит только администратор; гость описывает ошибку в «Исправить», в поле «Семейная связь»).'
+      ]},
+      {h:'🔗 Прикрепить',items:[
+        'Связывает двух людей, которые уже есть в дереве. Поля: «Кого прикрепить», «К кому» и «Тип связи». Тип связи читается так: «Кого прикрепить» приходится «К кому» — жена, муж, ребёнок, родитель, брат или сестра. Тип связи показывает, где человек окажется на дереве: родитель — выше, ребёнок — ниже, жена, муж, брат и сестра — рядом, на том же уровне. Пример: «Кого» — Анна, «К кому» — Пётр, тип «Ребёнок»: Анна становится ребёнком Петра.',
+        'У человека может быть не больше двух родителей. Отчима или мачеху прикрепите как «жена» или «муж» к родному родителю ребёнка: на дереве они появятся рядом с ним как отдельный брак. Если у ребёнка записан только один родитель, новая жена или муж этого родителя могут занять пустое место второго родителя ребёнка.',
+        'Программа не перенесёт ребёнка, который уже записан в другой семье (сначала отвяжите его значком ✂ или ✕), и не объединит двух братьев, у которых уже разные семьи.'
+      ]},
+      {h:'Два понятия, которые встретятся в дереве',items:[
+        '<strong>Поколение.</strong> Это номер «этажа» в семье. Самых старших из известных вам предков записывают как 0, их детей как 1, внуков как 2 и так далее. Номер нужен печати: люди одного поколения стоят в одном ряду. Когда вы добавляете человека и указываете, к кому он привязан, номер ставится сам. На экране дерево строится по связям, а не по этому номеру. Если на печати человек попал не в тот ряд, поправьте номер в «Исправить», поле «Номер поколения».',
+        '<strong>Степень родства.</strong> Это короткая подпись, кем человек приходится тому, кто ведёт дерево: «Тётя», «Зять», «Двоюродный брат». Она показывается под именем в нижней панели. Пишется свободным текстом в «Исправить», в поле «Степень родства». Подпись заполнять не обязательно: чтобы узнать, кем приходятся друг другу двое людей, откройте в панели «Кем приходится», программа посчитает сама.'
+      ]},
+      {h:'Управление связями (администратор)',items:[
+        '<strong>✂</strong> рядом с родителем — «отвязать только от этого родителя». Ребёнок остаётся привязан ко второму родителю. Значок виден, когда у человека двое родителей.',
+        '<strong>✕</strong> рядом с ребёнком — убрать ребёнка из этой семьи. Он останется в дереве, но без родителей.',
+        '<strong>🗑</strong> рядом с именем — удалить человека. Возможно, только если у него нет детей (сначала переназначьте детей). Перед удалением просят подтверждение, а сервер сохраняет копию.',
+        '<strong>«Браки (управление)»</strong> — список браков человека (с кем и сколько детей). 🗑 удаляет пустой брак; у брака с детьми кнопка неактивна.',
+        '<strong>⚠ Битые ссылки на детей</strong> — если в семье записан ребёнок, которого уже нет в базе, администратор увидит такую строку в панели; 🗑 убирает эту запись.',
+        'Каждое действие просит подтверждение. Вернуть связь существующему человеку можно вкладкой «🔗 Прикрепить». Перед крупными правками скачайте 📦.'
+      ]}
+    ],
     hint_parents:'Скрыты родители: {n} — нажмите на карточку',
     hint_siblings:'Скрыты братья/сёстры: {n} — нажмите на карточку',
     hint_children:'Скрыты дети: {n} — нажмите на карточку',
@@ -200,8 +253,61 @@ const UI = {
     btn_generate:'✉ Generate & send by email', btn_copy:'📋 Copy', btn_copied:'✓ Copied', btn_email:'✉️ Send by email',
     btn_cancel:'Cancel',
     rel_labels:{'Отец':'Father','Мать':'Mother','Сестра':'Sister','Зять':'Son-in-law','Составитель':'Compiler','Племянник':'Nephew','Племянница':'Niece','Тётя':'Aunt','Прабабушка':'Great-grandmother','Прадедушка':'Great-grandfather','Бабушка (по отцу)':'Grandmother (paternal)','Бабушка (по матери)':'Grandmother (maternal)','Дедушка (по отцу)':'Grandfather (paternal)','Дедушка (по матери)':'Grandfather (maternal)','Сестра деда':'Grandfather\'s sister','Брат деда':'Grandfather\'s brother','Двоюродная прабабушка':'2nd great-grandmother','Двоюродная родственница':'Distant relative','Троюродный дядя':'3rd cousin once removed','Троюродная тётя':'3rd cousin once removed','Дядя по матери':'Uncle (maternal)','Жена дяди':'Uncle\'s wife','Муж двоюродной прабабушки':'Husband of 2nd great-grandmother'},
-    help_title:'How to add information?',
-    help_steps:['Click "✏️ Add info" and fill the form','Copy the generated request','Open claude.ai','Upload this HTML file','Paste the copied text and send','Download the updated file'],
+    help_title:'Tree guide',
+    help_sections:[
+      {h:'Getting started',items:[
+        'To open the tree, enter the password on the start page. Whoever maintains the tree gives you the password.',
+        'Click a card and the tree rebuilds around that person; a panel with dates and relatives opens at the bottom. “◀ Back” returns to the previous view.',
+        'Search by name is in the top bar: start typing, pick a name from the list and press “→”.',
+        'Mouse wheel or a two-finger pinch zooms; dragging pans.',
+        'The buttons with names in the top bar (★ Miroslav, Yakov, Levik, Evgeny) take the tree to those people.'
+      ]},
+      {h:'Who can do what',items:[
+        '<strong>Guest</strong> (the family password): sees the tree and contacts, downloads contacts and the calendar, prints, and proposes changes to the administrator.',
+        '<strong>Administrator</strong>: saves changes immediately, manages links, uploads files and makes backups.'
+      ]},
+      {h:'Top bar buttons',items:[
+        '<strong>🔑</strong> — log in / log out. The icon shows your role: 🔓 administrator, 👤 guest.',
+        '<strong>📇 Contacts</strong> — a .vcf file with living relatives who have a phone, email or social media page. iPhone: open the file in Files or in an email and tap “Add All Contacts”. Android: Contacts app → “Fix & manage” → “Import from file” (on Samsung: menu → “Manage contacts” → “Import”). Computer: contacts.google.com → “Import”. Uploading the same file again may create duplicates, so download and add it again only when new contacts have appeared in the tree.',
+        '<strong>📅 Calendar</strong> — an .ics file with birthdays of living relatives; the event repeats every year and a reminder arrives one day before. It is most reliable to add it from a computer: Google Calendar (calendar.google.com) → “Settings” → “Import & export”; on a Mac — “File → Import”; in Outlook — “Import”. The events then appear on your phone by themselves. In the Google Calendar phone app a file cannot be uploaded, and on iPhone it may open only partially. It is a file, not a subscription: download it again after new people are added. Uploading it again to Google Calendar updates the birthdays already added, without duplicating them.',
+        '<strong>🖨 Print</strong> — choose A0, A1 or A2 (landscape); an HTML file is downloaded. Open it in your browser, press Ctrl+P (⌘P on Mac) and choose a printer or “Save as PDF”.',
+        '<strong>📦 Backup</strong> (after login) — downloads the whole tree as one .json file. Do it before big changes.',
+        '<strong>Administrator page</strong> — a separate page, admin.html (the same site, with /admin.html at the end of the address), signed in with the administrator password. Tabs: “Suggestions” — changes from guests, which can be accepted (the text of the change is copied so you can make it) or rejected; “Upload tree” — a .json file (or an old .html), before replacing you see what will change and can cancel, and the previous version is kept as a backup; “Backups” — list and download; “Maintenance” — recalculating links; “Settings” — changing the guest password; “Bulk field update” — uploading a .json with changes: a “Was — Becomes” table, unneeded rows can be excluded, then “Apply”.',
+        '<strong>⚙</strong> — data diagnostics (broken links, dates). Next to a problem person the administrator sees the buttons 🔧 “Correct” and (for a person with no links at all) 🔗 “Attach existing”. <strong>?</strong> — this guide.'
+      ]},
+      {h:'Personal data and social media',items:[
+        'Phone, email and a social media link are stored on a person’s card. The 🔗 icon on a card means a social media page is on file.',
+        'A person’s photo is visible only after login; clicking the photo opens it larger.',
+        'Edits are <strong>partial</strong>: in “Correct” the form is filled with current values and only the changed fields are sent. Uploading a .json file on the administrator page, however, replaces the <strong>whole tree</strong> (with a preview and a backup); there is no merging.'
+      ]},
+      {h:'How to add a person and correct data',items:[
+        '“✏️ Add info” (top bar, visible to the administrator only) opens a window with tabs: 👤 New person, 📷 Photo, 📝 Biography, 📅 Date / place, 🔧 Correct, 🔗 Attach existing. “🔧 Correct” and “➕ Add” in a person’s panel (everyone sees them after login) open the same window for that person right away.',
+        'What each tab has:<ul><li><strong>New person</strong> — name, genitive-case name (optional; used for phrases in the “Relationship” block, can be left empty), sex, dates of birth and death, “Father” and “Mother”, “Related to” and “Relationship type” (for a brother or sister also “Shared parent”), phone, email, social media page.</li><li><strong>Photo</strong> — the person, a photo file or a link, a caption.</li><li><strong>Biography</strong> — the person, text, a link to a full document.</li><li><strong>Date / place</strong> — the person and a clarification in text; always goes to the administrator as a suggestion.</li><li><strong>Correct</strong> — name, genitive-case name, dates (including Hebrew ones), phone, email, social media, sex, generation number, relationship (a label such as “Son-in-law” or “Aunt”), “Father” and “Mother”, comment; “Family link” and “Other” — as text only, as a suggestion.</li></ul>',
+        '<strong>“Father” and “Mother”</strong>: here you can only specify people who are already in the tree. Start typing a name and pick it from the list. If the parent is not in the tree yet, add them separately first. This is the easiest way to add a child: the link is created automatically. In “Correct” these fields are already filled with the current parents: pick a different person to change a parent, or clear the field to make the parent unknown (the program will ask for confirmation).',
+        '<strong>“Related to”</strong> and “Relationship type” (who the new person is to the selected one: wife, husband, child, parent, brother or sister) are for when you do not need to specify parents: for example, to add a wife, a husband or a brother. If “Father” or “Mother” is filled in, do not choose the type “child”, “brother” or “sister”: the selected person determines that person’s parents. Before adding, look the person up in the search: they may already be there.',
+        '<strong>Brother or sister</strong>: with the type “brother” or “sister” the “Shared parent” field appears: “Both parents” (full brother or sister) or father only or mother only, if only one of the parents is shared.',
+        '<strong>Guest</strong>: uses the “Correct” and “Add” buttons in a person’s panel. After “Generate & send by email” the change goes to the administrator — it appears on the administrator page in the “Suggestions” tab and can be sent by email (buttons “Copy” and “Send by email”). It shows up in the tree after the administrator reviews it.',
+        '<strong>Administrator</strong>: “New person”, “Photo”, “Biography”, “Correct” and “Attach existing” are saved immediately (button “Save directly”). “Date / place” and family-link changes written as text always go as suggestions.',
+        'Made a mistake? Correct wrong data of a person via “🔧 Correct”. Wrong links and extra people are removed with the icons in the panel: ✂, ✕, 🗑 (only the administrator sees them; a guest describes the mistake in “Correct”, in the “Family link” field).'
+      ]},
+      {h:'🔗 Attach existing',items:[
+        'Links two people who are already in the tree. Fields: “Attach who”, “To whom” and “Relationship type”. The relationship type reads like this: “Attach who” is the wife, husband, child, parent, brother or sister of “To whom”. The relationship type shows where the person will end up on the tree: a parent is higher, a child is lower, wife, husband, brother and sister are beside them, on the same level. Example: “Attach who” — Anna, “To whom” — Peter, type “Child”: Anna becomes Peter’s child.',
+        'A person can have no more than two parents. Attach a stepfather or stepmother as “wife” or “husband” to the child’s own parent: on the tree they will appear next to that parent as a separate marriage. If a child has only one parent on record, the new wife or husband of that parent may take the empty place of the child’s second parent.',
+        'The program will not move a child who is already recorded in another family (detach them first with the ✂ or ✕ icon), and will not merge two siblings who already have different families.'
+      ]},
+      {h:'Two terms you will come across in the tree',items:[
+        '<strong>Generation.</strong> This is the number of a “floor” in the family. The oldest ancestors you know of are recorded as 0, their children as 1, grandchildren as 2, and so on. Printing needs this number: people of the same generation stand in one row. When you add a person and say whom they are linked to, the number is set automatically. On screen the tree is built from the links, not from this number. If a person ends up in the wrong row on the printout, correct the number in “Correct”, in the “Generation number” field.',
+        '<strong>Relationship.</strong> This is a short label saying who the person is to whoever maintains the tree: “Aunt”, “Son-in-law”, “First cousin”. It is shown under the name in the bottom panel. It is written as free text in “Correct”, in the “Relationship” field. Filling in the label is optional: to find out how two people are related to each other, open the “Relationship” block in the panel; the program will work it out itself.'
+      ]},
+      {h:'Managing links (administrator)',items:[
+        '<strong>✂</strong> next to a parent — “detach from this parent only”. The child stays linked to the other parent. The icon shows when a person has two parents.',
+        '<strong>✕</strong> next to a child — remove the child from this family. They stay in the tree, but without parents.',
+        '<strong>🗑</strong> next to the name — delete a person. Only possible if they have no children (reassign the children first). You are asked to confirm, and the server saves a backup.',
+        '<strong>“Marriages (admin)”</strong> — the person’s marriages (with whom and how many children). 🗑 deletes an empty marriage; for a marriage with children the button is disabled.',
+        '<strong>⚠ Broken child links</strong> — if a family has a child recorded who is no longer in the database, the administrator sees such a row in the panel; 🗑 removes that record.',
+        'Every action asks for confirmation. An existing person can be re-linked with the “🔗 Attach existing” tab. Download 📦 before big changes.'
+      ]}
+    ],
     hint_parents:'Hidden parents: {n} — click the card',
     hint_siblings:'Hidden siblings: {n} — click the card',
     hint_children:'Hidden children: {n} — click the card',
@@ -330,8 +436,61 @@ const UI = {
     btn_generate:'✉ צור ושלח במייל', btn_copy:'📋 העתק', btn_copied:'✓ הועתק', btn_email:'✉️ שלח במייל',
     btn_cancel:'ביטול',
     rel_labels:{'Отец':'אבא','Мать':'אמא','Сестра':'אחות','Зять':'חתן','Составитель':'מחבר','Племянник':'אחיין','Племянница':'אחיינית','Тётя':'דודה','Прабабушка':'סבתא רבה','Прадедушка':'סבא רבה','Бабушка (по отцу)':'סבתא (מצד האב)','Бабушка (по матери)':'סבתא (מצד האם)','Дедушка (по отцу)':'סבא (מצד האב)','Дедушка (по матери)':'סבא (מצד האם)','Сестра деда':'אחות הסבא','Брат деда':'אח הסבא','Двоюродная прабабушка':'סבתא רבה שנייה','Двоюродная родственница':'קרובת משפחה רחוקה','Троюродный дядя':'דוד רחוק','Троюродная тётя':'דודה רחוקה','Дядя по матери':'דוד מצד האם','Жена дяди':'אשת הדוד','Муж двоюродной прабабушки':'בעל סבתא רבה שנייה'},
-    help_title:'כיצד להוסיף מידע?',
-    help_steps:['לחץ "✏️ הוספה" ומלא את הטופס','העתק את הבקשה שנוצרה','פתח את claude.ai','העלה את קובץ ה-HTML','הדבק את הטקסט ושלח','הורד את הקובץ המעודכן'],
+    help_title:'מדריך לעץ',
+    help_sections:[
+      {h:'תחילת עבודה',items:[
+        'כדי לפתוח את העץ, הזינו את הסיסמה בדף הפתיחה. הסיסמה ניתנת על ידי מי שמתחזק את העץ.',
+        'לחצו על כרטיס והעץ ייבנה מחדש סביב האדם; בתחתית ייפתח פאנל עם תאריכים וקרובים. «◀ חזרה» מחזיר למסך הקודם.',
+        'החיפוש לפי שם בשורה העליונה: התחילו להקליד, בחרו שם מהרשימה ולחצו «→».',
+        'גלגלת העכבר או צביטה בשתי אצבעות — זום, גרירה — הזזה.',
+        'הכפתורים עם שמות בסרגל העליון (★ מירוסלב, יעקב, לוויק, יבגני) מעבירים את העץ לאנשים האלה.'
+      ]},
+      {h:'מי יכול מה',items:[
+        '<strong>אורח</strong> (סיסמת המשפחה): רואה את העץ ואת פרטי הקשר, מוריד אנשי קשר ולוח שנה, מדפיס ומציע שינויים למנהל.',
+        '<strong>מנהל</strong>: שומר שינויים מיד, מנהל קשרים, מעלה קבצים ויוצר גיבויים.'
+      ]},
+      {h:'כפתורי הסרגל העליון',items:[
+        '<strong>🔑</strong> — כניסה ויציאה. הסמל מראה את התפקיד: 🔓 מנהל, 👤 אורח.',
+        '<strong>📇 אנשי קשר</strong> — קובץ vcf עם קרובים בחיים שיש להם טלפון, אימייל או עמוד ברשת חברתית. iPhone: פתחו את הקובץ ב«קבצים» או במייל ולחצו «הוסף את כל אנשי הקשר». Android: אפליקציית «אנשי קשר» ← «תיקון וניהול» ← «ייבוא מקובץ» (ב-Samsung: תפריט ← «ניהול אנשי קשר» ← «ייבוא»). מחשב: contacts.google.com ← «ייבוא». טעינה חוזרת של אותו קובץ עלולה ליצור כפילויות, ולכן הורידו והוסיפו אותו מחדש רק כשהופיעו בעץ אנשי קשר חדשים.',
+        '<strong>📅 לוח שנה</strong> — קובץ ics עם ימי ההולדת של הקרובים החיים; האירוע חוזר מדי שנה והתזכורת מגיעה יום לפני. הכי אמין להוסיף ממחשב: Google Calendar (calendar.google.com) ← «הגדרות» ← «ייבוא וייצוא»; ב-Mac — «קובץ ← ייבוא»; ב-Outlook — «ייבוא». האירועים יופיעו אחר כך בטלפון מעצמם. באפליקציית Google Calendar בטלפון אי אפשר להעלות קובץ, וב-iPhone הוא עלול להיפתח באופן חלקי. זה קובץ ולא מנוי — אחרי הוספת אנשים חדשים הורידו אותו שוב. טעינה חוזרת ל-Google Calendar מעדכנת את ימי ההולדת שכבר נוספו, בלי ליצור כפילויות.',
+        '<strong>🖨 הדפסה</strong> — בחרו פורמט A0, A1 או A2 (לרוחב); יורד קובץ HTML. פתחו אותו בדפדפן, לחצו Ctrl+P (‏⌘P ב-Mac) ובחרו מדפסת או «שמירה כ-PDF».',
+        '<strong>📦 גיבוי</strong> (לאחר כניסה) — מוריד את כל העץ בקובץ json אחד. עשו זאת לפני שינויים גדולים.',
+        '<strong>דף המנהל</strong> — דף נפרד, admin.html (אותו אתר, עם /admin.html בסוף הכתובת), כניסה בסיסמת המנהל. לשוניות: «הצעות» — שינויים מאורחים, אפשר לאשר אותם (הטקסט של השינוי מועתק כדי להכניס אותו) או לדחות; «העלאת עץ» — קובץ json (או html ישן), לפני ההחלפה מוצג מה ישתנה ואפשר לבטל, והגרסה הקודמת נשמרת כגיבוי; «גיבויים» — רשימה והורדה; «תחזוקה» — חישוב מחדש של הקשרים; «הגדרות» — החלפת סיסמת האורחים; «עדכון שדות המוני» — העלאת json עם שינויים: טבלת «היה — יהיה», אפשר להוציא שורות מיותרות, ואז «החל».',
+        '<strong>⚙</strong> — אבחון נתונים (קשרים שבורים, תאריכים). ליד אדם בעייתי המנהל רואה את הכפתורים 🔧 «תיקון» ו(אצל אדם ללא אף קשר) 🔗 «חיבור». <strong>?</strong> — המדריך הזה.'
+      ]},
+      {h:'פרטים אישיים ורשתות חברתיות',items:[
+        'טלפון, אימייל וקישור לעמוד ברשת חברתית נשמרים בכרטיס האדם. הסמל 🔗 על הכרטיס אומר שעמוד ברשת חברתית מצוין.',
+        'תמונת האדם גלויה רק לאחר כניסה; לחיצה על התמונה פותחת אותה בגדול.',
+        'התיקונים <strong>חלקיים</strong>: ב«תיקון» הטופס מלא בערכים הנוכחיים, ונשלחים רק השדות ששונו. לעומת זאת, העלאת קובץ json בדף המנהל מחליפה את <strong>כל העץ</strong> (עם תצוגה מקדימה וגיבוי); אין מיזוג.'
+      ]},
+      {h:'איך מוסיפים אדם ומתקנים נתונים',items:[
+        '«✏️ הוספה» (בסרגל העליון, גלוי למנהל בלבד) פותח חלון עם לשוניות: 👤 אדם חדש, 📷 תמונה, 📝 ביוגרפיה, 📅 תאריך / מקום, 🔧 תיקון, 🔗 חיבור. «🔧 תיקון» ו«➕ הוספה» בפאנל של האדם (כולם רואים אותם לאחר כניסה) פותחים את אותו חלון ישר עבורו.',
+        'מה יש בכל לשונית:<ul><li><strong>אדם חדש</strong> — שם, שם ביחסת הקניין (רשות; נחוץ לניסוחים ב«קרבה משפחתית», אפשר לא למלא), מין, תאריכי לידה ופטירה, «אבא» ו«אמא», «קשור/ה ל» ו«סוג קשר» (לאח ולאחות גם «הורה משותף»), טלפון, אימייל, עמוד ברשת חברתית.</li><li><strong>תמונה</strong> — האדם, קובץ תמונה או קישור, כיתוב.</li><li><strong>ביוגרפיה</strong> — האדם, טקסט, קישור למסמך מלא.</li><li><strong>תאריך / מקום</strong> — האדם והבהרה בטקסט; נשלח תמיד למנהל כהצעה.</li><li><strong>תיקון</strong> — שם, שם ביחסת הקניין, תאריכים (גם עבריים), טלפון, אימייל, רשתות חברתיות, מין, מספר דור, קרבה (תווית כמו «חתן» או «דודה»), «אבא» ו«אמא», הערה; «קשר משפחתי» ו«אחר» — בטקסט בלבד, כהצעה.</li></ul>',
+        '<strong>«אבא» ו«אמא»</strong>: כאן אפשר לציין רק אנשים שכבר קיימים בעץ. התחילו להקליד שם ובחרו מהרשימה. אם ההורה עדיין לא בעץ, הוסיפו אותו קודם בנפרד. כך הכי קל להוסיף ילד: הקשר נוצר מעצמו. ב«תיקון» השדות האלה כבר מלאים בהורים הנוכחיים: בחרו אדם אחר כדי להחליף הורה, או נקו את השדה כדי שההורה יהיה לא ידוע (התוכנה תבקש אישור).',
+        '<strong>«קשור/ה ל»</strong> ו«סוג קשר» (מי האדם החדש ביחס לנבחר: אישה, בעל, ילד/ה, הורה, אח או אחות) נחוצים כשאין צורך לציין הורים: למשל כדי להוסיף אישה, בעל או אח. אם מולאו «אבא» או «אמא», אין לבחור בסוג «ילד/ה», «אח» או «אחות»: ההורים של האדם הזה נקבעים לפי האדם שנבחר. לפני ההוספה חפשו את האדם בחיפוש: אולי הוא כבר שם.',
+        '<strong>אח או אחות</strong>: בסוג «אח» או «אחות» מופיע השדה «הורה משותף»: «שני ההורים» (אח או אחות מלאים) או רק אבא או רק אמא, אם משותף רק אחד מההורים.',
+        '<strong>אורח</strong>: משתמש בכפתורים «תיקון» ו«הוספה» בפאנל של האדם. אחרי «צור ושלח במייל» השינוי נשלח למנהל — הוא מופיע בדף המנהל בלשונית «הצעות» ואפשר לשלוח אותו גם במייל (כפתורי «העתק» ו«שלח במייל»). בעץ הוא יופיע אחרי בדיקת המנהל.',
+        '<strong>מנהל</strong>: «אדם חדש», «תמונה», «ביוגרפיה», «תיקון» ו«חיבור» נשמרים מיד (כפתור «שמור ישירות»). «תאריך / מקום» ושינויי קשרי משפחה בטקסט תמיד נשלחים כהצעות.',
+        'טעית? נתונים שגויים של אדם מתקנים דרך «🔧 תיקון». קשרים שגויים ואנשים מיותרים מסירים בעזרת הסמלים בפאנל: ✂, ✕, 🗑 (רק המנהל רואה אותם; אורח מתאר את הטעות ב«תיקון», בשדה «קשר משפחתי»).'
+      ]},
+      {h:'🔗 חיבור',items:[
+        'מחבר שני אנשים שכבר קיימים בעץ. שדות: «את מי לחבר», «למי» ו«סוג קשר». סוג הקשר נקרא כך: «את מי לחבר» הוא האישה, הבעל, הילד/ה, ההורה, האח או האחות של «למי». סוג הקשר מראה איפה האדם יופיע בעץ: הורה — למעלה, ילד — למטה, אישה, בעל, אח ואחות — לידו, באותה רמה. דוגמה: «את מי לחבר» — אנה, «למי» — פטר, סוג «ילד/ה»: אנה הופכת לילדה של פטר.',
+        'לאדם יכולים להיות לא יותר משני הורים. את האב החורג או האם החורגת חברו כ«אישה» או «בעל» להורה הביולוגי של הילד: בעץ הם יופיעו לידו כנישואין נפרדים. אם לילד רשום הורה אחד בלבד, האישה או הבעל החדשים של אותו הורה עשויים לתפוס את המקום הפנוי של ההורה השני של הילד.',
+        'התוכנה לא תעביר ילד שכבר רשום במשפחה אחרת (קודם נתקו אותו בסמל ✂ או ✕), ולא תאחד שני אחים שכבר יש להם משפחות שונות.'
+      ]},
+      {h:'שני מושגים שתפגשו בעץ',items:[
+        '<strong>דור.</strong> זה מספר ה«קומה» במשפחה. הקדמונים הכי מבוגרים שאתם מכירים נרשמים כ-0, ילדיהם כ-1, הנכדים כ-2 וכן הלאה. המספר נחוץ להדפסה: אנשים מאותו דור עומדים באותה שורה. כשמוסיפים אדם ומציינים למי הוא מקושר, המספר נקבע מעצמו. על המסך העץ נבנה לפי הקשרים ולא לפי המספר הזה. אם בהדפסה אדם הגיע לשורה הלא נכונה, תקנו את המספר ב«תיקון», בשדה «מספר דור».',
+        '<strong>קרבה.</strong> זו תווית קצרה שאומרת מי האדם ביחס למי שמתחזק את העץ: «דודה», «חתן», «בן דוד». היא מוצגת מתחת לשם בפאנל התחתון. היא נכתבת בטקסט חופשי ב«תיקון», בשדה «קרבה». את התווית לא חייבים למלא: כדי לברר מה הקשר בין שני אנשים, פתחו בפאנל «קרבה משפחתית» והתוכנה תחשב בעצמה.'
+      ]},
+      {h:'ניהול קשרים (מנהל)',items:[
+        '<strong>✂</strong> ליד הורה — «להסיר רק מהורה זה». הילד נשאר קשור להורה השני. הסמל מופיע כשיש לאדם שני הורים.',
+        '<strong>✕</strong> ליד ילד — להסיר את הילד מהמשפחה הזו. הוא נשאר בעץ, אך ללא הורים.',
+        '<strong>🗑</strong> ליד השם — מחיקת אדם. אפשרית רק אם אין לו ילדים (קודם יש להעביר את הילדים). לפני המחיקה מבקשים אישור והשרת שומר גיבוי.',
+        '<strong>«נישואין (ניהול)»</strong> — רשימת הנישואין של האדם (עם מי וכמה ילדים). 🗑 מוחק נישואין ריקים; בנישואין עם ילדים הכפתור לא פעיל.',
+        '<strong>⚠ קישורים שבורים</strong> — אם במשפחה רשום ילד שכבר אינו קיים במסד הנתונים, המנהל יראה שורה כזו בפאנל; 🗑 מסיר את הרשומה.',
+        'כל פעולה מבקשת אישור. אפשר לחבר מחדש אדם קיים בלשונית «🔗 חיבור». לפני שינויים גדולים הורידו 📦.'
+      ]}
+    ],
     hint_parents:'הורים מוסתרים: {n} — לחצו על הכרטיס',
     hint_siblings:'אחים/אחיות מוסתרים: {n} — לחצו על הכרטיס',
     hint_children:'ילדים מוסתרים: {n} — לחצו על הכרטיס',
