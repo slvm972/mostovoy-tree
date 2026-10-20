@@ -1616,7 +1616,26 @@ function relText(n){
     const manual = n['rel_' + currentLang];
     if(manual) return manual;
   }
+  // rel, созданный формой «Новый человек» («тип имя (год) [Pxx]»): собираем фразу на языке
+  // интерфейса, без года и технического тега. Словарные подписи и строки без слова-типа идут дальше.
+  const g = relGeneratedParts(n.rel);
+  if(g){
+    const nm = (IDX && IDX.nodes && IDX.nodes[g.id])
+      ? (currentLang === 'ru' ? genitive(g.id) : pname(g.id))
+      : g.name;
+    return t('rel_gen_' + g.kind) + (nm ? ' ' + nm : '');
+  }
   return trel(n.rel);
+}
+
+// Разбор rel вида «жена Иван Иванов (1950) [P12]» -> {kind:'wife', id:'P12', name:'Иван Иванов'}; иначе null.
+function relGeneratedParts(s){
+  if(!s) return null;
+  const KINDS = { 'жена':'wife', 'муж':'husband', 'ребёнок':'child', 'ребенок':'child',
+                  'родитель':'parent', 'брат':'brother', 'сестра':'sister' };
+  const m = String(s).match(/^(жена|муж|ребёнок|ребенок|родитель|брат|сестра)\s+(.*?)\s*\[?(P\d+)\]?\s*$/i);
+  if(!m) return null;
+  return { kind: KINDS[m[1].toLowerCase()], id: m[3], name: m[2].replace(/\s*\(\s*\d{3,4}\s*\)\s*$/, '').trim() };
 }
 
 function noteText(n, field){
@@ -2043,7 +2062,7 @@ function openModal(prefillId, mode){
     if(n.phone)    lines.push(t('lbl_phone')     + ': ' + n.phone);
     if(n.email)    lines.push(t('lbl_email')     + ': ' + n.email);
     if(n.social)   lines.push(t('lbl_social')    + ': ' + n.social);
-    if(n.rel)      lines.push(t('fix_rel')       + ': ' + trel(n.rel));
+    if(n.rel)      lines.push(t('fix_rel') + ': ' + relText(n));
     if(n.rel_en)   lines.push(t('fix_rel') + ' (EN): ' + n.rel_en);
     if(n.rel_he)   lines.push(t('fix_rel') + ' (HE): ' + n.rel_he);
     if(n.family_note) lines.push(t('fix_family') + ': ' + n.family_note);
@@ -2087,7 +2106,8 @@ function openModal(prefillId, mode){
     setVal('ff-father', prefillFam ? parentLabel(prefillFam.husband) : '');
     setVal('ff-mother', prefillFam ? parentLabel(prefillFam.wife)    : '');
 
-    setVal('ff-rel',       trel(n.rel));
+    // исходное значение, а не trel(): иначе сохранение в EN/HE записало бы перевод вместо исходного rel
+    setVal('ff-rel', n.rel);
     setVal('ff-rel-en',    n.rel_en);
     setVal('ff-rel-he',    n.rel_he);
     setVal('ff-family',    n.family_note);
@@ -3264,7 +3284,7 @@ function diagItemsHtml(r){
     const n = IDX.nodes[it.id];
     const name = n ? pname(it.id) : it.id;
     const meta = n
-      ? [ 'gen ' + (n.gen ?? '?'), n.rel ? trel(n.rel) : '', [yr(n.birth), yr(n.death) ? t('died') + ' ' + yr(n.death) : ''].filter(Boolean).join(' ') ].filter(Boolean).join(' · ')
+      ? [ 'gen ' + (n.gen ?? '?'), n.rel ? relText(n) : '', [yr(n.birth), yr(n.death) ? t('died') + ' ' + yr(n.death) : ''].filter(Boolean).join(' ') ].filter(Boolean).join(' · ')
       : 'нет в IDX.nodes';
     return `<div style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 18px;border-bottom:1px dotted rgba(255,255,255,.08)">
       <div style="flex:1;min-width:0">
@@ -3397,7 +3417,7 @@ function generateVCF() {
     if(n.email)  lines.push('EMAIL:' + n.email);
     if(n.social) lines.push('URL:' + n.social);
     if(bYear)    lines.push('BDAY:' + bYear + '0101');
-    const note = [n.rel ? trel(n.rel) : '', id].filter(Boolean).join(' · ');
+    const note = [n.rel ? relText(n) : '', id].filter(Boolean).join(' · ');
     if(note)     lines.push('NOTE:' + note);
     lines.push('ORG:' + t('tree_title').replace('🌳 ',''));
     lines.push('CATEGORIES:Family');
@@ -3531,7 +3551,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     lines.push(`DTEND;VALUE=DATE:${dtend_str}`);
     lines.push(`RRULE:FREQ=YEARLY`);
     lines.push(`SUMMARY:${summary}`);
-    if(p.rel) lines.push(`DESCRIPTION:${trel(p.rel)}`);
+    if(p.rel) lines.push(`DESCRIPTION:${relText(p)}`);
     lines.push(`TRANSP:TRANSPARENT`);
     lines.push(`BEGIN:VALARM`);
     lines.push(`TRIGGER:-P1D`);

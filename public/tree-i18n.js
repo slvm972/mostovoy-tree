@@ -70,6 +70,7 @@ const UI = {
     btn_generate:'✉ Сформировать и отправить по email', btn_copy:'📋 Копировать', btn_copied:'✓ Скопировано', btn_email:'✉️ Отправить по email',
     btn_cancel:'Отмена',
     rel_labels:{'Отец':'Отец','Мать':'Мать','Сестра':'Сестра','Зять':'Зять','Составитель':'Составитель','Племянник':'Племянник','Племянница':'Племянница','Тётя':'Тётя','Прабабушка':'Прабабушка','Прадедушка':'Прадедушка','Бабушка (по отцу)':'Бабушка (по отцу)','Бабушка (по матери)':'Бабушка (по матери)','Дедушка (по отцу)':'Дедушка (по отцу)','Дедушка (по матери)':'Дедушка (по матери)'},
+    rel_gen_wife:'Жена',rel_gen_husband:'Муж',rel_gen_child:'Ребёнок',rel_gen_parent:'Родитель',rel_gen_brother:'Брат',rel_gen_sister:'Сестра',
     help_title:'Справка по дереву',
     help_sections:[
       {h:'Начало работы',items:[
@@ -253,6 +254,7 @@ const UI = {
     btn_generate:'✉ Generate & send by email', btn_copy:'📋 Copy', btn_copied:'✓ Copied', btn_email:'✉️ Send by email',
     btn_cancel:'Cancel',
     rel_labels:{'Отец':'Father','Мать':'Mother','Сестра':'Sister','Зять':'Son-in-law','Составитель':'Compiler','Племянник':'Nephew','Племянница':'Niece','Тётя':'Aunt','Прабабушка':'Great-grandmother','Прадедушка':'Great-grandfather','Бабушка (по отцу)':'Grandmother (paternal)','Бабушка (по матери)':'Grandmother (maternal)','Дедушка (по отцу)':'Grandfather (paternal)','Дедушка (по матери)':'Grandfather (maternal)','Сестра деда':'Grandfather\'s sister','Брат деда':'Grandfather\'s brother','Двоюродная прабабушка':'2nd great-grandmother','Двоюродная родственница':'Distant relative','Троюродный дядя':'3rd cousin once removed','Троюродная тётя':'3rd cousin once removed','Дядя по матери':'Uncle (maternal)','Жена дяди':'Uncle\'s wife','Муж двоюродной прабабушки':'Husband of 2nd great-grandmother'},
+    rel_gen_wife:'Wife of',rel_gen_husband:'Husband of',rel_gen_child:'Child of',rel_gen_parent:'Parent of',rel_gen_brother:'Brother of',rel_gen_sister:'Sister of',
     help_title:'Tree guide',
     help_sections:[
       {h:'Getting started',items:[
@@ -436,6 +438,7 @@ const UI = {
     btn_generate:'✉ צור ושלח במייל', btn_copy:'📋 העתק', btn_copied:'✓ הועתק', btn_email:'✉️ שלח במייל',
     btn_cancel:'ביטול',
     rel_labels:{'Отец':'אבא','Мать':'אמא','Сестра':'אחות','Зять':'חתן','Составитель':'מחבר','Племянник':'אחיין','Племянница':'אחיינית','Тётя':'דודה','Прабабушка':'סבתא רבה','Прадедушка':'סבא רבה','Бабушка (по отцу)':'סבתא (מצד האב)','Бабушка (по матери)':'סבתא (מצד האם)','Дедушка (по отцу)':'סבא (מצד האב)','Дедушка (по матери)':'סבא (מצד האם)','Сестра деда':'אחות הסבא','Брат деда':'אח הסבא','Двоюродная прабабушка':'סבתא רבה שנייה','Двоюродная родственница':'קרובת משפחה רחוקה','Троюродный дядя':'דוד רחוק','Троюродная тётя':'דודה רחוקה','Дядя по матери':'דוד מצד האם','Жена дяди':'אשת הדוד','Муж двоюродной прабабушки':'בעל סבתא רבה שנייה'},
+    rel_gen_wife:'אשת',rel_gen_husband:'בעלה של',rel_gen_child:'ילד/ה של',rel_gen_parent:'הורה של',rel_gen_brother:'אח של',rel_gen_sister:'אחות של',
     help_title:'מדריך לעץ',
     help_sections:[
       {h:'תחילת עבודה',items:[
