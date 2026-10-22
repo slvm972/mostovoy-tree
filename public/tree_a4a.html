@@ -228,6 +228,8 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 #help-bubble .hb-title{font-size:.9rem;font-weight:700;margin-bottom:2px}
 #help-bubble .hb-sec{margin-top:10px}
 #help-bubble .hb-h{font-size:.8rem;font-weight:700;color:#C09828;margin-bottom:3px}
+#help-bubble details.hb-sec>summary{cursor:pointer;margin-bottom:0}
+#help-bubble details.hb-sec[open]>summary{margin-bottom:3px}
 #help-bubble ul{padding-left:16px;margin:0}
 #help-bubble li{margin-bottom:4px}
 #help-bubble strong{color:#FFF3C4}
@@ -1701,8 +1703,8 @@ function buildHelpBubble(lang){
   const sections = M.help_sections || UI.ru.help_sections || [];
   let html = '<div class="hb-title">' + L('help_title') + '</div>';
   for(const s of sections){
-    html += '<div class="hb-sec"><div class="hb-h">' + s.h + '</div><ul>' +
-            s.items.map(x => '<li>' + x + '</li>').join('') + '</ul></div>';
+    html += '<details class="hb-sec"' + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
+            s.items.map(x => '<li>' + x + '</li>').join('') + '</ul></details>';
   }
   const rows = [['\u2665','legend_spouses'],['\u2191','legend_parents'],
                 ['\u2194','legend_siblings'],['\u2193','legend_children']];
