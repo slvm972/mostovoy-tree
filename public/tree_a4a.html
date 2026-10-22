@@ -4351,6 +4351,8 @@ async function linkNewPersonToFamily(newId, targetId, relType, newSex, sharedPar
       const d = await r.json();
       if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
     } else {
+      const famCur = IDX.families[famId];
+      if(famCur && famCur.husband && famCur.wife) throw new Error(({ru:'У этой персоны уже есть оба родителя',en:'This person already has both parents',he:'לאדם הזה כבר יש שני הורים'})[currentLang] || 'У этой персоны уже есть оба родителя');
       const r = await fetch(WORKER_URL + '/api/family/' + famId, {
         method: 'PATCH', headers,
         body: JSON.stringify({addParent: newId})
@@ -4505,6 +4507,8 @@ async function linkExistingPersonToFamily(existingId, targetId, relType){
         if(!d.ok) throw new Error(d.error || 'Не удалось создать семью');
       }
     } else {
+      const famCur = IDX.families[famId];
+      if(famCur && famCur.husband && famCur.wife) throw new Error(({ru:'У этой персоны уже есть оба родителя',en:'This person already has both parents',he:'לאדם הזה כבר יש שני הורים'})[currentLang] || 'У этой персоны уже есть оба родителя');
       const r = await fetch(WORKER_URL + '/api/family/' + famId, {
         method: 'PATCH', headers, body: JSON.stringify({addParent: existingId})
       });
