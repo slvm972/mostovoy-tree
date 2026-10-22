@@ -332,6 +332,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
   <button class="btn" id="btn-backup" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать резервную копию (JSON)" data-title="tooltip_backup">📦</button>
+  <button class="btn" id="btn-gedcom" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать GEDCOM (для переноса в другие сервисы)" data-title="tooltip_gedcom">📤</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Выйти" data-title="tooltip_logout">🔑</button>
   <button class="btn" id="btn-diag" style="padding:4px 8px;opacity:.5;font-size:.65rem" title="Диагностика" data-title="tooltip_diag">⚙</button>
   <button class="btn" id="btn-help" style="padding:4px 8px;opacity:.7" title="Справка" data-title="tooltip_help">?</button>
@@ -3429,6 +3430,173 @@ function generateVCF() {
   }
   return { vcf: lines.join('\r\n'), count };
 }
+
+// ════════════════════════════════════════════════════════
+//  GEDCOM 5.5.1 export — всё дерево (персоны + семьи)
+//  Источник истины — IDX.nodes и IDX.families; кэши child_of/parent_in
+//  не используются (они могут разойтись). Имена берутся исходные (n.name),
+//  чтобы выгрузка не зависела от выбранного языка интерфейса.
+// ════════════════════════════════════════════════════════
+function generateGEDCOM() {
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const DECEASED_MARKS = ['ум.', 'd.', 'נפ.'];
+  const out = [];
+
+  // значение в одну строку; ведущий @ удваивается (правило GEDCOM)
+  const one = v => {
+    let s = String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').trim();
+    if (s.charAt(0) === '@') s = '@' + s;
+    return s;
+  };
+
+  // многострочный / длинный текст: CONT на переводах строк, CONC на длинных строках
+  const pushText = (level, tag, text) => {
+    const rows = String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n');
+    let first = true;
+    for (const row of rows) {
+      let rest = row;
+      let chunk = 0;
+      do {
+        const piece = rest.slice(0, 200);
+        rest = rest.slice(200);
+        if (first)           { out.push(level + ' ' + tag + ' ' + piece); first = false; }
+        else if (chunk === 0) out.push((level + 1) + ' CONT ' + piece);
+        else                  out.push((level + 1) + ' CONC ' + piece);
+        chunk++;
+      } while (rest.length);
+    }
+  };
+
+  // дата: стандартные формы идут как есть, всё остальное — как текстовая фраза в скобках
+  const gedDate = raw => {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const u = s.toUpperCase();
+    let m = u.match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{3,4})$/);
+    if (m && MONTHS.indexOf(m[2]) !== -1) return parseInt(m[1], 10) + ' ' + m[2] + ' ' + m[3];
+    m = u.match(/^([A-Z]{3})\s+(\d{3,4})$/);
+    if (m && MONTHS.indexOf(m[1]) !== -1) return m[1] + ' ' + m[2];
+    if (/^\d{3,4}$/.test(u)) return u;
+    return '(' + s.replace(/[()]/g, '') + ')';
+  };
+
+  // последнее слово — фамилия, остальное — имя
+  const gedName = name => {
+    const parts = String(name || '').replace(/[\/\r\n]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return parts.slice(0, -1).join(' ') + ' /' + parts[parts.length - 1] + '/';
+    return parts[0] || '';
+  };
+
+  const multi = (v, splitter, max) =>
+    String(v || '').split(splitter).map(s => s.trim()).filter(Boolean).slice(0, max);
+
+  const nodes = IDX.nodes || {};
+  const fams  = IDX.families || {};
+  const has   = id => !!(id && nodes[id]);
+
+  // связи считаем напрямую из families (только существующие персоны)
+  const famc = {}, famsOf = {};
+  for (const [fid, f] of Object.entries(fams)) {
+    for (const pid of [f.husband, f.wife]) {
+      if (has(pid)) (famsOf[pid] = famsOf[pid] || []).push(fid);
+    }
+    for (const cid of (f.children || [])) {
+      if (has(cid)) (famc[cid] = famc[cid] || []).push(fid);
+    }
+  }
+
+  const treeName = ((typeof t === 'function' ? t('tree_title') : '') || '').replace('🌳', '').trim() || 'Family tree';
+  const now = new Date();
+
+  out.push('0 HEAD');
+  out.push('1 SOUR FamilyTree');
+  out.push('1 DATE ' + now.getDate() + ' ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear());
+  out.push('1 SUBM @SUBM1@');
+  out.push('1 GEDC');
+  out.push('2 VERS 5.5.1');
+  out.push('2 FORM LINEAGE-LINKED');
+  out.push('1 CHAR UTF-8');
+  out.push('0 @SUBM1@ SUBM');
+  out.push('1 NAME ' + one(treeName));
+
+  let personCount = 0;
+  for (const [id, n] of Object.entries(nodes)) {
+    personCount++;
+    out.push('0 @' + id + '@ INDI');
+
+    const nm = gedName(n.name);
+    if (nm) out.push('1 NAME ' + one(nm));
+    if (n.sex === 'M' || n.sex === 'F') out.push('1 SEX ' + n.sex);
+
+    const bd = gedDate(n.birth);
+    if (bd) { out.push('1 BIRT'); out.push('2 DATE ' + bd); }
+
+    const dd = String(n.death || '').trim();
+    if (DECEASED_MARKS.indexOf(dd) !== -1) {
+      out.push('1 DEAT Y');            // «умер(ла), дата неизвестна»
+    } else if (dd) {
+      out.push('1 DEAT');
+      out.push('2 DATE ' + gedDate(dd));
+    }
+
+    // еврейские даты/имя формат структурно не поддерживает — переносим заметками
+    if (n.hebrew_name) pushText(1, 'NOTE', 'Еврейское имя: ' + n.hebrew_name);
+    if (n.birth_he)    pushText(1, 'NOTE', 'Дата рождения (евр.): ' + n.birth_he);
+    if (n.death_he)    pushText(1, 'NOTE', 'Дата смерти (евр.): ' + n.death_he);
+
+    multi(n.phone,  /[,;\n]+/, 3).forEach(v => out.push('1 PHON ' + one(v)));
+    multi(n.email,  /[,;\s]+/, 3).forEach(v => out.push('1 EMAIL ' + one(v)));
+    multi(n.social, /\s+/,     3).forEach(v => out.push('1 WWW ' + one(v)));
+    if (n.bio) pushText(1, 'NOTE', n.bio);
+
+    (famc[id]   || []).forEach(fid => out.push('1 FAMC @' + fid + '@'));
+    (famsOf[id] || []).forEach(fid => out.push('1 FAMS @' + fid + '@'));
+  }
+
+  let famCount = 0;
+  for (const [fid, f] of Object.entries(fams)) {
+    famCount++;
+    out.push('0 @' + fid + '@ FAM');
+    if (has(f.husband)) out.push('1 HUSB @' + f.husband + '@');
+    if (has(f.wife))    out.push('1 WIFE @' + f.wife + '@');
+    for (const cid of (f.children || [])) {
+      if (has(cid)) out.push('1 CHIL @' + cid + '@');
+    }
+  }
+
+  out.push('0 TRLR');
+  return { ged: out.join('\r\n') + '\r\n', persons: personCount, families: famCount };
+}
+
+document.getElementById('btn-gedcom').addEventListener('click', () => {
+  if (!(_sessionPassword && window._userRole === 'admin')) {
+    if (!_sessionPassword) document.getElementById('btn-login').click();
+    showToast(currentLang==='he' ? '🔒 ייצוא GEDCOM זמין למנהל בלבד'
+             : currentLang==='en' ? '🔒 GEDCOM export is for the admin only'
+             : '🔒 Экспорт GEDCOM доступен только администратору', true);
+    return;
+  }
+  if (!IDX || !IDX.nodes || !Object.keys(IDX.nodes).length) {
+    showToast(currentLang==='he' ? '⚠ אין נתונים לייצוא'
+             : currentLang==='en' ? '⚠ No data to export'
+             : '⚠ Нет данных для экспорта', true);
+    return;
+  }
+  const { ged, persons, families } = generateGEDCOM();
+  const blob = new Blob(['\uFEFF' + ged], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'mostovoy-tree-' + new Date().toISOString().slice(0, 10) + '.ged';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(currentLang==='he' ? '✓ GEDCOM הורד: ' + persons + ' אנשים, ' + families + ' משפחות'
+           : currentLang==='en' ? '✓ GEDCOM downloaded: ' + persons + ' persons, ' + families + ' families'
+           : '✓ GEDCOM скачан: ' + persons + ' персон, ' + families + ' семей', false);
+});
 
 // Visible toast notification (works even if user doesn't notice bottom bar)
 function showToast(msg, isWarning){
