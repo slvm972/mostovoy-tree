@@ -105,7 +105,7 @@ function parseYearToken(tok) {
 }
 
 // detailed parse: { ok:true, value, spelling, prefixed } or { ok:false, reason }
-function parseDetailed(raw) {
+function parseLetters(raw) {
   if (typeof raw !== 'string' || !raw.trim()) return { ok: false, reason: 'empty' };
   const s = normalize(raw);
   if (!s) return { ok: false, reason: 'empty' };
@@ -131,6 +131,77 @@ function parseDetailed(raw) {
 }
 
 function parseHebrewDate(raw) { const r = parseDetailed(raw); return r.ok ? r.value : null; }
+
+// Numeric tail inside parentheses, e.g. "(16 <month in Hebrew letters> 5763)".
+// Day = 1-2 digits, optional space, month in Hebrew letters (optional bet prefix), space, 4-digit year.
+function parseNumericPart(str) {
+  const s = normalize(str);
+  const m = /^(\d{1,2})\s*([\u05D0-\u05EA ]+?)\s+(\d{4})$/.exec(s);
+  if (!m) return null;
+  const day = +m[1];
+  const tokens = toCode(m[2]).split(' ');
+  const mm = matchMonth(tokens, 0);
+  if (!mm || mm.len !== tokens.length) return null;
+  if (day < 1 || day > MONTH_MAX_DAYS[mm.key]) return null;
+  return { day: day, monthKey: mm.key, year: +m[3] };
+}
+
+// Public detailed parser. Letters part is parsed by parseLetters. If the string ends with a
+// parenthesis that contains digits, that numeric part must agree with the letters part:
+//   agree -> ok, hadNumeric: true | differ -> numeric_mismatch | unreadable -> bad_parenthetical
+// Parentheses without digits behave exactly as before.
+function parseDetailed(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, reason: 'empty' };
+  const clean = raw.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '');
+  const pm = /\(([^)]*)\)\s*$/.exec(clean);
+  if (!pm || !/[0-9]/.test(pm[1])) return parseLetters(raw);
+  const res = parseLetters(clean.slice(0, pm.index));
+  if (!res.ok) return res;
+  const inner = parseNumericPart(pm[1]);
+  if (!inner) return { ok: false, reason: 'bad_parenthetical' };
+  const v = res.value;
+  if (inner.day !== v.day || inner.monthKey !== v.monthKey || inner.year !== v.year) return { ok: false, reason: 'numeric_mismatch' };
+  res.hadNumeric = true;
+  return res;
+}
+
+// ---- formatter: {day, monthKey, year} -> canonical Hebrew text, e.g. 13 Nisan 5731 ----
+// Day: letters only, no punctuation. Year: without thousands, gershayim before the last letter.
+const MONTH_CODE = { tishri: 'TSry', heshvan: 'xSwwn', kislev: 'kslw', tevet: 'tbT', shevat: 'Sbt', adar: 'adr', adar1: 'adr a', adar2: 'adr b', nisan: 'nysn', iyar: 'ayyr', sivan: 'sywwn', tamuz: 'Tmwz', av: 'ab', elul: 'alwl' };
+const FINAL = { n: '\u05DF', m: '\u05DD', k: '\u05DA', p: '\u05E3', c: '\u05E5' };
+const HUNDREDS = [['T', 400], ['S', 300], ['r', 200], ['q', 100]];
+const TENS = [['c', 90], ['p', 80], ['e', 70], ['s', 60], ['n', 50], ['m', 40], ['l', 30], ['k', 20], ['y', 10]];
+
+function numToLetters(n) {
+  let rest = n, out = '';
+  HUNDREDS.forEach(function (h) { while (rest >= h[1]) { out += h[0]; rest -= h[1]; } });
+  if (rest === 15) return out + 'tw';
+  if (rest === 16) return out + 'tz';
+  for (let i = 0; i < TENS.length; i++) { if (rest >= TENS[i][1]) { out += TENS[i][0]; rest -= TENS[i][1]; break; } }
+  if (rest > 0) out += UNITS[rest - 1];
+  return out;
+}
+function heWord(code) {
+  const a = Array.from(code);
+  const last = a.length - 1;
+  return a.map(function (ch, i) { return (i === last && has(FINAL, ch)) ? FINAL[ch] : (has(HEB, ch) ? HEB[ch] : ch); }).join('');
+}
+function punctuateYear(h) {
+  const a = Array.from(h);
+  if (a.length === 1) return a[0] + '\u05F3';
+  a.splice(a.length - 1, 0, '\u05F4');
+  return a.join('');
+}
+function formatHebrewDate(d) {
+  if (!d || !has(MONTH_CODE, d.monthKey)) return null;
+  const day = d.day, year = d.year;
+  if (Math.floor(day) !== day || Math.floor(year) !== year) return null;
+  if (!(day >= 1 && day <= 30) || !(year >= 5100 && year <= 5999)) return null;
+  const dayH = toHebrew(numToLetters(day));
+  let monthH = MONTH_CODE[d.monthKey].split(' ').map(function (w) { return heWord(w); }).join(' ');
+  if (d.monthKey === 'adar1' || d.monthKey === 'adar2') monthH += '\u05F3';
+  return dayH + ' ' + monthH + ' ' + punctuateYear(toHebrew(numToLetters(year - 5000)));
+}
 
 // ---- Gregorian side ----
 const GMON = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
@@ -208,7 +279,38 @@ function selftest() {
     if (!ok) bad++;
     console.log((ok ? 'PASS  ' : 'FAIL  ') + c[0] + (ok ? '' : '   got ' + res));
   }
-  console.log(bad === 0 ? 'SELFTEST: all ' + (cases.length + g.length) + ' passed' : 'SELFTEST: ' + bad + ' FAILED');
+  let extra = 0;
+  const eq = function (name, got, expected) {
+    extra++;
+    const ok = got === expected;
+    if (!ok) bad++;
+    console.log((ok ? 'PASS  ' : 'FAIL  ') + name + (ok ? '' : '   got ' + got + ' expected ' + expected));
+  };
+  const pj = function (s) { const r = parseHebrewDate(s); return r ? JSON.stringify(r) : 'null'; };
+  const pr = function (s) { const r = parseDetailed(s); return r.ok ? 'ok' : r.reason; };
+  const A13 = '\u05D9\u05D2 \u05E0\u05D9\u05E1\u05DF \u05EA\u05E9\u05DC\u05F4\u05D0';
+  const BN = '\u05D1\u05E0\u05D9\u05E1\u05DF';
+  const want13 = E(13, 'nisan', 5731);
+  eq('numeric part matches (with space)', pj(A13 + ' (13 ' + BN + ' 5731)'), want13);
+  eq('numeric part matches (glued, no space)', pj(A13 + ' (13' + BN + ' 5731)'), want13);
+  eq('numeric day differs -> numeric_mismatch', pr(A13 + ' (14 ' + BN + ' 5731)'), 'numeric_mismatch');
+  eq('numeric year differs -> numeric_mismatch', pr(A13 + ' (13 ' + BN + ' 5732)'), 'numeric_mismatch');
+  eq('unreadable numeric part -> bad_parenthetical', pr(A13 + ' (13 xx 5731)'), 'bad_parenthetical');
+  eq('parentheses with Latin junk, no digits -> old behaviour', pr(A13 + ' (abc)'), 'non_hebrew');
+  eq('empty parentheses -> old behaviour (parsed)', pj(A13 + ' ()'), want13);
+  eq('hadNumeric flag is set', String(parseDetailed(A13 + ' (13 ' + BN + ' 5731)').hadNumeric), 'true');
+  eq('format 15 Tishri 5786', formatHebrewDate({ day: 15, monthKey: 'tishri', year: 5786 }), '\u05D8\u05D5 \u05EA\u05E9\u05E8\u05D9 \u05EA\u05E9\u05E4\u05F4\u05D5');
+  eq('format 13 Nisan 5731', formatHebrewDate({ day: 13, monthKey: 'nisan', year: 5731 }), A13);
+  eq('format 1 Tishri 5785', formatHebrewDate({ day: 1, monthKey: 'tishri', year: 5785 }), '\u05D0 \u05EA\u05E9\u05E8\u05D9 \u05EA\u05E9\u05E4\u05F4\u05D4');
+  [
+    { day: 15, monthKey: 'nisan', year: 5785 },
+    { day: 16, monthKey: 'tishri', year: 5785 },
+    { day: 30, monthKey: 'shevat', year: 5785 },
+    { day: 9, monthKey: 'adar2', year: 5787 },
+    { day: 29, monthKey: 'elul', year: 5785 },
+    { day: 12, monthKey: 'adar1', year: 5787 }
+  ].forEach(function (o) { eq('round trip ' + JSON.stringify(o), pj(formatHebrewDate(o)), JSON.stringify(o)); });
+  console.log(bad === 0 ? 'SELFTEST: all ' + (cases.length + g.length + extra) + ' passed' : 'SELFTEST: ' + bad + ' FAILED');
   return bad === 0;
 }
 
@@ -240,10 +342,10 @@ function main(argv) {
   const nodes = root.nodes;
   const rep = [];
   const say = function (s) { console.log(s); rep.push(s); };
-  const S = { total: 0, living: 0, dead: 0, birthHe: 0, deathHe: 0, parsed: 0, failed: 0, odd: 0, yearOnly: 0, yearOnlyWithHe: 0, livingFullNoHe: 0 };
+  const S = { total: 0, living: 0, dead: 0, birthHe: 0, deathHe: 0, parsed: 0, failed: 0, odd: 0, yearOnly: 0, yearOnlyWithHe: 0, livingFullNoHe: 0, numParen: 0, numOk: 0, numMismatch: 0, nonCanon: 0 };
   const reasons = {}, monthFreq = {}, quotes = {}, cmp = {};
   const weird = { latin: 0, cyrillic: 0, digits: 0, direction_marks: 0 };
-  const unrec = [], big = [], cmpNote = [];
+  const unrec = [], big = [], cmpNote = [], numMismatchIds = [], nonCanonList = [];
   let prefixedCount = 0, noGreg = 0;
 
   for (const id of Object.keys(nodes)) {
@@ -261,6 +363,7 @@ function main(argv) {
       if (raw === undefined || raw === null || String(raw).trim() === '') continue;
       const str = String(raw);
       if (field === 'birth_he') S.birthHe++; else S.deathHe++;
+      if (/\([^)]*[0-9][^)]*\)\s*$/.test(str.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, ''))) S.numParen++;
 
       if (/[A-Za-z]/.test(str)) weird.latin++;
       if (/[\u0400-\u04FF]/.test(str)) weird.cyrillic++;
@@ -277,10 +380,13 @@ function main(argv) {
       const res = parseDetailed(str);
       if (!res.ok) {
         S.failed++; inc(reasons, res.reason);
+        if (res.reason === 'numeric_mismatch') { S.numMismatch++; numMismatchIds.push(id + ' ' + field); }
         unrec.push({ id: id, field: field, value: str, reason: res.reason });
         continue;
       }
       S.parsed++;
+      if (res.hadNumeric) S.numOk++;
+      { const canon = formatHebrewDate(res.value); if (canon !== str.trim()) { S.nonCanon++; nonCanonList.push(id + ' ' + field); } }
       if (res.prefixed) prefixedCount++;
       inc(monthFreq, res.value.monthKey + ' | ' + res.spelling);
       if (res.value.year < 5500 || res.value.year > 5790) S.odd++;
@@ -318,6 +424,12 @@ function main(argv) {
   say('--- Gregorian birth is a bare year ---');
   say('  persons with 4-digit birth only: ' + S.yearOnly + ' (of them with birth_he filled: ' + S.yearOnlyWithHe + ')');
   say('  living persons with full Gregorian birth but NO birth_he: ' + S.livingFullNoHe);
+  say('--- parenthetical numeric part and canonical form ---');
+  say('  values with a numeric part in parentheses: ' + S.numParen + ' (recognized ' + S.numOk + ', numeric_mismatch ' + S.numMismatch + ')');
+  say('  recognized values that differ from the canonical form: ' + S.nonCanon + ' of ' + S.parsed + '  (size of a future format migration)');
+  if (numMismatchIds.length) say('  numeric_mismatch ids: ' + numMismatchIds.join(', '));
+  if (nonCanonList.length) say('  non-canonical ids (first 20 of ' + nonCanonList.length + '): ' + nonCanonList.slice(0, 20).join(', '));
+  nonCanonList.slice(20).forEach(function (x) { rep.push('non-canonical: ' + x); });
 
   say('=== UNRECOGNIZED (first 40 of ' + unrec.length + ') ===');
   unrec.slice(0, 40).forEach(function (u) { say(u.id + ' | ' + u.field + ' | ' + u.reason + ' | ' + u.value + ' | ' + hex(u.value)); });
@@ -347,4 +459,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv);
-module.exports = { parseHebrewDate: parseHebrewDate, parseDetailed: parseDetailed, normalize: normalize, toCode: toCode, toHebrew: toHebrew, parseGreg: parseGreg, gregToHebrew: gregToHebrew, compareToGreg: compareToGreg };
+module.exports = { parseHebrewDate: parseHebrewDate, parseDetailed: parseDetailed, normalize: normalize, toCode: toCode, toHebrew: toHebrew, parseGreg: parseGreg, gregToHebrew: gregToHebrew, compareToGreg: compareToGreg, formatHebrewDate: formatHebrewDate, parseNumericPart: parseNumericPart };
