@@ -332,6 +332,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты" data-title="tooltip_contacts">📇</button>
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
+  <button class="btn" id="btn-hebrew-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_hebrew_calendar">&#128334;</button>
   <button class="btn" id="btn-backup" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать резервную копию (JSON)" data-title="tooltip_backup">📦</button>
   <button class="btn" id="btn-gedcom" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать GEDCOM (для переноса в другие сервисы)" data-title="tooltip_gedcom">📤</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Выйти" data-title="tooltip_logout">🔑</button>
@@ -3691,6 +3692,59 @@ document.getElementById('btn-contacts').addEventListener('click', () => {
 })
 
 // ── Calendar (ICS) export ────────────────────────────────────────────────
+// ---- Hebrew-date reminders (.ics, 5 years): birthdays by Hebrew date + yahrzeits chosen on this device ----
+document.getElementById('btn-hebrew-calendar').title = t('tooltip_hebrew_calendar');
+document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
+  if(!_sessionPassword){
+    document.getElementById('btn-login').click();
+    showToast(t('toast_hebrew_login'), true);
+    return;
+  }
+  if(!window.TreeHebrew || !TreeHebrew.isSupported()){
+    showToast(t('toast_hebrew_unsupported'), true);
+    return;
+  }
+  const sel = getYahrzeitSel();
+  let res;
+  try {
+    res = TreeHebrew.buildHebrewIcs({
+      nodes: IDX.nodes,
+      yahrzeitIds: sel,
+      nowYear: new Date().getFullYear(),
+      years: 5,
+      uidDomain: 'mostovoy-tree',
+      prodId: 'Mostovoy Family Tree',
+      nameOf: pname,
+      labels: {
+        calName: t('hebcal_name'),
+        yahrzeit: t('hebcal_yahrzeit'),
+        alarmBirth: t('hebcal_alarm_birth'),
+        alarmYahrzeit: t('hebcal_alarm_yahrzeit'),
+        descBirth: t('hebcal_desc_birth'),
+        descDeath: t('hebcal_desc_death')
+      }
+    });
+  } catch(e){
+    showToast('\u26A0 ' + e.message, true);
+    return;
+  }
+  const skippedNote = res.skipped ? t('toast_hebrew_skipped').replace('{m}', res.skipped) : '';
+  if(res.events === 0){
+    showToast(t('toast_hebrew_none') + skippedNote, true);
+    return;
+  }
+  const encoded = btoa(unescape(encodeURIComponent(res.ics)));
+  const a = document.createElement('a');
+  a.href = 'data:text/calendar;base64,' + encoded;
+  a.download = 'mostovoy-hebrew-reminders.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
+  if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
+  showToast(msg, res.skipped > 0);
+});
+
 document.getElementById('btn-calendar').addEventListener('click', () => {
   if(!_sessionPassword){
     document.getElementById('btn-login').click();
