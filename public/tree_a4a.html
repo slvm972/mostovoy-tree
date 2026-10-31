@@ -958,6 +958,22 @@ function toggleYahrzeit(id, on){
 }
 function dropYahrzeit(id){ setYahrzeitSel(rawYahrzeitSel().filter(x => x !== id)); }
 
+// ---- Hebrew calendar file status: remembered only in this browser (localStorage) ----
+function hebcalKey(){ return 'hebrew_cal_mostovoy'; }
+function saveHebrewCalStatus(st){
+  try { localStorage.setItem(hebcalKey(), JSON.stringify({ from: st.from, to: st.to, created: st.created })); } catch(e){}
+}
+// states: none (never downloaded), ok, soon (current year == last covered year), expired (current year is later)
+function getHebrewCalStatus(){
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(hebcalKey()) || 'null'); } catch(e){ o = null; }
+  if(!o || typeof o !== 'object' || !isFinite(o.from) || !isFinite(o.to)) return { state: 'none', from: 0, to: 0, created: '' };
+  const y = new Date().getFullYear();
+  const state = y > +o.to ? 'expired' : (y === +o.to ? 'soon' : 'ok');
+  return { state: state, from: +o.from, to: +o.to, created: String(o.created || '') };
+}
+function hebcalDue(){ const s = getHebrewCalStatus(); return s.state === 'soon' || s.state === 'expired'; }
+
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
@@ -3705,13 +3721,18 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
     return;
   }
   const sel = getYahrzeitSel();
+  const hebFrom = new Date().getFullYear();
+  const dNow = new Date();
+  const hebCreated = String(dNow.getDate()).padStart(2,'0') + '.' + String(dNow.getMonth()+1).padStart(2,'0') + '.' + dNow.getFullYear();
   let res;
   try {
     res = TreeHebrew.buildHebrewIcs({
       nodes: IDX.nodes,
       yahrzeitIds: sel,
-      nowYear: new Date().getFullYear(),
+      nowYear: hebFrom,
       years: 5,
+      createdStr: hebCreated,
+      treeUrl: location.origin + location.pathname,
       uidDomain: 'mostovoy-tree',
       prodId: 'Mostovoy Family Tree',
       nameOf: pname,
@@ -3721,7 +3742,10 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
         alarmBirth: t('hebcal_alarm_birth'),
         alarmYahrzeit: t('hebcal_alarm_yahrzeit'),
         descBirth: t('hebcal_desc_birth'),
-        descDeath: t('hebcal_desc_death')
+        descDeath: t('hebcal_desc_death'),
+        createdLine: t('hebcal_created'),
+        updateSummary: t('hebcal_update_summary'),
+        updateDesc: t('hebcal_update_desc')
       }
     });
   } catch(e){
@@ -3736,10 +3760,11 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
   const encoded = btoa(unescape(encodeURIComponent(res.ics)));
   const a = document.createElement('a');
   a.href = 'data:text/calendar;base64,' + encoded;
-  a.download = 'mostovoy-hebrew-reminders.ics';
+  a.download = 'mostovoy-hebrew-reminders-' + res.from + '-' + res.to + '.ics';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  saveHebrewCalStatus({from: res.from, to: res.to, created: hebCreated});
   let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
   if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
   showToast(msg, res.skipped > 0);
