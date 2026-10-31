@@ -311,6 +311,7 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 <script src="tree-print.js"></script>
 <script src="tree-layout.js"></script>
 <script src="tree-kinship.js"></script>
+<script src="tree-hebrew.js"></script>
 </head>
 <body>
 <div id="tb">
@@ -939,6 +940,23 @@ document.addEventListener('keydown', (e) => {
 });
 
 
+// ---- Yahrzeit reminders: personal choice, stored only in this browser (localStorage, never sent to the server) ----
+function yzKey(){ return 'yahrzeit_sel_mostovoy'; }
+function rawYahrzeitSel(){
+  try {
+    const arr = JSON.parse(localStorage.getItem(yzKey()) || '[]');
+    return Array.isArray(arr) ? arr.filter(x => typeof x === 'string') : [];
+  } catch(e){ return []; }
+}
+function getYahrzeitSel(){ return rawYahrzeitSel().filter(x => IDX && IDX.nodes && IDX.nodes[x]); }
+function setYahrzeitSel(ids){ try { localStorage.setItem(yzKey(), JSON.stringify(ids)); } catch(e){} }
+function toggleYahrzeit(id, on){
+  const cur = rawYahrzeitSel().filter(x => x !== id);
+  if(on) cur.push(id);
+  setYahrzeitSel(cur);
+}
+function dropYahrzeit(id){ setYahrzeitSel(rawYahrzeitSel().filter(x => x !== id)); }
+
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
@@ -1019,6 +1037,12 @@ function showPanel(id){
   const otherNoteText  = noteText(n, 'other_note');
   if(familyNoteText) col1 += `<div class="p-sec"><h3>${t('fix_family')}</h3><div class="p-block">${familyNoteText}</div></div>`;
   if(otherNoteText)  col1 += `<div class="p-sec"><h3>${t('fix_other')}</h3><div class="p-block">${otherNoteText}</div></div>`;
+  // Yahrzeit reminder: personal choice (any logged-in role), kept only in this browser
+  if(_sessionPassword && n.death_he && String(n.death_he).trim()){
+    const yzOn = getYahrzeitSel().indexOf(id) >= 0;
+    col1 += `<label style="display:block;margin-top:8px;font-size:.72rem;color:#5A3C10;cursor:pointer">
+      <input type="checkbox" ${yzOn ? 'checked' : ''} onchange="toggleYahrzeit('${id}', this.checked)"> ${t('yahrzeit_remind')}</label>`;
+  }
   // Contacts: only shown to authenticated users (guest or admin)
   const hasContacts = n.phone || n.email || n.social;
   if(hasContacts){
@@ -3950,6 +3974,7 @@ async function confirmDeletePerson(id){
         delete IDX.relatives[id];
         delete IDX.child_of[id];
         delete IDX.parent_in[id];
+        dropYahrzeit(id);
         for(const [, r2] of Object.entries(IDX.relatives)){
           r2.siblings = (r2.siblings||[]).filter(s=>s!==id);
           r2.spouses  = (r2.spouses ||[]).filter(s=>s!==id);
