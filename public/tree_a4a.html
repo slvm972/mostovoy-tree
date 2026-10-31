@@ -173,6 +173,16 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 #print-overlay{display:none;position:fixed;inset:0;background:rgba(20,12,4,.7);z-index:600;
                align-items:center;justify-content:center;flex-direction:column;gap:12px}
 #print-overlay.open{display:flex}
+#hebcal-overlay{display:none;position:fixed;inset:0;background:rgba(20,12,4,.7);z-index:600;align-items:center;justify-content:center}
+#hebcal-overlay.open{display:flex}
+#hebcal-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:460px;width:94vw;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#hebcal-box h3{font-size:.95rem;font-weight:600;color:#1C1208;margin-bottom:10px}
+#hebcal-status{font-size:.82rem;font-weight:600;color:#1C1208;margin-bottom:10px}
+.hebcal-step{font-size:.78rem;color:#555;line-height:1.55;margin-bottom:5px}
+.hebcal-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+body.rtl #hebcal-box{direction:rtl;text-align:right}
+.btn.hebcal-due{position:relative}
+.btn.hebcal-due::after{content:'';position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:#E05050}
 #print-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:480px;width:94vw;
            box-shadow:0 8px 40px rgba(0,0,0,.5)}
 #print-box h3{font-size:.95rem;font-weight:600;color:#1C1208;margin-bottom:12px}
@@ -609,6 +619,21 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 </div>
 
 <!-- ── PRINT PREVIEW ── -->
+<div id="hebcal-overlay">
+  <div id="hebcal-box">
+    <h3 id="hebcal-title"></h3>
+    <div id="hebcal-status"></div>
+    <div class="hebcal-step" id="hebcal-s1"></div>
+    <div class="hebcal-step" id="hebcal-s2"></div>
+    <div class="hebcal-step" id="hebcal-s3"></div>
+    <div class="hebcal-btns">
+      <button type="button" class="pbtn pbtn-cancel" id="hebcal-close"></button>
+      <button type="button" class="pbtn pbtn-cancel" id="hebcal-howto"></button>
+      <button type="button" class="pbtn pbtn-primary" id="hebcal-download"></button>
+    </div>
+  </div>
+</div>
+
 <div id="print-overlay">
   <div id="print-box">
     <h3 data-i="print_title">🖨 Печать генеалогического дерева</h3>
@@ -973,6 +998,34 @@ function getHebrewCalStatus(){
   return { state: state, from: +o.from, to: +o.to, created: String(o.created || '') };
 }
 function hebcalDue(){ const s = getHebrewCalStatus(); return s.state === 'soon' || s.state === 'expired'; }
+
+// ---- small window of the Hebrew calendar button ----
+function fillHebcalWindow(){
+  const st = getHebrewCalStatus();
+  document.getElementById('hebcal-title').textContent = t('hebcal_win_title');
+  document.getElementById('hebcal-status').textContent = st.state === 'none'
+    ? t('hebcal_win_none')
+    : t('hebcal_win_last').replace('{from}', st.from).replace('{to}', st.to).replace('{created}', st.created);
+  document.getElementById('hebcal-s1').textContent = t('hebcal_win_step1');
+  document.getElementById('hebcal-s2').textContent = t('hebcal_win_step2');
+  document.getElementById('hebcal-s3').textContent = t('hebcal_win_step3');
+  document.getElementById('hebcal-howto').textContent = t('hebcal_howto');
+  document.getElementById('hebcal-download').textContent = t('hebcal_win_download');
+  document.getElementById('hebcal-close').textContent = t('hebcal_win_close');
+}
+function openHebcalWindow(){ fillHebcalWindow(); document.getElementById('hebcal-overlay').classList.add('open'); }
+function closeHebcalWindow(){ const o = document.getElementById('hebcal-overlay'); if(o) o.classList.remove('open'); }
+// opens the guide and unfolds the Hebrew calendar section
+function openHebcalHelp(){
+  closeHebcalWindow();
+  const hb = document.getElementById('help-bubble');
+  if(!hb) return;
+  buildHelpBubble(currentLang);
+  hb.classList.add('open');
+  try { helpOpen = true; } catch(e){}
+  const d = document.getElementById('hb-hebcal');
+  if(d){ d.open = true; try { d.scrollIntoView({ block: 'nearest' }); } catch(e){} }
+}
 
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
@@ -1742,10 +1795,12 @@ function buildHelpBubble(lang){
   if(!hb) return;
   const M = UI[lang] || UI.ru;
   const L = k => M[k] || UI.ru[k] || k;
-  const sections = M.help_sections || UI.ru.help_sections || [];
+  const sections = (M.help_sections || UI.ru.help_sections || []).slice();
+  const hebHelp = M.help_hebcal || UI.ru.help_hebcal;
+  if(hebHelp) sections.push(hebHelp);
   let html = '<div class="hb-title">' + L('help_title') + '</div>';
   for(const s of sections){
-    html += '<details class="hb-sec"' + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
+    html += '<details class="hb-sec"' + (s === hebHelp ? ' id="hb-hebcal"' : '') + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
             s.items.map(x => '<li>' + x + '</li>').join('') + '</ul></details>';
   }
   const rows = [['\u2665','legend_spouses'],['\u2191','legend_parents'],
@@ -3716,6 +3771,13 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
     showToast(t('toast_hebrew_login'), true);
     return;
   }
+  openHebcalWindow();
+});
+document.getElementById('hebcal-close').addEventListener('click', closeHebcalWindow);
+document.getElementById('hebcal-overlay').addEventListener('click', e => { if(e.target.id === 'hebcal-overlay') closeHebcalWindow(); });
+document.getElementById('hebcal-howto').addEventListener('click', e => { e.stopPropagation(); openHebcalHelp(); });
+document.getElementById('hebcal-download').addEventListener('click', () => { downloadHebrewCalendar(); });
+function downloadHebrewCalendar(){
   if(!window.TreeHebrew || !TreeHebrew.isSupported()){
     showToast(t('toast_hebrew_unsupported'), true);
     return;
@@ -3765,10 +3827,11 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
   a.click();
   document.body.removeChild(a);
   saveHebrewCalStatus({from: res.from, to: res.to, created: hebCreated});
+  closeHebcalWindow();
   let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
   if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
   showToast(msg, res.skipped > 0);
-});
+}
 
 document.getElementById('btn-calendar').addEventListener('click', () => {
   if(!_sessionPassword){
