@@ -169,5 +169,29 @@ eq('ics: empty choice -> no yahrzeit events', icsEmpty.yahrzeitEvents, 0);
 eq('ics: empty choice -> birthdays still there', icsEmpty.birthdayEvents, 5);
 eq('ics: empty choice -> only the broken birthday is skipped', icsEmpty.skipped, 1);
 
+// ---- validity: calendar name with years, created line, service "time to update" event ----
+var icsV = H.buildHebrewIcs({
+  nodes: icsNodes, yahrzeitIds: ['P2'], nowYear: 2026, years: 5, uidDomain: 'test.local', prodId: 'Test',
+  nameOf: function (id) { return 'Name ' + id; }, stamp: '20260101T000000Z',
+  createdStr: '31.10.2026', treeUrl: 'https://example.test/tree_a4a.html',
+  labels: { yahrzeit: 'Yahrzeit', calName: 'Test cal', createdLine: 'Created: {date}, valid until {to}',
+            updateSummary: 'Time to update', updateDesc: 'How to update. Tree: {url}' }
+});
+var vText = icsV.ics.replace(/\r\n /g, '');
+var vLines = vText.split('\r\n');
+eq('validity: from', icsV.from, 2026);
+eq('validity: to', icsV.to, 2030);
+eq('validity: service event is not counted', icsV.events, icsV.birthdayEvents + icsV.yahrzeitEvents);
+eq('validity: exactly one extra VEVENT block', vLines.filter(function (l) { return l === 'BEGIN:VEVENT'; }).length, icsV.events + 1);
+check('validity: calendar name has the years', vText.indexOf('X-WR-CALNAME:Test cal (2026\u20132030)') >= 0);
+check('validity: created line is in DESCRIPTION', vText.indexOf('Created: 31.10.2026\\, valid until 2030') >= 0);
+check('validity: service event UID', vLines.indexOf('UID:hebrew-update-2026-2030@test.local') >= 0);
+check('validity: service event on 1 October of the last year', vLines.indexOf('DTSTART;VALUE=DATE:20301001') >= 0);
+check('validity: service event has the tree address', vText.indexOf('https://example.test/tree_a4a.html') >= 0);
+eq('validity: one alarm per event incl. the service one', vLines.filter(function (l) { return l === 'TRIGGER:-P1D'; }).length, icsV.events + 1);
+check('validity: every line is at most 75 octets', icsV.ics.split('\r\n').every(function (l) { return Buffer.byteLength(l, 'utf8') <= 75; }));
+var icsNoSvc = icsRun(['P2']);
+check('validity: without update labels there is no service event', icsNoSvc.ics.indexOf('hebrew-update-') < 0);
+
 console.log(bad === 0 ? ('HEBREW TEST: all ' + total + ' passed') : ('HEBREW TEST: ' + bad + ' of ' + total + ' FAILED'));
 process.exitCode = bad === 0 ? 0 : 1;

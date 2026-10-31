@@ -377,6 +377,13 @@ function foldLine(line) {
   return out;
 }
 
+// Validity data (all optional, existing callers keep working):
+//   opts.createdStr   text of the creation date, e.g. '31.10.2026'
+//   opts.treeUrl      address of the tree (put into the service event)
+//   labels.createdLine  'Created: {date}, valid until {to}'  -> added to the DESCRIPTION of every event
+//   labels.updateSummary / labels.updateDesc ({url})          -> service event "time to update" on 1 October of the last year;
+//                                                              it is NOT counted in res.events
+// The calendar name always gets the covered years: "<name> (from-to)". res.from / res.to are returned.
 function buildHebrewIcs(opts) {
   var nodes = opts.nodes || {};
   var labels = opts.labels || {};
@@ -386,7 +393,7 @@ function buildHebrewIcs(opts) {
   (opts.yahrzeitIds || []).forEach(function (id) { selected[id] = true; });
   var nameOf = opts.nameOf || function (id) { return (nodes[id] && nodes[id].name) || id; };
   var stamp = opts.stamp || (new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z');
-  var res = { ics: '', events: 0, birthdayEvents: 0, yahrzeitEvents: 0, yahrzeitPersons: 0, skipped: 0, skippedIds: [], tooOld: 0 };
+  var res = { ics: '', from: opts.nowYear, to: opts.nowYear + (opts.years || 5) - 1, events: 0, birthdayEvents: 0, yahrzeitEvents: 0, yahrzeitPersons: 0, skipped: 0, skippedIds: [], tooOld: 0 };
   var body = [];
   var uids = {};
 
@@ -416,6 +423,7 @@ function buildHebrewIcs(opts) {
       : (ICON_CANDLE + ' ' + (labels.yahrzeit || 'Yahrzeit') + ': ' + name);
     var desc = ((kind === 'birthday') ? (labels.descBirth || 'Hebrew birth date: ') : (labels.descDeath || 'Hebrew date of death: ')) + canon;
     var alarm = ((kind === 'birthday') ? (labels.alarmBirth || 'Birthday tomorrow: ') : (labels.alarmYahrzeit || 'Yahrzeit tomorrow: ')) + name;
+    if (labels.createdLine && opts.createdStr) desc += '\n' + labels.createdLine.replace('{date}', opts.createdStr).replace('{to}', res.to);
     if (kind === 'yahrzeit') res.yahrzeitPersons++;
     occ.forEach(function (o) {
       var base = 'hebrew-' + id + '-' + kind + '-' + o.ymd.slice(0, 4);
@@ -432,8 +440,18 @@ function buildHebrewIcs(opts) {
   });
 
   res.events = res.birthdayEvents + res.yahrzeitEvents;
+  // service event "time to update": last in the file, whole day, 1 October of the last covered year, one alarm
+  if (labels.updateSummary && res.events > 0) {
+    var upDesc = (labels.updateDesc || '').replace('{url}', opts.treeUrl || '');
+    body.push('BEGIN:VEVENT', 'UID:hebrew-update-' + res.from + '-' + res.to + '@' + domain, 'DTSTAMP:' + stamp,
+      'DTSTART;VALUE=DATE:' + res.to + '1001', 'DTEND;VALUE=DATE:' + res.to + '1002',
+      'SUMMARY:' + icsEscape(labels.updateSummary), 'DESCRIPTION:' + icsEscape(upDesc), 'TRANSP:TRANSPARENT',
+      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(labels.updateSummary), 'END:VALARM',
+      'END:VEVENT');
+    res.serviceEvent = true;
+  }
   var head = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//' + icsEscape(opts.prodId || 'Family Tree') + '//Hebrew reminders//EN',
-    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape(labels.calName || 'Hebrew dates')];
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape((labels.calName || 'Hebrew dates') + ' (' + res.from + '\u2013' + res.to + ')')];
   res.ics = head.concat(body, ['END:VCALENDAR']).map(foldLine).join('\r\n') + '\r\n';
   return res;
 }
