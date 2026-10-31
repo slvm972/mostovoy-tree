@@ -999,6 +999,40 @@ function getHebrewCalStatus(){
 }
 function hebcalDue(){ const s = getHebrewCalStatus(); return s.state === 'soon' || s.state === 'expired'; }
 
+// Hints only for people who downloaded a file (state is not "none") and only when the period is near its end or over:
+// a dot on the button, a line in the bottom bar, and one toast per browser session.
+function refreshHebcalHints(allowToast){
+  const st = getHebrewCalStatus();
+  const due = st.state === 'soon' || st.state === 'expired';
+  const btn = document.getElementById('btn-hebrew-calendar');
+  if(btn){
+    btn.classList.toggle('hebcal-due', due);
+    btn.title = t('tooltip_hebrew_calendar') + (st.state !== 'none' ? ' (' + t('hebcal_valid_until').replace('{to}', st.to) + ')' : '');
+  }
+  if(!due) return;
+  const info = document.getElementById('info');
+  if(info){
+    info.textContent = '';
+    const sp = document.createElement('span');
+    sp.textContent = t(st.state === 'expired' ? 'hebcal_info_expired' : 'hebcal_info_soon').replace('{to}', st.to) + ' ';
+    const lk = document.createElement('a');
+    lk.href = '#';
+    lk.textContent = t('hebcal_howto');
+    lk.style.cssText = 'color:#EDD890;text-decoration:underline';
+    lk.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); openHebcalHelp(); });
+    info.appendChild(sp);
+    info.appendChild(lk);
+  }
+  if(allowToast){
+    let shown = false;
+    try { shown = sessionStorage.getItem('hebcal_toast_shown') === '1'; } catch(e){}
+    if(!shown){
+      try { sessionStorage.setItem('hebcal_toast_shown', '1'); } catch(e){}
+      showToast(t(st.state === 'expired' ? 'hebcal_toast_expired' : 'hebcal_toast_soon').replace('{to}', st.to), true);
+    }
+  }
+}
+
 // ---- small window of the Hebrew calendar button ----
 function fillHebcalWindow(){
   const st = getHebrewCalStatus();
@@ -1112,6 +1146,7 @@ function showPanel(id){
     const yzOn = getYahrzeitSel().indexOf(id) >= 0;
     col1 += `<label style="display:block;margin-top:8px;font-size:.72rem;color:#5A3C10;cursor:pointer">
       <input type="checkbox" ${yzOn ? 'checked' : ''} onchange="toggleYahrzeit('${id}', this.checked)"> ${t('yahrzeit_remind')}</label>`;
+    { const hs = getHebrewCalStatus(); if(hs.state !== 'none') col1 += `<div style="margin-top:3px;font-size:.66rem;color:#7A5828">${t('hebcal_valid_until').replace('{to}', hs.to)}</div>`; }
   }
   // Contacts: only shown to authenticated users (guest or admin)
   const hasContacts = n.phone || n.email || n.social;
@@ -3828,6 +3863,7 @@ function downloadHebrewCalendar(){
   document.body.removeChild(a);
   saveHebrewCalStatus({from: res.from, to: res.to, created: hebCreated});
   closeHebcalWindow();
+  refreshHebcalHints(false);
   let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
   if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
   showToast(msg, res.skipped > 0);
@@ -5037,6 +5073,7 @@ function initTree(data, pwd) {
   buildHelpBubble(currentLang);
   if(currentLang !== 'ru' && window.applyLang) window.applyLang(currentLang);
   hideLoader();
+  refreshHebcalHints(true);
   const editBtn = document.getElementById('btn-edit');
   if(editBtn) editBtn.style.display = (_sessionPassword && window._userRole === 'admin' && WORKER_URL) ? '' : 'none';
   // иконка входа после перезагрузки страницы (роль восстановлена в loadTree)
