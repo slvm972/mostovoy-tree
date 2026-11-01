@@ -508,13 +508,13 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
       <label data-i="fix_birth_he" style="margin:10px 0 3px">Дата рождения (еврейский календарь)</label>
       <button type="button" onclick="quickClearField('ff-birth-he','birth_he','fix_birth_he')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
     </div>
-    <input id="ff-birth-he" type="text" data-ph="ph_birth_he" placeholder="например: יג ניסן תשל״א">
+    <input id="ff-birth-he" type="hidden" data-heb-widget="birth">
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="fix_death_he" style="margin:10px 0 3px">Дата смерти (еврейский календарь)</label>
       <button type="button" onclick="quickClearField('ff-death-he','death_he','fix_death_he')" title="Очистить" style="font-size:.62rem;padding:1px 6px;background:rgba(192,48,48,.1);border:1px solid rgba(192,48,48,.3);border-radius:3px;cursor:pointer;color:#A02020;flex-shrink:0">🗑</button>
     </div>
-    <input id="ff-death-he" type="text" data-ph="ph_death_he" placeholder="например: יב שבט תשפ״א">
+    <input id="ff-death-he" type="hidden" data-heb-widget="death">
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
       <label data-i="lbl_phone" style="margin:10px 0 3px">Телефон(ы)</label>
@@ -1912,6 +1912,7 @@ window.applyLang = function(lang){
 
   // 8b. Date widgets: month labels come from tm()
   if(typeof dateWidgetRefreshLabels === 'function') dateWidgetRefreshLabels();
+  if(typeof hebWidgetRefreshLabels === 'function'){ try { hebWidgetRefreshLabels(); } catch(e){} }
 
   // 9. Rebuild names autocomplete in current language
   if(IDX && typeof buildDatalist === 'function') buildDatalist();
@@ -2340,6 +2341,7 @@ function hebWidgetFirstError(){
 }
 
 // Open / close modal
+initHebWidgets();
 function openModal(prefillId, mode){
   mode = mode || 'fix'; // preserve existing behavior for all pre-existing openModal(id) calls
   document.getElementById('modal-overlay').classList.add('open');
@@ -3015,6 +3017,8 @@ document.getElementById('modal-generate').addEventListener('click', async () => 
     const deathFixR = dateWidgetRead('ff-death');
     if(!birthFixR.ok){ showToast(birthFixR.error, true); return; }
     if(!deathFixR.ok){ showToast(deathFixR.error, true); return; }
+    const hebBad = (typeof hebWidgetFirstError === 'function') ? hebWidgetFirstError() : null;
+    if(hebBad){ showToast(hebBad, true); return; }
 
     const fields = [
       { key: 'name',     label: t('fix_name'),       val: getV('ff-name'),     orig: orig.name || '' },
