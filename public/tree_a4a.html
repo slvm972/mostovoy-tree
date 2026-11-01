@@ -314,6 +314,19 @@ body.rtl #hebcal-box{direction:rtl;text-align:right}
 #modal .datew .dw-hint{font-size:.7rem;color:#A03818;line-height:1.5;margin-top:4px}
 #modal .datew .dw-restore{margin-top:6px;font-size:.7rem;padding:2px 8px;background:rgba(184,144,48,.12);
   border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828}
+/* Widget styles */
+#modal .hebw{margin-top:2px}
+#modal .hebw .hw-row{display:flex;gap:6px;margin-top:5px}
+#modal .hebw .hw-row select{flex:1 1 0;min-width:0}
+#modal .hebw .hw-row .hw-m{flex:1.6 1 0}
+#modal .hebw .hw-prev{margin-top:5px;font-size:.85rem;min-height:1.2em;direction:rtl;text-align:right;color:#5A3C10}
+#modal .hebw .hw-note{font-size:.7rem;line-height:1.5;color:#7A5828;margin-top:4px}
+#modal .hebw .hw-warn{font-size:.72rem;line-height:1.5;color:#A03818;margin-top:4px}
+#modal .hebw .hw-warn:empty{display:none}
+#modal .hebw .hw-legacy{direction:rtl;text-align:right;background:#EDE4D3;color:#5A3C10}
+#modal .hebw .hw-btn{margin-top:6px;margin-right:6px;font-size:.7rem;padding:3px 9px;background:rgba(184,144,48,.12);
+  border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828;font-family:inherit}
+body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
 </style>
 <script src="tree-i18n.js"></script>
 <script src="tree-names.js"></script>
@@ -2114,6 +2127,217 @@ function initDateWidgets(){
   ['f-birth','f-death','ff-birth','ff-death'].forEach(id => dateWidgetSet(id, ''));
 }
 initDateWidgets();
+
+const HW_DAYS_MAX = { tishri:30, heshvan:30, kislev:30, tevet:29, shevat:30, adar:29, adar1:30, adar2:29, nisan:30, iyar:29, sivan:30, tamuz:29, av:30, elul:29 };
+const HW_MONTHS_COMMON = ['tishri','heshvan','kislev','tevet','shevat','adar','nisan','iyar','sivan','tamuz','av','elul'];
+const HW_YEAR_MIN = 5460;
+const HW_VALUE_DESC = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const hebWidgets = {};
+function hwYearMax(){ try { return TreeHebrew.gregToHebrew(new Date()).year + 1; } catch(e){ return 5800; } }
+function hwMonthLabel(key){
+  const he = TreeHebrew.monthNameHe(key);
+  return currentLang === 'he' ? he : he + ' - ' + t('hm_' + key);
+}
+function hwOpt(value, text){ const o = document.createElement('option'); o.value = value; o.textContent = text; return o; }
+
+function buildHebWidget(inputId){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  if(!window.TreeHebrew || !TreeHebrew.isSupported()){ input.type = 'text'; return; }
+  const kind = input.dataset.hebWidget === 'death' ? 'death' : 'birth';
+  const gregId = kind === 'death' ? 'ff-death' : 'ff-birth';
+  const host = document.createElement('div');
+  host.className = 'hebw';
+  host.innerHTML = `
+    <div class="hw-legacy-box" style="display:none">
+      <input type="text" class="hw-legacy" readonly dir="rtl">
+      <div class="hw-warn hw-legacy-hint"></div>
+      <button type="button" class="hw-btn hw-redo"></button>
+    </div>
+    <div class="hw-pick">
+      <div class="hw-row"><select class="hw-d"></select><select class="hw-m"></select></div>
+      <div class="hw-row"><select class="hw-yn"></select><select class="hw-yl" dir="rtl"></select></div>
+      <div class="hw-prev"></div>
+      <div class="hw-warn hw-w"></div>
+      <button type="button" class="hw-btn hw-fill"></button>
+      <button type="button" class="hw-btn hw-clear"></button>
+      <div class="hw-note"></div>
+    </div>`;
+  input.insertAdjacentElement('afterend', host);
+  const q = s => host.querySelector(s);
+  const w = { input: input, kind: kind, initialRaw: '', initialRec: null, legacy: false, redo: false };
+  hebWidgets[inputId] = w;
+
+  const yearsIn = [];
+  for(let y = HW_YEAR_MIN; y <= hwYearMax(); y++) yearsIn.push(y);
+
+  function curSel(){
+    const d = q('.hw-d').value, m = q('.hw-m').value, y = q('.hw-yn').value;
+    return { day: d ? +d : 0, monthKey: m, year: y ? +y : 0 };
+  }
+  function sameRec(a, b){ return !!a && !!b && a.day === b.day && a.monthKey === b.monthKey && a.year === b.year; }
+  function monthKeys(year){
+    const info = year ? TreeHebrew.hebrewYearInfo(year) : null;
+    return info ? info.months.map(m => m.key) : HW_MONTHS_COMMON;
+  }
+  function daysIn(year, key){
+    const info = year ? TreeHebrew.hebrewYearInfo(year) : null;
+    if(info){ for(const m of info.months){ if(m.key === key && m.days) return m.days; } }
+    return HW_DAYS_MAX[key] || 30;
+  }
+  function fillYears(want){
+    const yn = q('.hw-yn'), yl = q('.hw-yl');
+    yn.textContent = ''; yl.textContent = '';
+    yn.appendChild(hwOpt('', t('hw_year_num')));
+    yl.appendChild(hwOpt('', t('hw_year_let')));
+    const list = yearsIn.slice();
+    if(want && list.indexOf(want) < 0){ list.push(want); list.sort((a, b) => a - b); }
+    for(const y of list){
+      yn.appendChild(hwOpt(String(y), String(y)));
+      yl.appendChild(hwOpt(String(y), TreeHebrew.formatHebrewYear(y)));
+    }
+    yn.value = want ? String(want) : '';
+    yl.value = yn.value;
+  }
+  function fillMonths(year, want){
+    const sel = q('.hw-m');
+    sel.textContent = '';
+    sel.appendChild(hwOpt('', t('hw_month')));
+    const keys = monthKeys(year);
+    for(const k of keys) sel.appendChild(hwOpt(k, hwMonthLabel(k)));
+    if(want && keys.indexOf(want) < 0) sel.appendChild(hwOpt(want, hwMonthLabel(want) + ' ' + t('hw_extra_mark')));
+    sel.value = want || '';
+  }
+  function fillDays(year, key, want, keepExtra){
+    const sel = q('.hw-d');
+    sel.textContent = '';
+    sel.appendChild(hwOpt('', t('hw_day')));
+    const max = key ? daysIn(year, key) : 30;
+    for(let d = 1; d <= max; d++) sel.appendChild(hwOpt(String(d), d + ' - ' + TreeHebrew.dayLetters(d)));
+    if(want && want > max && keepExtra) sel.appendChild(hwOpt(String(want), want + ' - ' + TreeHebrew.dayLetters(want) + ' ' + t('hw_extra_mark')));
+    sel.value = (want && (want <= max || keepExtra)) ? String(want) : '';
+  }
+  function fill(rec){
+    const y = rec ? rec.year : 0;
+    fillYears(y);
+    fillMonths(y, rec ? rec.monthKey : '');
+    fillDays(y, rec ? rec.monthKey : '', rec ? rec.day : 0, true);
+  }
+  function setLegacy(on){
+    w.legacy = on;
+    q('.hw-legacy-box').style.display = on ? '' : 'none';
+    q('.hw-pick').style.display = on ? 'none' : '';
+  }
+  function refresh(){
+    const s = curSel();
+    const complete = !!(s.day && s.monthKey && s.year);
+    q('.hw-prev').textContent = complete ? (TreeHebrew.formatHebrewDate(s) || '') : '';
+    let warn = '';
+    if(complete){
+      const gr = dateWidgetRead(gregId);
+      if(gr.ok && DW_FULL_RE.test(gr.value)){
+        const dt = TreeHebrew.parseGreg(gr.value);
+        if(dt && TreeHebrew.compareHebrewToGreg(s, dt) === 'big'){
+          const act = TreeHebrew.gregToHebrew(dt);
+          warn = t('hw_warn_mismatch').replace('{heb}', act ? (TreeHebrew.formatHebrewDate(act) || '') : '');
+        }
+      }
+    }
+    q('.hw-w').textContent = warn;
+  }
+  function sync(){
+    const s = curSel();
+    const blank = !s.day && !s.monthKey && !s.year;
+    const complete = !!(s.day && s.monthKey && s.year);
+    let value;
+    if(w.legacy) value = w.initialRaw;
+    else if(blank) value = w.redo ? w.initialRaw : '';
+    else if(!complete) value = w.initialRaw;
+    else if(sameRec(s, w.initialRec)) value = w.initialRaw;
+    else value = TreeHebrew.formatHebrewDate(s) || w.initialRaw;
+    w.setRaw(value);
+    refresh();
+  }
+  function onYear(srcSel){
+    const v = q(srcSel).value;
+    q('.hw-yn').value = v;
+    q('.hw-yl').value = v;
+    const year = v ? +v : 0;
+    const keys = monthKeys(year);
+    let want = q('.hw-m').value;
+    if(want && keys.indexOf(want) < 0) want = ((want === 'adar1' || want === 'adar2') && keys.indexOf('adar') >= 0) ? 'adar' : '';
+    const dayWant = q('.hw-d').value ? +q('.hw-d').value : 0;
+    fillMonths(year, want);
+    fillDays(year, q('.hw-m').value, dayWant, false);
+    sync();
+  }
+  q('.hw-yn').addEventListener('change', () => onYear('.hw-yn'));
+  q('.hw-yl').addEventListener('change', () => onYear('.hw-yl'));
+  q('.hw-m').addEventListener('change', () => {
+    const year = q('.hw-yn').value ? +q('.hw-yn').value : 0;
+    const dayWant = q('.hw-d').value ? +q('.hw-d').value : 0;
+    fillDays(year, q('.hw-m').value, dayWant, false);
+    sync();
+  });
+  q('.hw-d').addEventListener('change', sync);
+  q('.hw-fill').addEventListener('click', () => {
+    const gr = dateWidgetRead(gregId);
+    const dt = (gr.ok && DW_FULL_RE.test(gr.value)) ? TreeHebrew.parseGreg(gr.value) : null;
+    const h = dt ? TreeHebrew.gregToHebrew(dt) : null;
+    if(!h){ showToast(t('hw_need_greg'), true); return; }
+    w.redo = false; setLegacy(false); fill(h); sync();
+  });
+  q('.hw-clear').addEventListener('click', () => { w.redo = false; setLegacy(false); fill(null); sync(); });
+  q('.hw-redo').addEventListener('click', () => { w.redo = true; setLegacy(false); fill(null); sync(); });
+
+  w.setRaw = v => HW_VALUE_DESC.set.call(input, v);
+  w.load = function(raw){
+    w.initialRaw = raw;
+    w.redo = false;
+    const trimmed = raw.trim();
+    if(!trimmed){ w.initialRec = null; setLegacy(false); fill(null); refresh(); return; }
+    const rec = TreeHebrew.parseHebrewDate(trimmed);
+    if(!rec){ w.initialRec = null; q('.hw-legacy').value = raw; setLegacy(true); fill(null); refresh(); return; }
+    w.initialRec = rec; setLegacy(false); fill(rec); refresh();
+  };
+  w.firstError = function(){
+    if(w.legacy) return null;
+    const s = curSel();
+    if(!s.day && !s.monthKey && !s.year) return null;
+    const label = kind === 'death' ? t('fix_death_he') : t('fix_birth_he');
+    if(!s.day || !s.monthKey || !s.year) return t('hw_err_incomplete').replace('{label}', label);
+    if(s.day > daysIn(s.year, s.monthKey) && !sameRec(s, w.initialRec)) return t('hw_err_day').replace('{label}', label);
+    return null;
+  };
+  w.refreshLabels = function(){
+    const s = curSel();
+    fillYears(s.year);
+    fillMonths(s.year, s.monthKey);
+    fillDays(s.year, s.monthKey, s.day, true);
+    q('.hw-fill').textContent = t('hw_fill_greg');
+    q('.hw-clear').textContent = t('hw_clear');
+    q('.hw-redo').textContent = t('hw_legacy_redo');
+    q('.hw-legacy-hint').textContent = t('hw_legacy_hint');
+    q('.hw-note').textContent = t('hw_sunset_note');
+    refresh();
+  };
+
+  Object.defineProperty(input, 'value', {
+    configurable: true,
+    get(){ return HW_VALUE_DESC.get.call(this); },
+    set(v){ HW_VALUE_DESC.set.call(this, v); w.load(v === null || v === undefined ? '' : String(v)); }
+  });
+  const gh = document.getElementById(gregId);
+  if(gh){ gh.addEventListener('change', refresh); gh.addEventListener('input', refresh); }
+  w.refreshLabels();
+  w.load(HW_VALUE_DESC.get.call(input));
+}
+function initHebWidgets(){ ['ff-birth-he', 'ff-death-he'].forEach(buildHebWidget); }
+function hebWidgetRefreshLabels(){ Object.keys(hebWidgets).forEach(k => hebWidgets[k].refreshLabels()); }
+function hebWidgetFirstError(){
+  for(const k of Object.keys(hebWidgets)){ const e = hebWidgets[k].firstError(); if(e) return e; }
+  return null;
+}
 
 // Open / close modal
 function openModal(prefillId, mode){
