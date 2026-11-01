@@ -456,6 +456,56 @@ function buildHebrewIcs(opts) {
   return res;
 }
 
+// ---- helpers for the date picker widget (lists of months / days / years) ----
+var MONTH_ORDER_COMMON = ['tishri', 'heshvan', 'kislev', 'tevet', 'shevat', 'adar', 'nisan', 'iyar', 'sivan', 'tamuz', 'av', 'elul'];
+var MONTH_ORDER_LEAP = ['tishri', 'heshvan', 'kislev', 'tevet', 'shevat', 'adar1', 'adar2', 'nisan', 'iyar', 'sivan', 'tamuz', 'av', 'elul'];
+var yearInfoCache = {};
+
+function hebrewYearInfo(year) {
+  if (has(yearInfoCache, year)) return yearInfoCache[year];
+  var gy = year - 3761;
+  var start = null, t;
+  for (t = Date.UTC(gy, 7, 15, 12); t <= Date.UTC(gy, 10, 15, 12); t += DAY_MS) {
+    var h = gregToHebrew(new Date(t));
+    if (h && h.year === year && h.monthKey === 'tishri' && h.day === 1) { start = t; break; }
+  }
+  if (start === null) return null;
+  var lens = {};
+  for (t = start; t - start <= 400 * DAY_MS; t += DAY_MS) {
+    var h2 = gregToHebrew(new Date(t));
+    if (!h2 || h2.year !== year) break;
+    if (!lens[h2.monthKey] || h2.day > lens[h2.monthKey]) lens[h2.monthKey] = h2.day;
+  }
+  var order = isLeapYear(year) ? MONTH_ORDER_LEAP : MONTH_ORDER_COMMON;
+  var info = { year: year, leap: isLeapYear(year), months: order.map(function (k) { return { key: k, days: lens[k] || 0 }; }) };
+  yearInfoCache[year] = info;
+  return info;
+}
+function dayLetters(n) { return toHebrew(numToLetters(n)); }
+function formatHebrewYear(y) { return punctuateYear(toHebrew(numToLetters(y - 5000))); }
+function monthNameHe(key) {
+  if (!has(MONTH_CODE, key)) return '';
+  var s = MONTH_CODE[key].split(' ').map(function (w) { return heWord(w); }).join(' ');
+  return (key === 'adar1' || key === 'adar2') ? s + '\u05F3' : s;
+}
+function cmpOne(rec, act) {
+  if (!act) return 0;
+  if (rec.day !== act.day || rec.year !== act.year) return 0;
+  if (rec.monthKey === act.monthKey) return 1;
+  if (rec.monthKey === 'adar' && (act.monthKey === 'adar1' || act.monthKey === 'adar2')) return 2;
+  return 0;
+}
+function compareHebrewToGreg(rec, dt) {
+  if (!rec || !dt) return null;
+  if (!gregToHebrew(dt)) return 'intl_unknown';
+  var r = [0, -1, 1].map(function (off) { return cmpOne(rec, gregToHebrew(new Date(dt.getTime() + off * DAY_MS))); });
+  if (r[0] === 1) return 'match';
+  if (r[0] === 2) return 'ambiguous_adar';
+  if (r[1] === 1 || r[2] === 1) return 'off1';
+  if (r[1] === 2 || r[2] === 2) return 'ambiguous_adar';
+  return 'big';
+}
+
 var api = {
   parseHebrewDate: parseHebrewDate,
   parseDetailed: parseDetailed,
@@ -465,6 +515,11 @@ var api = {
   isLeapYear: isLeapYear,
   createCalendar: createCalendar,
   buildHebrewIcs: buildHebrewIcs,
+  hebrewYearInfo: hebrewYearInfo,
+  dayLetters: dayLetters,
+  formatHebrewYear: formatHebrewYear,
+  monthNameHe: monthNameHe,
+  compareHebrewToGreg: compareHebrewToGreg,
   toYMD: toYMD,
   isSupported: isSupported,
   DEFAULT_RULES: DEFAULT_RULES

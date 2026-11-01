@@ -193,5 +193,35 @@ check('validity: every line is at most 75 octets', icsV.ics.split('\r\n').every(
 var icsNoSvc = icsRun(['P2']);
 check('validity: without update labels there is no service event', icsNoSvc.ics.indexOf('hebrew-update-') < 0);
 
+var yi86 = H.hebrewYearInfo(5786), yi87 = H.hebrewYearInfo(5787);
+function yiHas(info, key) { return info.months.some(function (m) { return m.key === key; }); }
+function yiDays(info, key) { return info.months.filter(function (m) { return m.key === key; })[0].days; }
+function yiSum(info) { return info.months.reduce(function (s, m) { return s + m.days; }, 0); }
+check('year info: 5786 found, not leap, 12 months', !!yi86 && !yi86.leap && yi86.months.length === 12);
+check('year info: 5787 found, leap, 13 months', !!yi87 && yi87.leap && yi87.months.length === 13);
+check('year info: 5786 has 353-355 days', [353, 354, 355].indexOf(yiSum(yi86)) >= 0, String(yiSum(yi86)));
+check('year info: 5787 has 383-385 days', [383, 384, 385].indexOf(yiSum(yi87)) >= 0, String(yiSum(yi87)));
+check('year info: plain Adar only in a common year', yiHas(yi86, 'adar') && !yiHas(yi87, 'adar'));
+check('year info: Adar I and Adar II only in a leap year', yiHas(yi87, 'adar1') && yiHas(yi87, 'adar2') && !yiHas(yi86, 'adar1') && !yiHas(yi86, 'adar2'));
+check('year info: every month has 29 or 30 days (several years)', [5460, 5700, 5731, 5765, 5781, 5785, 5790].every(function (y) {
+  var i = H.hebrewYearInfo(y);
+  return i && i.months.every(function (m) { return m.days === 29 || m.days === 30; });
+}));
+eq('year info: Nisan has 30 days', yiDays(yi86, 'nisan'), 30);
+eq('year info: Iyar has 29 days', yiDays(yi86, 'iyar'), 29);
+eq('day letters 13', H.dayLetters(13), '\u05D9\u05D2');
+eq('day letters 15', H.dayLetters(15), '\u05D8\u05D5');
+eq('day letters 16', H.dayLetters(16), '\u05D8\u05D6');
+eq('day letters 30', H.dayLetters(30), '\u05DC');
+eq('year letters 5731', H.formatHebrewYear(5731), '\u05EA\u05E9\u05DC\u05F4\u05D0');
+eq('year letters 5785', H.formatHebrewYear(5785), '\u05EA\u05E9\u05E4\u05F4\u05D4');
+eq('month name Adar II', H.monthNameHe('adar2'), '\u05D0\u05D3\u05E8 \u05D1\u05F3');
+eq('month name Heshvan', H.monthNameHe('heshvan'), '\u05D7\u05E9\u05D5\u05D5\u05DF');
+eq('compare: 13 Nisan 5731 vs 8 APR 1971 = match', H.compareHebrewToGreg({ day: 13, monthKey: 'nisan', year: 5731 }, H.parseGreg('8 APR 1971')), 'match');
+eq('compare: one day off', H.compareHebrewToGreg({ day: 13, monthKey: 'nisan', year: 5731 }, H.parseGreg('9 APR 1971')), 'off1');
+eq('compare: far apart', H.compareHebrewToGreg({ day: 13, monthKey: 'nisan', year: 5731 }, H.parseGreg('20 APR 1971')), 'big');
+eq('compare: 7 Tamuz 5785 vs 7 MAR 2025 is a big difference', H.compareHebrewToGreg({ day: 7, monthKey: 'tamuz', year: 5785 }, H.parseGreg('7 MAR 2025')), 'big');
+eq('compare: plain Adar in a leap year is not an error', H.compareHebrewToGreg({ day: 9, monthKey: 'adar', year: 5787 }, H.parseGreg('18 FEB 2027')), 'big');
+
 console.log(bad === 0 ? ('HEBREW TEST: all ' + total + ' passed') : ('HEBREW TEST: ' + bad + ' of ' + total + ' FAILED'));
 process.exitCode = bad === 0 ? 0 : 1;
