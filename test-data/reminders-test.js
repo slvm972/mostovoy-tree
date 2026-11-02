@@ -1,0 +1,118 @@
+// node test-data/reminders-test.js
+const fs = require('fs');
+const path = require('path');
+const R = require('../public/tree-reminders.js');
+
+let passed = 0, failed = 0;
+function ok(cond, name) {
+  if (cond) { passed++; console.log('PASS  ' + name); }
+  else { failed++; console.log('FAIL  ' + name); }
+}
+function eq(a, b, name) { ok(a === b, name + ' (got ' + a + ', want ' + b + ')'); }
+
+function mk(persons, fams) {
+  const idx = { nodes: {}, families: {}, child_of: {}, parent_in: {}, relatives: {}, grandparents: {} };
+  persons.forEach(id => { idx.nodes[id] = { id: id, name: id, sex: 'M', birth: '', death: '' }; });
+  fams.forEach((f, i) => {
+    const fid = 'F' + (i + 1);
+    idx.families[fid] = { id: fid, husband: f[0], wife: f[1], children: f[2] };
+    if (f[0] && idx.nodes[f[0]]) idx.nodes[f[0]].sex = 'M';
+    if (f[1] && idx.nodes[f[1]]) idx.nodes[f[1]].sex = 'F';
+    f[2].forEach(c => { idx.child_of[c] = fid; });
+  });
+  return idx;
+}
+
+// ---- synthetic tree ----
+const idx = mk(
+  ['G1','G2','A','B','U','UW','ME','SIB','SW','NEPH','W','WP1','WP2','WS','KID','COUSIN','CW','COUSKID','LONE'],
+  [
+    ['G1','G2',['A','U']],
+    ['A','B',['ME','SIB']],
+    ['ME','W',['KID']],
+    ['WP1','WP2',['W','WS']],
+    ['SIB','SW',['NEPH']],
+    ['U','UW',['COUSIN']],
+    ['COUSIN','CW',['COUSKID']]
+  ]
+);
+const L = R.kinshipLevels(idx, 'ME');
+const want = { ME:0, W:0, KID:1, A:1, B:1, SIB:1, WP1:1, WP2:1, WS:1,
+               G1:2, G2:2, U:2, UW:2, COUSIN:2, CW:2, NEPH:2, SW:1, COUSKID:3 };
+Object.keys(want).forEach(k => eq(L[k], want[k], 'level ' + k));
+eq(L.LONE, undefined, 'unconnected person has no level');
+eq(Object.keys(R.kinshipLevels(idx, 'NOPE')).length, 0, 'unknown me -> empty');
+
+// ---- incomplete family: one parent only ----
+const idx2 = mk(['X','M2','S2','Y'], [['X', null, ['M2','S2']]]);
+const L2 = R.kinshipLevels(idx2, 'M2');
+eq(L2.X, 1, 'single parent family: parent = 1');
+eq(L2.S2, 1, 'single parent family: sibling = 1');
+eq(L2.Y, undefined, 'single parent family: stranger has no level');
+
+// ---- step parent (depends on tree-kinship step detection) ----
+const idx3 = mk(['A3','B3','ME3','SIB3','STEP'], [['A3','B3',['ME3','SIB3']], ['STEP','B3',[]]]);
+const L3 = R.kinshipLevels(idx3, 'ME3');
+eq(L3.STEP, 1, 'step parent = 1');
+
+// ---- reminderMode ----
+const P = (o) => Object.assign({ me: 'ME', near: 1, far: 2, pinned: [], muted: [] }, o || {});
+eq(R.reminderMode('A', idx, P(), L, 'greg'), 'full', 'mode: level 1 <= near -> full');
+eq(R.reminderMode('U', idx, P(), L, 'greg'), 'quiet', 'mode: level 2 <= far -> quiet');
+eq(R.reminderMode('COUSKID', idx, P(), L, 'greg'), 'skip', 'mode: level 3 > far -> skip');
+eq(R.reminderMode('LONE', idx, P(), L, 'greg'), 'skip', 'mode: no level -> skip');
+eq(R.reminderMode('LONE', idx, P({ far: 'all' }), L, 'greg'), 'quiet', 'mode: far=all, no level -> quiet');
+eq(R.reminderMode('COUSKID', idx, P({ far: 'all' }), L, 'greg'), 'quiet', 'mode: far=all, far person -> quiet');
+eq(R.reminderMode('W', idx, P({ near: 0, far: 0 }), L, 'greg'), 'full', 'mode: level 0 with near=0');
+eq(R.reminderMode('A', idx, P({ near: 0, far: 0 }), L, 'greg'), 'skip', 'mode: level 1 with near=far=0');
+eq(R.reminderMode('LONE', idx, P({ pinned: ['LONE'] }), L, 'greg'), 'full', 'mode: pinned -> full');
+eq(R.reminderMode('A', idx, P({ muted: ['A'] }), L, 'greg'), 'skip', 'mode: muted -> skip');
+eq(R.reminderMode('A', idx, P({ muted: ['A'], pinned: ['A'] }), L, 'greg'), 'skip', 'mode: muted beats pinned');
+eq(R.reminderMode('LONE', idx, P({ me: '' }), L, 'greg'), 'full', 'mode: no me -> full (filter off)');
+eq(R.reminderMode('LONE', idx, P({ me: 'GONE' }), L, 'greg'), 'full', 'mode: me not in tree -> full');
+eq(R.reminderMode('LONE', idx, null, L, 'greg'), 'full', 'mode: no prefs -> full');
+eq(R.reminderMode('U', idx, P(), L, 'he'), R.reminderMode('U', idx, P(), L, 'greg'), 'mode: calendar flag does not change result');
+eq(R.reminderMode('U', idx, { me: 'ME', pinned: [], muted: [] }, L, 'greg'), 'full', 'mode: defaults near 2 far 4 -> level 2 is full');
+
+// ---- storage with a fake localStorage ----
+const mem = {};
+global.localStorage = {
+  getItem: k => (k in mem ? mem[k] : null),
+  setItem: (k, v) => { mem[k] = String(v); },
+  removeItem: k => { delete mem[k]; }
+};
+eq(R.loadReminderPrefs(idx), null, 'storage: nothing saved -> null');
+ok(R.saveReminderPrefs({ me: 'ME', near: 1, far: 'all', pinned: ['LONE', 'GHOST'], muted: ['A'] }), 'storage: save ok');
+const back = R.loadReminderPrefs(idx);
+eq(back.me, 'ME', 'storage: me restored');
+eq(back.far, 'all', 'storage: far=all restored');
+eq(back.pinned.join(','), 'LONE', 'storage: unknown id ignored on read');
+eq(back.muted.join(','), 'A', 'storage: muted restored');
+R.dropReminderPerson('A');
+eq(R.loadReminderPrefs(null).muted.length, 0, 'storage: deleted person removed from muted');
+mem[Object.keys(mem)[0]] = '{broken';
+eq(R.loadReminderPrefs(idx), null, 'storage: broken JSON -> null');
+R.saveReminderPrefs({ me: 'ME', near: 99, far: 'x', pinned: [], muted: [] });
+const norm = R.loadReminderPrefs(idx);
+eq(norm.near, R.REMINDER_DEFAULTS.near, 'storage: bad near -> default');
+eq(norm.far, R.REMINDER_DEFAULTS.far, 'storage: bad far -> default');
+R.clearReminderPrefs();
+eq(R.loadReminderPrefs(idx), null, 'storage: reset -> null');
+delete global.localStorage;
+
+// ---- real tree, me = P3 ----
+const fb = path.join(__dirname, '..', 'tools', 'tree-fallback.json');
+if (fs.existsSync(fb)) {
+  const real = JSON.parse(fs.readFileSync(fb, 'utf8'));
+  if (real.nodes && real.nodes.P3) {
+    const RL = R.kinshipLevels(real, 'P3');
+    ['P1','P2','P6','P11'].forEach(k => eq(RL[k], 1, 'real P3: ' + k + ' = 1'));
+    ['P4','P7','P8','P9','P10','P28','P12'].forEach(k => eq(RL[k], 2, 'real P3: ' + k + ' = 2'));
+    eq(RL.P3, 0, 'real P3: me = 0');
+  }
+} else {
+  console.log('SKIP  tools/tree-fallback.json not found');
+}
+
+console.log(failed ? ('REMINDERS TEST: FAILED ' + failed + ', passed ' + passed) : ('REMINDERS TEST: all ' + passed + ' passed'));
+process.exit(failed ? 1 : 0);
