@@ -393,7 +393,7 @@ function buildHebrewIcs(opts) {
   (opts.yahrzeitIds || []).forEach(function (id) { selected[id] = true; });
   var nameOf = opts.nameOf || function (id) { return (nodes[id] && nodes[id].name) || id; };
   var stamp = opts.stamp || (new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z');
-  var res = { ics: '', from: opts.nowYear, to: opts.nowYear + (opts.years || 5) - 1, events: 0, birthdayEvents: 0, yahrzeitEvents: 0, yahrzeitPersons: 0, skipped: 0, skippedIds: [], tooOld: 0 };
+  var res = { ics: '', from: opts.nowYear, to: opts.nowYear + (opts.years || 5) - 1, events: 0, birthdayEvents: 0, yahrzeitEvents: 0, yahrzeitPersons: 0, skipped: 0, skippedIds: [], tooOld: 0, quietEvents: 0 };
   var body = [];
   var uids = {};
 
@@ -401,7 +401,7 @@ function buildHebrewIcs(opts) {
     var n = nodes[id] || {};
     var heDeath = n.death_he ? String(n.death_he).trim() : '';
     var deceased = !!(n.death && String(n.death).trim()) || !!heDeath;
-    var kind, raw;
+    var kind, raw, bMode = 'full';
     if (deceased) {
       if (!has(selected, id) || !heDeath) return;   // not chosen, or no Hebrew date of death: nothing to do
       kind = 'yahrzeit';
@@ -410,6 +410,7 @@ function buildHebrewIcs(opts) {
       raw = n.birth_he ? String(n.birth_he).trim() : '';
       if (!raw) return;                              // no Hebrew birth date: not counted, not guessed
       kind = 'birthday';
+      if (opts.birthdayMode) { bMode = opts.birthdayMode(id) || 'full'; if (bMode === 'skip') return; }
     }
     var rec = parseHebrewDate(raw);
     if (!rec) { res.skipped++; res.skippedIds.push(id); return; }
@@ -433,9 +434,9 @@ function buildHebrewIcs(opts) {
       body.push('BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + stamp,
         'DTSTART;VALUE=DATE:' + o.ymd, 'DTEND;VALUE=DATE:' + toYMD(o.ts + DAY_MS),
         'SUMMARY:' + icsEscape(summary), 'DESCRIPTION:' + icsEscape(desc), 'TRANSP:TRANSPARENT',
-        'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(alarm), 'END:VALARM',
+        ...((kind === 'birthday' && bMode === 'quiet') ? [] : ['BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(alarm), 'END:VALARM']),
         'END:VEVENT');
-      if (kind === 'birthday') res.birthdayEvents++; else res.yahrzeitEvents++;
+      if (kind === 'birthday') { res.birthdayEvents++; if (bMode === 'quiet') res.quietEvents++; } else res.yahrzeitEvents++;
     });
   });
 

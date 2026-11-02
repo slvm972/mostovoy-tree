@@ -4047,6 +4047,10 @@ function downloadHebrewCalendar(){
     return;
   }
   const sel = getYahrzeitSel();
+  const rPrefsH = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
+  const rActiveH = !!(rPrefsH && rPrefsH.me);
+  const rLevelsH = rActiveH ? TreeReminders.kinshipLevels(IDX, rPrefsH.me) : null;
+  const hebBirthdayMode = rActiveH ? (id => TreeReminders.reminderMode(id, IDX, rPrefsH, rLevelsH, 'he')) : null;
   const hebFrom = new Date().getFullYear();
   const dNow = new Date();
   const hebCreated = String(dNow.getDate()).padStart(2,'0') + '.' + String(dNow.getMonth()+1).padStart(2,'0') + '.' + dNow.getFullYear();
@@ -4055,6 +4059,7 @@ function downloadHebrewCalendar(){
     res = TreeHebrew.buildHebrewIcs({
       nodes: IDX.nodes,
       yahrzeitIds: sel,
+      birthdayMode: hebBirthdayMode,
       nowYear: hebFrom,
       years: 5,
       createdStr: hebCreated,
@@ -4094,6 +4099,7 @@ function downloadHebrewCalendar(){
   closeHebcalWindow();
   refreshHebcalHints(false);
   let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
+  if(res.quietEvents) msg += ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + res.quietEvents + ')';
   if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
   showToast(msg, res.skipped > 0);
 }

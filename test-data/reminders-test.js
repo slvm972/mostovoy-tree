@@ -114,5 +114,33 @@ if (fs.existsSync(fb)) {
   console.log('SKIP  tools/tree-fallback.json not found');
 }
 
+// ---- Hebrew calendar: birthdayMode (full / quiet / skip) ----
+{
+  const HB = require('../public/tree-hebrew.js');
+  if (HB.isSupported()) {
+    const raw = HB.formatHebrewDate({ day: 13, monthKey: 'nisan', year: 5731 });
+    const nodes = {
+      A: { id: 'A', name: 'A', birth_he: raw, death: '' },
+      B: { id: 'B', name: 'B', birth_he: raw, death: '' },
+      C: { id: 'C', name: 'C', birth_he: raw, death: '' }
+    };
+    const run = (mode) => HB.buildHebrewIcs({ nodes: nodes, nowYear: 2026, years: 1, birthdayMode: mode,
+      nameOf: id => id, labels: {}, stamp: '20260101T000000Z' });
+    const alarms = (r) => (r.ics.match(/BEGIN:VALARM/g) || []).length;
+    const r0 = run(null);
+    eq(r0.birthdayEvents, 3, 'hebrew circles: no filter -> 3 birthdays');
+    eq(alarms(r0), 3, 'hebrew circles: no filter -> 3 alarms');
+    eq(run(undefined).ics, r0.ics, 'hebrew circles: undefined mode = same file');
+    const r1 = run(id => id === 'A' ? 'full' : (id === 'B' ? 'quiet' : 'skip'));
+    eq(r1.birthdayEvents, 2, 'hebrew circles: skip removes the event');
+    eq(r1.quietEvents, 1, 'hebrew circles: one quiet event');
+    eq(alarms(r1), 1, 'hebrew circles: quiet event has no alarm');
+    eq(r1.skipped, 0, 'hebrew circles: skipped by circles is not "unreadable"');
+    ok(r1.ics.indexOf('SUMMARY:') > 0 && r1.ics.indexOf('hebrew-C-birthday') < 0, 'hebrew circles: skipped person is absent');
+  } else {
+    console.log('SKIP  Intl Hebrew calendar not available');
+  }
+}
+
 console.log(failed ? ('REMINDERS TEST: FAILED ' + failed + ', passed ' + passed) : ('REMINDERS TEST: all ' + passed + ' passed'));
 process.exit(failed ? 1 : 0);
