@@ -335,6 +335,7 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
 <script src="tree-layout.js"></script>
 <script src="tree-kinship.js"></script>
 <script src="tree-hebrew.js"></script>
+<script src="tree-reminders.js"></script>
 </head>
 <body>
 <div id="tb">
@@ -4130,6 +4131,11 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
 
   const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mostovoy Family Tree//RU','CALSCALE:GREGORIAN','X-WR-CALNAME:' + calName,'X-WR-TIMEZONE:Asia/Jerusalem'];
 
+  // reminder circles: personal filter (no "me" chosen = filter off, file as before)
+  const rPrefs = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
+  const rActive = !!(rPrefs && rPrefs.me);
+  const rLevels = rActive ? TreeReminders.kinshipLevels(IDX, rPrefs.me) : null;
+  let quietCount = 0;
   let count = 0;
   Object.values(IDX.nodes).forEach(p => {
     if(p.death) return;
@@ -4137,6 +4143,11 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     if(!d) return;
     if(NOW_YEAR - d.year > MAX_AGE) return; // исключаем >100 лет без даты смерти
 
+    let rMode = 'full';
+    if(rActive){
+      rMode = TreeReminders.reminderMode(p.id, IDX, rPrefs, rLevels, 'greg');
+      if(rMode === 'skip') return;
+    }
     const mm = pad(d.month), dd = pad(d.day);
     // Первое будущее событие — в этом или следующем году
     const age = NOW_YEAR - d.year;
@@ -4153,11 +4164,15 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
     lines.push(`SUMMARY:${summary}`);
     if(p.rel) lines.push(`DESCRIPTION:${relText(p)}`);
     lines.push(`TRANSP:TRANSPARENT`);
-    lines.push(`BEGIN:VALARM`);
-    lines.push(`TRIGGER:-P1D`);
-    lines.push(`ACTION:DISPLAY`);
-    lines.push(`DESCRIPTION:${calAlarm}${pname(p.id)}`);
-    lines.push(`END:VALARM`);
+    if(rMode === 'quiet'){
+      quietCount++;
+    } else {
+      lines.push(`BEGIN:VALARM`);
+      lines.push(`TRIGGER:-P1D`);
+      lines.push(`ACTION:DISPLAY`);
+      lines.push(`DESCRIPTION:${calAlarm}${pname(p.id)}`);
+      lines.push(`END:VALARM`);
+    }
     lines.push('END:VEVENT');
     count++;
   });
@@ -4181,7 +4196,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
   const msg = currentLang==='he' ? `✓ הורד ${count} ימי הולדת`
             : currentLang==='en' ? `✓ Downloaded ${count} birthdays`
             : `✓ Скачано ${count} дней рождения`;
-  showToast(msg);
+  showToast(msg + (quietCount ? ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + quietCount + ')' : ''));
 });
 ;
 
