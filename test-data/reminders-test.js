@@ -16,6 +16,7 @@ function mk(persons, fams) {
   fams.forEach((f, i) => {
     const fid = 'F' + (i + 1);
     idx.families[fid] = { id: fid, husband: f[0], wife: f[1], children: f[2] };
+    if (f[3]) idx.families[fid].status = f[3];
     if (f[0] && idx.nodes[f[0]]) idx.nodes[f[0]].sex = 'M';
     if (f[1] && idx.nodes[f[1]]) idx.nodes[f[1]].sex = 'F';
     f[2].forEach(c => { idx.child_of[c] = fid; });
@@ -140,6 +141,95 @@ if (fs.existsSync(fb)) {
   } else {
     console.log('SKIP  Intl Hebrew calendar not available');
   }
+}
+
+// ---- v2: former marriages ----
+{
+  const idx4 = mk(['ME4','W4','X4','XF4','XM4','C4','KID4'],
+    [['ME4','W4',['KID4']], ['ME4','X4',['C4'],'divorced'], ['XF4','XM4',['X4']]]);
+  const L4 = R.kinshipLevels(idx4, 'ME4');
+  eq(L4.W4, 0, 'former: current spouse = 0');
+  eq(L4.KID4, 1, 'former: child of current marriage = 1');
+  eq(L4.C4, 1, 'former: child of former marriage = 1');
+  eq(L4.X4, 1, 'former: ex-spouse with a common child = 1');
+  eq(L4.XF4, undefined, 'former: ex-spouse father is not counted');
+  eq(L4.XM4, undefined, 'former: ex-spouse mother is not counted');
+  const idx5 = mk(['ME5','X5','XP5','XQ5'], [['ME5','X5',[],'divorced'], ['XP5','XQ5',['X5']]]);
+  const L5 = R.kinshipLevels(idx5, 'ME5');
+  eq(L5.X5, undefined, 'former: ex-spouse without children has no level');
+  eq(L5.XP5, undefined, 'former: her parents have no level');
+  const idx6 = mk(['ME6','W6','WP6','WQ6'], [['ME6','W6',[]], ['WP6','WQ6',['W6']]]);
+  const L6 = R.kinshipLevels(idx6, 'ME6');
+  eq(L6.WP6, 1, 'current spouse: her parents = 1');
+}
+
+// ---- v2: personal decisions ----
+{
+  const PP = (o) => Object.assign({ me: 'ME', near: 1, far: 2, personal: {}, events: R.EVENT_DEFAULTS }, o || {});
+  const pr = PP({ personal: { U: 'always', A: 'never', LONE: 'quiet', COUSKID: 'quiet' } });
+  eq(R.reminderMode('U', idx, pr, L, 'greg'), 'full', 'personal: always beats radius');
+  eq(R.reminderMode('A', idx, pr, L, 'greg'), 'skip', 'personal: never beats radius');
+  eq(R.reminderMode('LONE', idx, pr, L, 'greg'), 'quiet', 'personal: quiet for an unconnected person');
+  eq(R.reminderMode('COUSKID', idx, pr, L, 'greg'), 'quiet', 'personal: quiet for a far person');
+  eq(R.reminderMode('SIB', idx, pr, L, 'greg'), 'full', 'personal: others follow the radius');
+  eq(R.personState(pr, 'U'), 'always', 'personState always');
+  eq(R.personState(pr, 'NOBODY'), '', 'personState empty');
+}
+
+// ---- v2: event types ----
+{
+  eq(R.eventEnabled(null, 'birthday_greg'), true, 'events: no settings -> birthdays by regular date');
+  eq(R.eventEnabled(null, 'birthday_he'), true, 'events: no settings -> birthdays by Hebrew date (as before)');
+  eq(R.eventEnabled(null, 'death_he'), false, 'events: no settings -> no Hebrew death anniversaries');
+  eq(R.eventEnabled(null, 'death_greg'), false, 'events: no settings -> no regular death anniversaries');
+  const e1 = { events: { birthdays: true, birthdayCal: 'he', deathHe: true, deathGreg: false } };
+  eq(R.eventEnabled(e1, 'birthday_greg'), false, 'events: cal=he -> no regular birthdays');
+  eq(R.eventEnabled(e1, 'birthday_he'), true, 'events: cal=he -> Hebrew birthdays');
+  eq(R.eventEnabled(e1, 'death_he'), true, 'events: deathHe on');
+  eq(R.eventEnabled(e1, 'death_greg'), false, 'events: deathGreg off');
+  const e2 = { events: { birthdays: false, birthdayCal: 'both', deathHe: false, deathGreg: true } };
+  eq(R.eventEnabled(e2, 'birthday_greg'), false, 'events: birthdays off -> no regular birthdays');
+  eq(R.eventEnabled(e2, 'birthday_he'), false, 'events: birthdays off -> no Hebrew birthdays');
+  eq(R.eventEnabled(e2, 'death_greg'), true, 'events: deathGreg on');
+}
+
+// ---- v2: storage, migration, moving between devices ----
+{
+  const mem2 = {};
+  global.localStorage = {
+    getItem: k => (k in mem2 ? mem2[k] : null),
+    setItem: (k, v) => { mem2[k] = String(v); },
+    removeItem: k => { delete mem2[k]; }
+  };
+  const KEY = 'reminder_prefs_mostovoy';
+  mem2[KEY] = JSON.stringify({ me: 'ME', near: 1, far: 2, pinned: ['LONE'], muted: ['A'] });
+  const m1 = R.loadReminderPrefs(idx);
+  eq(m1.personal.LONE, 'always', 'migration: pinned -> always');
+  eq(m1.personal.A, 'never', 'migration: muted -> never');
+  eq(m1.events.birthdayCal, 'both', 'migration: default calendars = both');
+  eq(m1.events.deathHe, false, 'migration: death anniversaries off');
+  eq(m1.v, 2, 'migration: version 2');
+  m1.personal.U = 'quiet';
+  ok(R.saveReminderPrefs(m1), 'v2: save');
+  const m2 = R.loadReminderPrefs(idx);
+  eq(m2.personal.U, 'quiet', 'v2: quiet decision survives save and load');
+  eq(JSON.parse(mem2[KEY]).pinned, undefined, 'v2: stored object has no legacy arrays');
+  const ex = R.exportPrefs(m2);
+  const im = R.importPrefs(ex, idx);
+  eq(im.personal.A, 'never', 'export/import: decision kept');
+  eq(im.me, 'ME', 'export/import: me kept');
+  eq(R.importPrefs('not json', idx), null, 'import: garbage -> null');
+  eq(R.importPrefs('[1,2]', idx), null, 'import: array -> null');
+  const imd = R.importPrefs(JSON.stringify({ me: 'GHOST', personal: { GHOST: 'never', A: 'bad', U: 'always' } }), idx);
+  eq(imd.me, '', 'import: unknown me ignored');
+  eq(imd.personal.GHOST, undefined, 'import: unknown person ignored');
+  eq(imd.personal.A, undefined, 'import: bad value ignored');
+  eq(imd.personal.U, 'always', 'import: good value kept');
+  mem2['yahrzeit_sel_mostovoy'] = JSON.stringify(['A', 'GHOST', 5]);
+  eq(R.legacyYahrzeitIds(idx).join(','), 'A', 'legacy yahrzeit list: only known people');
+  R.dropReminderPerson('U');
+  eq(R.loadReminderPrefs(idx).personal.U, undefined, 'drop: person removed from decisions');
+  delete global.localStorage;
 }
 
 console.log(failed ? ('REMINDERS TEST: FAILED ' + failed + ', passed ' + passed) : ('REMINDERS TEST: all ' + passed + ' passed'));
