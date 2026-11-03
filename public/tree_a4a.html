@@ -1932,6 +1932,8 @@ function buildHelpBubble(lang){
   const sections = (M.help_sections || UI.ru.help_sections || []).slice();
   const hebHelp = M.help_hebcal || UI.ru.help_hebcal;
   if(hebHelp) sections.push(hebHelp);
+  const circHelp = M.help_circles || UI.ru.help_circles;
+  if(circHelp) sections.push(circHelp);
   let html = '<div class="hb-title">' + L('help_title') + '</div>';
   for(const s of sections){
     html += '<details class="hb-sec"' + (s === hebHelp ? ' id="hb-hebcal"' : '') + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
