@@ -1117,6 +1117,35 @@ function openHebcalHelp(){
   if(d){ d.open = true; try { d.scrollIntoView({ block: 'nearest' }); } catch(e){} }
 }
 
+// ---- Reminder circles: quick personal choices from the person panel (kept only in this browser) ----
+function rcPrefsNow(){
+  const p = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
+  const d = window.TreeReminders ? TreeReminders.REMINDER_DEFAULTS : { near: 2, far: 4 };
+  return p || { me: '', near: d.near, far: d.far, pinned: [], muted: [] };
+}
+function rcSetMe(id){
+  if(!window.TreeReminders) return;
+  const p = rcPrefsNow(); p.me = id;
+  TreeReminders.saveReminderPrefs(p);
+  showToast(t('rc_me_saved'), false);
+  showPanel(id);
+}
+function rcTogglePin(id, on){
+  if(!window.TreeReminders) return;
+  const p = rcPrefsNow();
+  p.pinned = p.pinned.filter(x => x !== id);
+  if(on){ p.pinned.push(id); p.muted = p.muted.filter(x => x !== id); }
+  TreeReminders.saveReminderPrefs(p);
+  showPanel(id);
+}
+function rcToggleMute(id, on){
+  if(!window.TreeReminders) return;
+  const p = rcPrefsNow();
+  p.muted = p.muted.filter(x => x !== id);
+  if(on){ p.muted.push(id); p.pinned = p.pinned.filter(x => x !== id); }
+  TreeReminders.saveReminderPrefs(p);
+  showPanel(id);
+}
 function showPanel(id){
   const n = IDX.nodes[id]; if(!n) return;
 
@@ -1205,6 +1234,20 @@ function showPanel(id){
     { const hs = getHebrewCalStatus(); if(hs.state !== 'none') col1 += `<div style="margin-top:3px;font-size:.66rem;color:#7A5828">${t('hebcal_valid_until').replace('{to}', hs.to)}</div>`; }
   }
   // Contacts: only shown to authenticated users (guest or admin)
+  // Reminder circles: personal choices for living people (any logged-in role), kept only in this browser
+  if(_sessionPassword && window.TreeReminders && !(n.death && String(n.death).trim()) && !(n.death_he && String(n.death_he).trim())){
+    const rp = rcPrefsNow();
+    const rcIsMe = rp.me === id;
+    const rcPin = rp.pinned.indexOf(id) >= 0, rcMute = rp.muted.indexOf(id) >= 0;
+    col1 += `<div class="p-sec" style="margin-top:8px">
+      <button type="button" ${rcIsMe ? 'disabled' : ''} onclick="rcSetMe('${id}')"
+        style="padding:3px 9px;font-size:.68rem;background:rgba(184,144,48,.15);border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#5A3C10;font-family:inherit">\uD83D\uDE4B ${rcIsMe ? t('rc_is_me') : t('rc_btn_me')}</button>
+      <label style="display:block;margin-top:6px;font-size:.72rem;color:#5A3C10;cursor:pointer">
+        <input type="checkbox" ${rcPin ? 'checked' : ''} onchange="rcTogglePin('${id}', this.checked)"> \u2B50 ${t('rc_pin')}</label>
+      <label style="display:block;margin-top:3px;font-size:.72rem;color:#5A3C10;cursor:pointer">
+        <input type="checkbox" ${rcMute ? 'checked' : ''} onchange="rcToggleMute('${id}', this.checked)"> \uD83D\uDD15 ${t('rc_mute')}</label>
+    </div>`;
+  }
   const hasContacts = n.phone || n.email || n.social;
   if(hasContacts){
     if(isAuth){
