@@ -181,6 +181,23 @@ svg{position:absolute;top:0;left:0;overflow:visible}
 .hebcal-step{font-size:.78rem;color:#555;line-height:1.55;margin-bottom:5px}
 .hebcal-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
 body.rtl #hebcal-box{direction:rtl;text-align:right}
+#rc-overlay{display:none;position:fixed;inset:0;background:rgba(20,12,4,.7);z-index:650;align-items:center;justify-content:center}
+#rc-overlay.open{display:flex}
+#rc-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:520px;width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#rc-box h3{font-size:.95rem;font-weight:600;color:#1C1208;margin-bottom:8px}
+.rc-intro{font-size:.74rem;color:#555;line-height:1.5;margin-bottom:6px}
+.rc-lbl{display:block;font-size:.72rem;font-weight:600;color:#7A5828;margin:10px 0 3px}
+#rc-box input,#rc-box select{width:100%;padding:6px 9px;border:1px solid rgba(184,144,48,.4);border-radius:4px;font-family:inherit;font-size:.8rem;background:#FFFDF7;color:#28180A}
+#rc-count{margin-top:12px;font-size:.84rem;font-weight:600;color:#1C1208;line-height:1.45}
+#rc-heb{font-size:.74rem;color:#555;margin-bottom:6px}
+#rc-box details{margin-top:8px;font-size:.76rem}
+#rc-box summary{cursor:pointer;color:#5A3C10;font-weight:600}
+.rc-list{max-height:170px;overflow-y:auto;margin-top:4px;border:1px solid rgba(184,144,48,.25);border-radius:4px;padding:4px 8px;color:#28180A}
+.rc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0;font-size:.74rem}
+.rc-row .rc-m{color:#7A5828;font-size:.68rem;white-space:nowrap}
+.rc-row .rc-x{cursor:pointer;color:#A02020;border:none;background:none;font-size:.9rem;line-height:1}
+.rc-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+body.rtl #rc-box{direction:rtl;text-align:right}
 .btn.hebcal-due{position:relative}
 .btn.hebcal-due::after{content:'';position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:#E05050}
 #print-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:480px;width:94vw;
@@ -356,6 +373,7 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты" data-title="tooltip_contacts">📇</button>
   <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
   <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
+  <button class="btn" id="btn-reminders" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_reminders">&#9881;</button>
   <button class="btn" id="btn-hebrew-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_hebrew_calendar">&#128334;</button>
   <button class="btn" id="btn-backup" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать резервную копию (JSON)" data-title="tooltip_backup">📦</button>
   <button class="btn" id="btn-gedcom" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать GEDCOM (для переноса в другие сервисы)" data-title="tooltip_gedcom">📤</button>
@@ -640,10 +658,33 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
     <div class="hebcal-step" id="hebcal-s1"></div>
     <div class="hebcal-step" id="hebcal-s2"></div>
     <div class="hebcal-step" id="hebcal-s3"></div>
+    <div class="hebcal-step"><a href="#" id="hebcal-circles-link"></a></div>
     <div class="hebcal-btns">
       <button type="button" class="pbtn pbtn-cancel" id="hebcal-close"></button>
       <button type="button" class="pbtn pbtn-cancel" id="hebcal-howto"></button>
       <button type="button" class="pbtn pbtn-primary" id="hebcal-download"></button>
+    </div>
+  </div>
+</div>
+
+<div id="rc-overlay">
+  <div id="rc-box">
+    <h3 id="rc-title"></h3>
+    <div class="rc-intro" id="rc-intro"></div>
+    <label class="rc-lbl" id="rc-me-lbl" for="rc-me"></label>
+    <input id="rc-me" type="text" list="names-list" autocomplete="off">
+    <label class="rc-lbl" id="rc-near-lbl" for="rc-near"></label>
+    <select id="rc-near"></select>
+    <label class="rc-lbl" id="rc-far-lbl" for="rc-far"></label>
+    <select id="rc-far"></select>
+    <div id="rc-count"></div>
+    <div id="rc-heb"></div>
+    <details id="rc-who"><summary id="rc-who-sum"></summary><div class="rc-list" id="rc-who-list"></div></details>
+    <details id="rc-pm"><summary id="rc-pm-sum"></summary><div class="rc-list" id="rc-pm-list"></div></details>
+    <div class="rc-btns">
+      <button type="button" class="pbtn pbtn-cancel" id="rc-reset"></button>
+      <button type="button" class="pbtn pbtn-cancel" id="rc-close"></button>
+      <button type="button" class="pbtn pbtn-primary" id="rc-save"></button>
     </div>
   </div>
 </div>
@@ -1060,6 +1101,7 @@ function fillHebcalWindow(){
   document.getElementById('hebcal-howto').textContent = t('hebcal_howto');
   document.getElementById('hebcal-download').textContent = t('hebcal_win_download');
   document.getElementById('hebcal-close').textContent = t('hebcal_win_close');
+  document.getElementById('hebcal-circles-link').textContent = t('rc_link');
 }
 function openHebcalWindow(){ fillHebcalWindow(); document.getElementById('hebcal-overlay').classList.add('open'); }
 function closeHebcalWindow(){ const o = document.getElementById('hebcal-overlay'); if(o) o.classList.remove('open'); }
@@ -4027,6 +4069,144 @@ document.getElementById('btn-contacts').addEventListener('click', () => {
 })
 
 // ── Calendar (ICS) export ────────────────────────────────────────────────
+// ---- Reminder circles: personal settings window (kept only in this browser) ----
+let rcDraft = null, rcLevels = null, rcLevelsFor = '';
+function rcLabel(id){
+  const n = IDX.nodes[id]; if(!n) return id;
+  const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
+  return pname(id) + (by ? ' (' + by + ')' : '') + ' [' + id + ']';
+}
+function rcParseMe(str){
+  const m = String(str || '').match(/\[(P\d+)\]\s*$/);
+  return (m && IDX.nodes[m[1]]) ? m[1] : '';
+}
+function rcVal(elId){ const v = document.getElementById(elId).value; return v === 'all' ? 'all' : Number(v); }
+function rcFillSelect(elId, cur){
+  const sel = document.getElementById(elId);
+  sel.innerHTML = '';
+  ['0','1','2','3','4','5','6','7','all'].forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = t('rc_lvl_' + v);
+    sel.appendChild(o);
+  });
+  sel.value = String(cur);
+}
+function rcLiving(){
+  const out = [];
+  Object.keys(IDX.nodes).forEach(id => {
+    const n = IDX.nodes[id];
+    if((n.death && String(n.death).trim()) || (n.death_he && String(n.death_he).trim())) return;
+    const hasB = (n.birth && String(n.birth).trim()) || (n.birth_he && String(n.birth_he).trim());
+    if(hasB) out.push(id);
+  });
+  return out;
+}
+function rcRow(left, right, onX){
+  const row = document.createElement('div'); row.className = 'rc-row';
+  const a = document.createElement('span'); a.textContent = left; row.appendChild(a);
+  if(onX){
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'rc-x'; x.textContent = '\u2715';
+    x.addEventListener('click', onX); row.appendChild(x);
+  } else {
+    const b = document.createElement('span'); b.className = 'rc-m'; b.textContent = right; row.appendChild(b);
+  }
+  return row;
+}
+function rcPmList(){
+  const box = document.getElementById('rc-pm-list');
+  box.innerHTML = '';
+  let n = 0;
+  rcDraft.pinned.forEach(id => {
+    if(!IDX.nodes[id]) return; n++;
+    box.appendChild(rcRow('\u2B50 ' + pname(id), '', () => { rcDraft.pinned = rcDraft.pinned.filter(x => x !== id); rcRecalc(); }));
+  });
+  rcDraft.muted.forEach(id => {
+    if(!IDX.nodes[id]) return; n++;
+    box.appendChild(rcRow('\uD83D\uDD15 ' + pname(id), '', () => { rcDraft.muted = rcDraft.muted.filter(x => x !== id); rcRecalc(); }));
+  });
+  if(!n) box.textContent = t('rc_pm_none');
+}
+function rcRecalc(){
+  rcDraft.me = rcParseMe(document.getElementById('rc-me').value);
+  rcDraft.near = rcVal('rc-near');
+  rcDraft.far = rcVal('rc-far');
+  if(rcDraft.near === 'all' && rcDraft.far !== 'all'){ rcDraft.far = 'all'; document.getElementById('rc-far').value = 'all'; }
+  if(rcDraft.near !== 'all' && rcDraft.far !== 'all' && rcDraft.far < rcDraft.near){
+    rcDraft.far = rcDraft.near; document.getElementById('rc-far').value = String(rcDraft.far);
+  }
+  const living = rcLiving();
+  const cEl = document.getElementById('rc-count'), hEl = document.getElementById('rc-heb'), wl = document.getElementById('rc-who-list');
+  wl.innerHTML = '';
+  if(!rcDraft.me){
+    cEl.textContent = t('rc_off').replace('{n}', living.length);
+    hEl.textContent = '';
+  } else {
+    if(rcLevelsFor !== rcDraft.me){ rcLevels = TreeReminders.kinshipLevels(IDX, rcDraft.me); rcLevelsFor = rcDraft.me; }
+    let full = 0, quiet = 0, skip = 0, heb = 0;
+    const rows = [];
+    living.forEach(id => {
+      const m = TreeReminders.reminderMode(id, IDX, rcDraft, rcLevels, 'greg');
+      if(m === 'full') full++; else if(m === 'quiet') quiet++; else skip++;
+      if(m !== 'skip'){
+        const hb = IDX.nodes[id].birth_he;
+        if(hb && String(hb).trim()) heb++;
+        rows.push({ id: id, m: m, lv: (rcLevels[id] === undefined ? 99 : rcLevels[id]) });
+      }
+    });
+    cEl.textContent = t('rc_count').replace('{a}', full).replace('{b}', quiet).replace('{c}', skip);
+    hEl.textContent = t('rc_heb').replace('{l}', heb);
+    rows.sort((x, y) => (x.lv - y.lv) || pname(x.id).localeCompare(pname(y.id)));
+    rows.forEach(r => { wl.appendChild(rcRow(pname(r.id), t(r.m === 'full' ? 'rc_mode_full' : 'rc_mode_quiet'), null)); });
+  }
+  rcPmList();
+}
+function openRemindersWindow(){
+  if(!_sessionPassword){
+    document.getElementById('btn-login').click();
+    showToast(t('rc_login'), true);
+    return;
+  }
+  if(!window.TreeReminders){ showToast('tree-reminders.js is not loaded', true); return; }
+  const saved = TreeReminders.loadReminderPrefs(IDX);
+  const d = TreeReminders.REMINDER_DEFAULTS;
+  rcDraft = saved
+    ? { me: saved.me, near: saved.near, far: saved.far, pinned: saved.pinned.slice(), muted: saved.muted.slice() }
+    : { me: '', near: d.near, far: d.far, pinned: [], muted: [] };
+  rcLevels = null; rcLevelsFor = '';
+  const set = (id, key) => { document.getElementById(id).textContent = t(key); };
+  set('rc-title', 'rc_title'); set('rc-intro', 'rc_intro'); set('rc-me-lbl', 'rc_me_lbl');
+  set('rc-near-lbl', 'rc_near_lbl'); set('rc-far-lbl', 'rc_far_lbl');
+  set('rc-who-sum', 'rc_who'); set('rc-pm-sum', 'rc_pm');
+  set('rc-save', 'rc_save'); set('rc-reset', 'rc_reset'); set('rc-close', 'rc_close');
+  const meEl = document.getElementById('rc-me');
+  meEl.placeholder = t('ph_search');
+  meEl.value = rcDraft.me ? rcLabel(rcDraft.me) : '';
+  rcFillSelect('rc-near', rcDraft.near);
+  rcFillSelect('rc-far', rcDraft.far);
+  document.getElementById('rc-overlay').classList.add('open');
+  rcRecalc();
+}
+function closeRemindersWindow(){ const o = document.getElementById('rc-overlay'); if(o) o.classList.remove('open'); }
+document.getElementById('btn-reminders').addEventListener('click', openRemindersWindow);
+document.getElementById('rc-close').addEventListener('click', closeRemindersWindow);
+document.getElementById('rc-overlay').addEventListener('click', e => { if(e.target.id === 'rc-overlay') closeRemindersWindow(); });
+['input', 'change'].forEach(ev => document.getElementById('rc-me').addEventListener(ev, () => { if(rcDraft) rcRecalc(); }));
+['rc-near', 'rc-far'].forEach(id => document.getElementById(id).addEventListener('change', () => { if(rcDraft) rcRecalc(); }));
+document.getElementById('rc-save').addEventListener('click', () => {
+  if(!rcDraft) return;
+  rcRecalc();
+  if(!rcDraft.me && document.getElementById('rc-me').value.trim()){ showToast(t('rc_pick'), true); return; }
+  if(TreeReminders.saveReminderPrefs(rcDraft)){ closeRemindersWindow(); showToast(t('rc_saved'), false); }
+});
+document.getElementById('rc-reset').addEventListener('click', () => {
+  TreeReminders.clearReminderPrefs();
+  closeRemindersWindow();
+  showToast(t('rc_reset_done'), false);
+});
+document.getElementById('hebcal-circles-link').addEventListener('click', e => {
+  e.preventDefault(); closeHebcalWindow(); openRemindersWindow();
+});
+
 // ---- Hebrew-date reminders (.ics, 5 years): birthdays by Hebrew date + yahrzeits chosen on this device ----
 document.getElementById('btn-hebrew-calendar').title = t('tooltip_hebrew_calendar');
 document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
@@ -4402,6 +4582,7 @@ async function confirmDeletePerson(id){
         delete IDX.child_of[id];
         delete IDX.parent_in[id];
         dropYahrzeit(id);
+        if(window.TreeReminders) TreeReminders.dropReminderPerson(id);
         for(const [, r2] of Object.entries(IDX.relatives)){
           r2.siblings = (r2.siblings||[]).filter(s=>s!==id);
           r2.spouses  = (r2.spouses ||[]).filter(s=>s!==id);
