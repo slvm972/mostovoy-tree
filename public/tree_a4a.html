@@ -4272,19 +4272,18 @@ function downloadHebrewCalendar(){
     return;
   }
   const sel = getYahrzeitSel();
-  const rPrefsH = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
-  const rActiveH = !!(rPrefsH && rPrefsH.me);
-  const rLevelsH = rActiveH ? TreeReminders.kinshipLevels(IDX, rPrefsH.me) : null;
-  const hebBirthdayMode = rActiveH ? (id => TreeReminders.reminderMode(id, IDX, rPrefsH, rLevelsH, 'he')) : null;
-  const hebFrom = new Date().getFullYear();
+  const plan = window.TreeReminders
+    ? TreeReminders.planHebrew(IDX, TreeReminders.loadReminderPrefs(IDX), sel)
+    : { yzIds: sel, yahrzeitMode: null, birthdayMode: null, suffix: false };  const hebFrom = new Date().getFullYear();
   const dNow = new Date();
   const hebCreated = String(dNow.getDate()).padStart(2,'0') + '.' + String(dNow.getMonth()+1).padStart(2,'0') + '.' + dNow.getFullYear();
   let res;
   try {
     res = TreeHebrew.buildHebrewIcs({
       nodes: IDX.nodes,
-      yahrzeitIds: sel,
-      birthdayMode: hebBirthdayMode,
+      yahrzeitIds: plan.yzIds,
+      birthdayMode: plan.birthdayMode,
+      yahrzeitMode: plan.yahrzeitMode,
       nowYear: hebFrom,
       years: 5,
       createdStr: hebCreated,
@@ -4300,6 +4299,7 @@ function downloadHebrewCalendar(){
         descBirth: t('hebcal_desc_birth'),
         descDeath: t('hebcal_desc_death'),
         createdLine: t('hebcal_created'),
+        birthdaySuffix: plan.suffix ? t('ev_suffix_he_cal') : '',
         updateSummary: t('hebcal_update_summary'),
         updateDesc: t('hebcal_update_desc')
       }
@@ -4325,7 +4325,7 @@ function downloadHebrewCalendar(){
   refreshHebcalHints(false);
   let msg = t('toast_hebrew_added').replace('{n}', res.events) + skippedNote;
   if(res.quietEvents) msg += ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + res.quietEvents + ')';
-  if(sel.length === 0) msg += t('toast_hebrew_no_yahrzeit');
+  if(plan.yzIds.length === 0) msg += t('toast_hebrew_no_yahrzeit');
   showToast(msg, res.skipped > 0);
 }
 
@@ -4362,55 +4362,18 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
 
   const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Mostovoy Family Tree//RU','CALSCALE:GREGORIAN','X-WR-CALNAME:' + calName,'X-WR-TIMEZONE:Asia/Jerusalem'];
 
-  // reminder circles: personal filter (no "me" chosen = filter off, file as before)
-  const rPrefs = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
-  const rActive = !!(rPrefs && rPrefs.me);
-  const rLevels = rActive ? TreeReminders.kinshipLevels(IDX, rPrefs.me) : null;
-  let quietCount = 0;
-  let count = 0;
-  Object.values(IDX.nodes).forEach(p => {
-    if(p.death) return;
-    const d = parseDate(p.birth);
-    if(!d) return;
-    if(NOW_YEAR - d.year > MAX_AGE) return; // исключаем >100 лет без даты смерти
-
-    let rMode = 'full';
-    if(rActive){
-      rMode = TreeReminders.reminderMode(p.id, IDX, rPrefs, rLevels, 'greg');
-      if(rMode === 'skip') return;
-    }
-    const mm = pad(d.month), dd = pad(d.day);
-    // Первое будущее событие — в этом или следующем году
-    const age = NOW_YEAR - d.year;
-    const uid = `birthday-${p.id}@mostovoy-tree`;
-    const summary = `🎂 ${pname(p.id)} (${calAge(age)})`;
-    const dtstart = `${NOW_YEAR}${mm}${dd}`;
-    lines.push('BEGIN:VEVENT');
-    lines.push(`UID:${uid}`);
-    lines.push(`DTSTART;VALUE=DATE:${dtstart}`);
-    const dtEndDate = new Date(NOW_YEAR, d.month-1, d.day+1);
-    const dtend_str = `${dtEndDate.getFullYear()}${pad(dtEndDate.getMonth()+1)}${pad(dtEndDate.getDate())}`;
-    lines.push(`DTEND;VALUE=DATE:${dtend_str}`);
-    lines.push(`RRULE:FREQ=YEARLY`);
-    lines.push(`SUMMARY:${summary}`);
-    if(p.rel) lines.push(`DESCRIPTION:${relText(p)}`);
-    lines.push(`TRANSP:TRANSPARENT`);
-    if(rMode === 'quiet'){
-      quietCount++;
-    } else {
-      lines.push(`BEGIN:VALARM`);
-      lines.push(`TRIGGER:-P1D`);
-      lines.push(`ACTION:DISPLAY`);
-      lines.push(`DESCRIPTION:${calAlarm}${pname(p.id)}`);
-      lines.push(`END:VALARM`);
-    }
-    lines.push('END:VEVENT');
-    count++;
+  // family reminders (settings v2): radius + personal decisions + event types (logic in tree-reminders.js)
+  if(!window.TreeReminders){ showToast('tree-reminders.js is not loaded', true); return; }
+  const gres = TreeReminders.buildGregorianEvents({
+    idx: IDX, prefs: TreeReminders.loadReminderPrefs(IDX), nowYear: NOW_YEAR, maxAge: MAX_AGE,
+    nameOf: pname, ageText: calAge, relOf: p => (p.rel ? relText(p) : ''), uidDomain: 'mostovoy-tree',
+    labels: { alarmBirth: calAlarm, deathTitle: t('ev_death_greg'), deathDesc: t('ev_death_greg_desc'), alarmDeath: t('ev_alarm_death_greg') }
   });
-
+  gres.lines.forEach(l => lines.push(l));
+  const count = gres.count, deathCount = gres.deathCount, quietCount = gres.quietCount, skippedYear = gres.skippedYear;
   lines.push('END:VCALENDAR');
 
-  if(count === 0){
+  if(count === 0 && deathCount === 0){
     showToast(t('calendar_no_dates'), true);
     return;
   }
@@ -4427,7 +4390,7 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
   const msg = currentLang==='he' ? `✓ הורד ${count} ימי הולדת`
             : currentLang==='en' ? `✓ Downloaded ${count} birthdays`
             : `✓ Скачано ${count} дней рождения`;
-  showToast(msg + (quietCount ? ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + quietCount + ')' : ''));
+  showToast(msg + (deathCount ? t('toast_cal_deaths').replace('{k}', deathCount) : '') + (skippedYear ? t('toast_cal_skip_year').replace('{m}', skippedYear) : '') + (quietCount ? ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + quietCount + ')' : ''));
 });
 ;
 
