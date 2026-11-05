@@ -217,6 +217,9 @@
       personal: personal,
       events: events
     };
+    // explicit = the user chose event types (new window). Without it the old behaviour is kept:
+    // yahrzeit people chosen with the old checkbox stay in the Hebrew file.
+    p.eventsExplicit = (o.eventsExplicit !== undefined) ? !!o.eventsExplicit : !!(o.events && typeof o.events === 'object');
     deriveLegacy(p);
     return p;
   }
@@ -229,7 +232,9 @@
     });
   }
   function stripDerived(p) {
-    return { v: p.v, me: p.me, near: p.near, far: p.far, personal: p.personal, events: p.events };
+    var o = { v: p.v, me: p.me, near: p.near, far: p.far, personal: p.personal };
+    if (p.eventsExplicit) o.events = p.events;
+    return o;
   }
 
   function defaultPrefs() { return normalize({}, null); }
@@ -285,12 +290,120 @@
     return normalize(o, idx);
   }
 
+  // ---- calendar dates: one rule for 29 February ----
+  // 29 February is always placed on 28 February (every year, also in leap years): a yearly
+  // repeat that starts on 29 February would skip three years out of four. DTEND is the next day.
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function ymdUtc(dt) { return '' + dt.getUTCFullYear() + pad2(dt.getUTCMonth() + 1) + pad2(dt.getUTCDate()); }
+  function calendarDate(year, month, day) {
+    var dim = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (!(month >= 1 && month <= 12) || !(day >= 1 && day <= dim[month - 1])) return null;
+    var d = (month === 2 && day === 29) ? 28 : day;
+    var start = new Date(Date.UTC(year, month - 1, d));
+    var end = new Date(Date.UTC(year, month - 1, d + 1));
+    return { start: ymdUtc(start), end: ymdUtc(end), moved: d !== day };
+  }
+  var MONTHS3 = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
+  // only a full date "D MON YYYY" counts; a year alone or month + year is not enough
+  function parseFullDate(s) {
+    var m = s && String(s).trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+    if (!m) return null;
+    var mo = MONTHS3[m[2].toUpperCase()];
+    return mo ? { day: parseInt(m[1], 10), month: mo, year: parseInt(m[3], 10) } : null;
+  }
+
+  // events of the regular-date file: birthdays of living people, death anniversaries of the deceased.
+  // o: idx, prefs, nowYear, maxAge, nameOf(id), ageText(n), relOf(person), uidDomain,
+  //    labels { alarmBirth, deathTitle, deathDesc, alarmDeath }
+  // returns { lines, count (birthdays), deathCount, quietCount, skippedYear }
+  function buildGregorianEvents(o) {
+    var idx = o.idx, prefs = o.prefs || null, labels = o.labels || {};
+    var res = { lines: [], count: 0, deathCount: 0, quietCount: 0, skippedYear: 0 };
+    var levels = (prefs && prefs.me && idx.nodes[prefs.me]) ? kinshipLevels(idx, prefs.me) : null;
+    var useBirth = eventEnabled(prefs, 'birthday_greg');
+    var useDeath = eventEnabled(prefs, 'death_greg');
+    var domain = o.uidDomain || 'family-tree';
+    var L = res.lines;
+    Object.keys(idx.nodes).forEach(function (id) {
+      var p = idx.nodes[id];
+      if (!p) return;
+      var isDead = !!(p.death && String(p.death).trim());
+      if (isDead ? !useDeath : !useBirth) return;
+      var src = isDead ? p.death : p.birth;
+      if (!src || !String(src).trim()) return;
+      var mode = prefs ? reminderMode(id, idx, prefs, levels, 'greg') : 'full';
+      if (mode === 'skip') return;
+      var d = parseFullDate(src);
+      if (!d) { if (/\d{4}/.test(String(src))) res.skippedYear++; return; }
+      if (!isDead && o.maxAge && o.nowYear - d.year > o.maxAge) return;
+      var cd = calendarDate(o.nowYear, d.month, d.day);
+      if (!cd) { res.skippedYear++; return; }
+      var name = o.nameOf ? o.nameOf(id) : id;
+      var summary = isDead
+        ? '\uD83D\uDD6F ' + (labels.deathTitle || 'Death anniversary') + ': ' + name
+        : '\uD83C\uDF82 ' + name + ' (' + (o.ageText ? o.ageText(o.nowYear - d.year) : (o.nowYear - d.year)) + ')';
+      L.push('BEGIN:VEVENT', 'UID:' + (isDead ? 'death-' : 'birthday-') + id + '@' + domain,
+        'DTSTART;VALUE=DATE:' + cd.start, 'DTEND;VALUE=DATE:' + cd.end, 'RRULE:FREQ=YEARLY', 'SUMMARY:' + summary);
+      if (isDead) L.push('DESCRIPTION:' + (labels.deathDesc || 'Date of death: ') + p.death);
+      else { var rel = o.relOf ? o.relOf(p) : ''; if (rel) L.push('DESCRIPTION:' + rel); }
+      L.push('TRANSP:TRANSPARENT');
+      if (mode === 'quiet') {
+        res.quietCount++;
+      } else {
+        L.push('BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY',
+          'DESCRIPTION:' + (isDead ? (labels.alarmDeath || 'Tomorrow: ') : (labels.alarmBirth || 'Birthday tomorrow: ')) + name,
+          'END:VALARM');
+      }
+      L.push('END:VEVENT');
+      if (isDead) res.deathCount++; else res.count++;
+    });
+    return res;
+  }
+
+  // plan for the Hebrew file: which deceased get a yahrzeit event and in which mode.
+  // Priority for one person (highest first):
+  //   1. personal decision of the new model: never -> skip, quiet -> quiet, always -> full
+  //   2. old checkbox list (legacy), only while event types were not chosen explicitly: full
+  //   3. radius (and "me not chosen" = everyone, full)
+  // When event types were chosen explicitly, the old list is ignored and a switched-off type
+  // produces nothing. legacyIds = people chosen with the old yahrzeit checkbox.
+  function planHebrew(idx, prefs, legacyIds) {
+    var legacyMode = !prefs || !prefs.eventsExplicit;
+    var legacy = legacyMode ? cleanIds(legacyIds, idx) : [];
+    var levels = (prefs && prefs.me && idx.nodes && idx.nodes[prefs.me]) ? kinshipLevels(idx, prefs.me) : null;
+    function radiusMode(id) { return prefs ? reminderMode(id, idx, prefs, levels, 'he') : 'full'; }
+    var useBirth = eventEnabled(prefs, 'birthday_he');
+    var useDeath = eventEnabled(prefs, 'death_he');
+    function yahrzeitMode(id) {
+      var st = personState(prefs, id);
+      if (st === 'never') return 'skip';
+      if (st === 'quiet') return 'quiet';
+      if (st === 'always') return 'full';
+      if (legacy.indexOf(id) >= 0) return 'full';
+      return radiusMode(id);
+    }
+    var ids = legacy.slice();
+    if (useDeath) {
+      Object.keys(idx.nodes).forEach(function (id) {
+        var n = idx.nodes[id];
+        if (n && n.death_he && String(n.death_he).trim() && ids.indexOf(id) < 0 && radiusMode(id) !== 'skip') ids.push(id);
+      });
+    }
+    return {
+      yzIds: ids,
+      yahrzeitMode: yahrzeitMode,
+      birthdayMode: useBirth ? radiusMode : function () { return 'skip'; },
+      suffix: !!(prefs && prefs.eventsExplicit && prefs.events && prefs.events.birthdayCal === 'both')
+    };
+  }
+
   var api = {
     kinshipLevels: kinshipLevels, reminderMode: reminderMode, personState: personState,
     eventEnabled: eventEnabled, defaultPrefs: defaultPrefs,
     loadReminderPrefs: loadReminderPrefs, saveReminderPrefs: saveReminderPrefs,
     clearReminderPrefs: clearReminderPrefs, dropReminderPerson: dropReminderPerson,
     legacyYahrzeitIds: legacyYahrzeitIds, exportPrefs: exportPrefs, importPrefs: importPrefs,
+    calendarDate: calendarDate, buildGregorianEvents: buildGregorianEvents, planHebrew: planHebrew,
     REMINDER_DEFAULTS: REMINDER_DEFAULTS, EVENT_DEFAULTS: EVENT_DEFAULTS, PREFS_VERSION: PREFS_VERSION
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

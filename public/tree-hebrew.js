@@ -406,6 +406,7 @@ function buildHebrewIcs(opts) {
       if (!has(selected, id) || !heDeath) return;   // not chosen, or no Hebrew date of death: nothing to do
       kind = 'yahrzeit';
       raw = heDeath;
+      if (opts.yahrzeitMode) { bMode = opts.yahrzeitMode(id) || 'full'; if (bMode === 'skip') return; }
     } else {
       raw = n.birth_he ? String(n.birth_he).trim() : '';
       if (!raw) return;                              // no Hebrew birth date: not counted, not guessed
@@ -420,7 +421,7 @@ function buildHebrewIcs(opts) {
     var name = nameOf(id);
     var canon = formatHebrewDate(rec) || raw;
     var summary = (kind === 'birthday')
-      ? (ICON_BIRTHDAY + ' ' + name)
+      ? (ICON_BIRTHDAY + ' ' + name + (labels.birthdaySuffix || ''))
       : (ICON_CANDLE + ' ' + (labels.yahrzeit || 'Yahrzeit') + ': ' + name);
     var desc = ((kind === 'birthday') ? (labels.descBirth || 'Hebrew birth date: ') : (labels.descDeath || 'Hebrew date of death: ')) + canon;
     var alarm = ((kind === 'birthday') ? (labels.alarmBirth || 'Birthday tomorrow: ') : (labels.alarmYahrzeit || 'Yahrzeit tomorrow: ')) + name;
@@ -434,9 +435,10 @@ function buildHebrewIcs(opts) {
       body.push('BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + stamp,
         'DTSTART;VALUE=DATE:' + o.ymd, 'DTEND;VALUE=DATE:' + toYMD(o.ts + DAY_MS),
         'SUMMARY:' + icsEscape(summary), 'DESCRIPTION:' + icsEscape(desc), 'TRANSP:TRANSPARENT',
-        ...((kind === 'birthday' && bMode === 'quiet') ? [] : ['BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(alarm), 'END:VALARM']),
+        ...((bMode === 'quiet') ? [] : ['BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape(alarm), 'END:VALARM']),
         'END:VEVENT');
-      if (kind === 'birthday') { res.birthdayEvents++; if (bMode === 'quiet') res.quietEvents++; } else res.yahrzeitEvents++;
+      if (kind === 'birthday') res.birthdayEvents++; else res.yahrzeitEvents++;
+      if (bMode === 'quiet') res.quietEvents++;
     });
   });
 

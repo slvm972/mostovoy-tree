@@ -321,5 +321,160 @@ if (fs.existsSync(fb)) {
   delete global.localStorage;
 }
 
+// ---- stage B: 29 February and calendar dates ----
+{
+  const c1 = R.calendarDate(2026, 2, 29);
+  eq(c1.start, '20260228', 'feb29: non-leap year start = 28 Feb');
+  eq(c1.end, '20260301', 'feb29: non-leap year end = 1 Mar');
+  const c2 = R.calendarDate(2028, 2, 29);
+  eq(c2.start, '20280228', 'feb29: leap year start = 28 Feb (same rule every year)');
+  eq(c2.end, '20280229', 'feb29: leap year end = 29 Feb (day after start)');
+  eq(R.calendarDate(2026, 12, 31).end, '20270101', 'date: 31 Dec ends on 1 Jan of next year');
+  eq(R.calendarDate(2026, 3, 1).start, '20260301', 'date: ordinary date start');
+  eq(R.calendarDate(2026, 3, 1).end, '20260302', 'date: ordinary date end');
+  eq(R.calendarDate(2026, 4, 31), null, 'date: 31 April does not exist');
+  eq(R.calendarDate(2026, 13, 1), null, 'date: month 13 does not exist');
+}
+
+// ---- stage B: regular-date file ----
+{
+  const gn = {
+    P1: { id: 'P1', birth: '9 OCT 1970', death: '' },
+    P2: { id: 'P2', birth: '1970', death: '' },
+    P3: { id: 'P3', birth: '29 FEB 1980', death: '' },
+    P4: { id: 'P4', birth: '', death: '25 JAN 2021' },
+    P5: { id: 'P5', birth: '', death: 'OCT 1942' },
+    P6: { id: 'P6', birth: '1 JAN 1990', death: '' },
+    P7: { id: 'P7', birth: '5 MAR 1995', death: '' },
+    P8: { id: 'P8', birth: '29 FEB 2000', death: '' }
+  };
+  const gidx = { nodes: gn, families: {}, child_of: {}, parent_in: {}, relatives: {}, grandparents: {} };
+  const base = { idx: gidx, nowYear: 2026, maxAge: 100, nameOf: id => id, ageText: n => n + 'y', relOf: p => '', uidDomain: 't',
+    labels: { alarmBirth: 'AB: ', deathTitle: 'DT', deathDesc: 'DD: ', alarmDeath: 'AD: ' } };
+  const text = (r) => r.lines.join('\n');
+  const alarms = (r) => r.lines.filter(l => l === 'BEGIN:VALARM').length;
+  const pr = { me: '', near: 2, far: 4, eventsExplicit: true, personal: { P6: 'never', P7: 'quiet' },
+    events: { birthdays: true, birthdayCal: 'greg', deathHe: false, deathGreg: true } };
+  const g1 = R.buildGregorianEvents(Object.assign({}, base, { prefs: pr }));
+  eq(g1.count, 4, 'greg file: birthdays P1, P3, P7, P8 (P2 has only a year, P6 is never)');
+  eq(g1.deathCount, 1, 'greg file: one death anniversary (P4)');
+  eq(g1.skippedYear, 2, 'greg file: year-only birth and month-year death are skipped and counted');
+  eq(g1.quietCount, 1, 'greg file: one quiet event (P7)');
+  eq(alarms(g1), 4, 'greg file: quiet event has no alarm, others have (P1, P3, P8, P4)');
+  ok(text(g1).indexOf('UID:birthday-P6@t') < 0, 'greg file: never -> no event at all');
+  ok(text(g1).indexOf('UID:birthday-P2@t') < 0, 'greg file: year-only birth -> no event');
+  ok(text(g1).indexOf('UID:birthday-P7@t') > 0, 'greg file: quiet person still has the event');
+  ok(text(g1).indexOf('SUMMARY:\uD83D\uDD6F DT: P4') > 0, 'greg file: death anniversary title');
+  ok(text(g1).indexOf('DESCRIPTION:DD: 25 JAN 2021') > 0, 'greg file: death date in the description');
+  ok(text(g1).indexOf('DTSTART;VALUE=DATE:20261009') > 0, 'greg file: ordinary birthday date');
+  ok(text(g1).indexOf('DTSTART;VALUE=DATE:20260228\nDTEND;VALUE=DATE:20260301') > 0, 'greg file: 29 Feb -> 28 Feb with DTEND 1 Mar');
+  const g2 = R.buildGregorianEvents(Object.assign({}, base, { nowYear: 2028, prefs: pr }));
+  ok(text(g2).indexOf('DTSTART;VALUE=DATE:20280228\nDTEND;VALUE=DATE:20280229') > 0, 'greg file: leap year, 29 Feb -> 28 Feb with DTEND 29 Feb');
+  const g3 = R.buildGregorianEvents(Object.assign({}, base, { prefs: null }));
+  eq(g3.count, 5, 'greg file: no settings -> all full birthdays (year-only still skipped)');
+  eq(g3.deathCount, 0, 'greg file: no settings -> no death anniversaries');
+  eq(alarms(g3), 5, 'greg file: no settings -> every event has an alarm');
+  const pr2 = Object.assign({}, pr, { events: { birthdays: false, birthdayCal: 'greg', deathHe: false, deathGreg: true } });
+  const g4 = R.buildGregorianEvents(Object.assign({}, base, { prefs: pr2 }));
+  eq(g4.count, 0, 'greg file: birthdays switched off -> none');
+  eq(g4.deathCount, 1, 'greg file: death anniversaries still there');
+}
+
+// ---- stage B: Hebrew file plan ----
+{
+  const HB = require('../public/tree-hebrew.js');
+  if (HB.isSupported()) {
+    const rawB = HB.formatHebrewDate({ day: 13, monthKey: 'nisan', year: 5731 });
+    const rawD = HB.formatHebrewDate({ day: 12, monthKey: 'shevat', year: 5781 });
+    const hn = {
+      A: { id: 'A', name: 'A', birth_he: rawB, death: '' },
+      D: { id: 'D', name: 'D', birth: '', death: '25 JAN 2021', death_he: rawD },
+      E: { id: 'E', name: 'E', birth: '', death: '25 JAN 2021', death_he: rawD },
+      F: { id: 'F', name: 'F', birth: '', death: '25 JAN 2021', death_he: rawD }
+    };
+    const hidx = { nodes: hn, families: {}, child_of: {}, parent_in: {}, relatives: {}, grandparents: {} };
+    const alarmsH = (r) => (r.ics.match(/BEGIN:VALARM/g) || []).length;
+    const gen = (plan, extraLabels) => HB.buildHebrewIcs({ nodes: hn, nowYear: 2026, years: 1, nameOf: id => id,
+      labels: Object.assign({}, extraLabels || {}), stamp: '20260101T000000Z',
+      yahrzeitIds: plan.yzIds, yahrzeitMode: plan.yahrzeitMode, birthdayMode: plan.birthdayMode });
+    const has = (r, id) => r.ics.indexOf('hebrew-' + id + '-yahrzeit') >= 0;
+
+    // legacy mode: no settings at all, old checkbox list is used
+    const p1 = R.planHebrew(hidx, null, ['D']);
+    eq(p1.yzIds.join(','), 'D', 'plan: no settings -> only the old list');
+    const r1 = gen(p1);
+    ok(has(r1, 'D') && !has(r1, 'E'), 'plan: no settings -> yahrzeit only for the old list');
+    eq(alarmsH(r1), 2, 'plan: no settings -> birthday and legacy yahrzeit have alarms');
+
+    // events chosen explicitly, death_he switched off: the old list must not leak in
+    const off = R.importPrefs(JSON.stringify({ me: '', events: { birthdays: true, birthdayCal: 'both', deathHe: false, deathGreg: false } }), hidx);
+    eq(off.eventsExplicit, true, 'explicit flag: set when events are present');
+    const p2 = R.planHebrew(hidx, off, ['D']);
+    eq(p2.yzIds.length, 0, 'plan: death_he off + old list -> nothing');
+    eq(gen(p2).yahrzeitEvents, 0, 'plan: death_he off -> no yahrzeit events in the file');
+
+    // not explicit (old window): personal decisions beat the old list
+    const old1 = R.importPrefs(JSON.stringify({ me: '', personal: { D: 'quiet' } }), hidx);
+    eq(old1.eventsExplicit, false, 'explicit flag: not set without events');
+    const p3 = R.planHebrew(hidx, old1, ['D']);
+    eq(p3.yahrzeitMode('D'), 'quiet', 'priority: personal quiet beats the old list');
+    const r3 = gen(p3);
+    ok(has(r3, 'D'), 'priority: quiet person still has the event');
+    eq(alarmsH(r3), 1, 'priority: quiet yahrzeit has no alarm (only the birthday has one)');
+    const old2 = R.importPrefs(JSON.stringify({ me: '', personal: { D: 'never' } }), hidx);
+    const p4 = R.planHebrew(hidx, old2, ['D']);
+    eq(p4.yahrzeitMode('D'), 'skip', 'priority: personal never beats the old list');
+    ok(!has(gen(p4), 'D'), 'priority: never -> no event in the file');
+    const old3 = R.importPrefs(JSON.stringify({ me: '', personal: { D: 'always' } }), hidx);
+    eq(R.planHebrew(hidx, old3, ['D']).yahrzeitMode('D'), 'full', 'priority: personal always -> full');
+    const old4 = R.importPrefs(JSON.stringify({ me: '', personal: {} }), hidx);
+    eq(R.planHebrew(hidx, old4, ['D']).yahrzeitMode('D'), 'full', 'priority: no personal decision, old list -> full');
+
+    // explicit: death_he on, radius decides, personal decisions apply, old list ignored
+    const on = R.importPrefs(JSON.stringify({ me: '', personal: { E: 'never', F: 'quiet' },
+      events: { birthdays: true, birthdayCal: 'greg', deathHe: true, deathGreg: false } }), hidx);
+    const p5 = R.planHebrew(hidx, on, []);
+    eq(p5.yzIds.join(','), 'D,F', 'plan: death_he on -> everyone except never');
+    const r5 = gen(p5);
+    ok(has(r5, 'D') && has(r5, 'F') && !has(r5, 'E'), 'plan: never person is absent');
+    eq(r5.quietEvents, 1, 'plan: quiet person counted as quiet');
+    eq(R.planHebrew(hidx, on, ['E']).yzIds.indexOf('E'), -1, 'plan: old list is ignored once events are explicit');
+    eq(R.planHebrew(hidx, on, []).suffix, false, 'suffix: calendar greg -> no suffix');
+    const both = R.importPrefs(JSON.stringify({ me: '', events: { birthdays: true, birthdayCal: 'both', deathHe: false, deathGreg: false } }), hidx);
+    eq(R.planHebrew(hidx, both, []).suffix, true, 'suffix: explicit both -> suffix on');
+    eq(R.planHebrew(hidx, R.importPrefs(JSON.stringify({ me: '' }), hidx), []).suffix, false, 'suffix: not explicit -> no suffix');
+    const nb = R.importPrefs(JSON.stringify({ me: '', events: { birthdays: false, birthdayCal: 'both', deathHe: false, deathGreg: false } }), hidx);
+    eq(gen(R.planHebrew(hidx, nb, [])).birthdayEvents, 0, 'plan: birthdays off -> no Hebrew birthdays');
+  }
+}
+
+// ---- Hebrew builder: yahrzeitMode and birthday suffix ----
+{
+  const HB = require('../public/tree-hebrew.js');
+  if (HB.isSupported()) {
+    const rawB = HB.formatHebrewDate({ day: 13, monthKey: 'nisan', year: 5731 });
+    const rawD = HB.formatHebrewDate({ day: 12, monthKey: 'shevat', year: 5781 });
+    const nodes = {
+      A: { id: 'A', name: 'A', birth_he: rawB, death: '' },
+      D: { id: 'D', name: 'D', birth: '', death: '25 JAN 2021', death_he: rawD },
+      E: { id: 'E', name: 'E', birth: '', death: '25 JAN 2021', death_he: rawD }
+    };
+    const run = (extra, labels) => HB.buildHebrewIcs(Object.assign({ nodes: nodes, nowYear: 2026, years: 1,
+      nameOf: id => id, labels: labels || {}, stamp: '20260101T000000Z' }, extra));
+    const alarms = (r) => (r.ics.match(/BEGIN:VALARM/g) || []).length;
+    const r1 = run({ yahrzeitIds: ['D', 'E'], yahrzeitMode: id => id === 'D' ? 'quiet' : 'skip' });
+    eq(r1.yahrzeitEvents, 1, 'hebrew yahrzeit mode: skip removes E');
+    eq(r1.quietEvents, 1, 'hebrew yahrzeit mode: D is quiet');
+    eq(alarms(r1), 1, 'hebrew yahrzeit mode: only the birthday has an alarm');
+    const r2 = run({ yahrzeitIds: ['D', 'E'] });
+    eq(r2.yahrzeitEvents, 2, 'hebrew yahrzeit mode: no mode function -> both events');
+    eq(alarms(r2), 3, 'hebrew yahrzeit mode: no mode function -> all alarms');
+    const r3 = run({ yahrzeitIds: [] }, { birthdaySuffix: ' - SUFFIX' });
+    ok(r3.ics.indexOf(' - SUFFIX') > 0, 'hebrew suffix: birthday title gets the suffix');
+    const r4 = run({ yahrzeitIds: [] }, {});
+    ok(r4.ics.indexOf('SUFFIX') < 0, 'hebrew suffix: no suffix by default');
+  }
+}
+
 console.log(failed ? ('REMINDERS TEST: FAILED ' + failed + ', passed ' + passed) : ('REMINDERS TEST: all ' + passed + ' passed'));
 process.exit(failed ? 1 : 0);
