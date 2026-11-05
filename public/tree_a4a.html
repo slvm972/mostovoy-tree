@@ -198,6 +198,28 @@ body.rtl #hebcal-box{direction:rtl;text-align:right}
 .rc-row .rc-x{cursor:pointer;color:#A02020;border:none;background:none;font-size:.9rem;line-height:1}
 .rc-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
 body.rtl #rc-box{direction:rtl;text-align:right}
+#rc-box{max-width:660px}
+#rc-box input[type=checkbox],#rc-box input[type=radio]{width:auto;padding:0}
+#rc-box h4{font-size:.88rem;color:#5A3C10;margin:0 0 6px}
+#rc-box h5{font-size:.78rem;color:#28180A;margin:12px 0 4px}
+.rc-block{border-top:1px solid rgba(184,144,48,.35);margin-top:14px;padding-top:10px}
+.rc-warn{font-size:.78rem;line-height:1.45;padding:7px 10px;border-radius:4px;background:#FFF1C9;border:1px solid #D9B24C;color:#5A3C10;margin-bottom:6px}
+.rc-warn.ok{background:#E6F2E1;border-color:#8DB67B;color:#2D5A1E}
+.rc-legacy{font-size:.76rem;line-height:1.45;padding:7px 10px;border-radius:4px;background:#EAF1FA;border:1px solid #9DB8D6;color:#1E3F66;margin-bottom:8px}
+.rc-hint{font-size:.72rem;color:#666;line-height:1.45;margin:3px 0 6px}
+.rc-sent{font-size:.8rem;color:#28180A;line-height:1.7;margin-top:8px}
+.rc-sent select{width:auto;max-width:100%}
+.rc-ex{font-size:.72rem;color:#7A5828;line-height:1.45;margin:2px 0 4px}
+.rc-chk{display:block;font-size:.8rem;color:#28180A;margin-top:8px;cursor:pointer}
+.rc-sub{margin:4px 0 0 22px;font-size:.76rem;color:#28180A}
+.rc-sub label{margin-right:12px;cursor:pointer;white-space:nowrap}
+.rc-file{border:1px solid rgba(184,144,48,.35);border-radius:5px;padding:8px 10px;margin-top:8px;background:#FBF8F0}
+.rc-file b{font-size:.82rem;color:#1C1208}
+.rc-add{display:flex;gap:6px;margin-top:6px}
+.rc-add input{flex:1}
+.rc-notif{font-size:.72rem;color:#5A3C10;line-height:1.5;margin-top:10px;padding:7px 10px;background:#F6EFDD;border-radius:4px}
+body.rtl .rc-sub{margin:4px 22px 0 0}
+body.rtl .rc-sub label{margin-right:0;margin-left:12px}
 .btn.hebcal-due{position:relative}
 .btn.hebcal-due::after{content:'';position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:#E05050}
 #print-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:480px;width:94vw;
@@ -671,16 +693,63 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
   <div id="rc-box">
     <h3 id="rc-title"></h3>
     <div class="rc-intro" id="rc-intro"></div>
-    <label class="rc-lbl" id="rc-me-lbl" for="rc-me"></label>
-    <input id="rc-me" type="text" list="names-list" autocomplete="off">
-    <label class="rc-lbl" id="rc-near-lbl" for="rc-near"></label>
-    <select id="rc-near"></select>
-    <label class="rc-lbl" id="rc-far-lbl" for="rc-far"></label>
-    <select id="rc-far"></select>
-    <div id="rc-count"></div>
-    <div id="rc-heb"></div>
-    <details id="rc-who"><summary id="rc-who-sum"></summary><div class="rc-list" id="rc-who-list"></div></details>
-    <details id="rc-pm"><summary id="rc-pm-sum"></summary><div class="rc-list" id="rc-pm-list"></div></details>
+    <div class="rc-legacy" id="rc-legacy" style="display:none"></div>
+
+    <div class="rc-block">
+      <h4 id="rc-b1"></h4>
+      <div class="rc-warn" id="rc-warn"></div>
+      <label class="rc-lbl" id="rc-me-lbl" for="rc-me"></label>
+      <input id="rc-me" type="text" list="names-list" autocomplete="off">
+      <div class="rc-hint" id="rc-me-hint"></div>
+      <h5 id="rc-radius-h"></h5>
+      <div class="rc-sent"><span id="rc-p1a"></span> <select id="rc-near"></select> <span id="rc-p1b"></span></div>
+      <div class="rc-ex" id="rc-near-ex"></div>
+      <div class="rc-sent"><span id="rc-p2a"></span> <select id="rc-far"></select> <span id="rc-p2b"></span></div>
+      <div class="rc-ex" id="rc-far-ex"></div>
+      <div class="rc-sent" id="rc-p3"></div>
+      <div id="rc-count"></div>
+      <details><summary id="rc-who-sum"></summary><div class="rc-list" id="rc-who-list"></div></details>
+      <h5 id="rc-people-h"></h5>
+      <div class="rc-hint" id="rc-people-p"></div>
+      <div class="rc-hint" id="rc-people-note"></div>
+      <div class="rc-list" id="rc-people-list"></div>
+      <div class="rc-add"><input id="rc-add-in" type="text" list="names-list" autocomplete="off"><button type="button" class="pbtn pbtn-cancel" id="rc-add-btn"></button></div>
+    </div>
+
+    <div class="rc-block">
+      <h4 id="rc-b2"></h4>
+      <div class="rc-hint" id="rc-b2-p"></div>
+      <label class="rc-chk"><input type="checkbox" id="rc-ev-birth"> <span id="rc-ev-birth-t"></span></label>
+      <div class="rc-sub"><span id="rc-cal-lbl"></span>
+        <label><input type="radio" name="rc-cal" value="greg"> <span id="rc-cal-greg"></span></label>
+        <label><input type="radio" name="rc-cal" value="he"> <span id="rc-cal-he"></span></label>
+        <label><input type="radio" name="rc-cal" value="both"> <span id="rc-cal-both"></span></label>
+      </div>
+      <div class="rc-hint" id="rc-cal-hint"></div>
+      <label class="rc-chk"><input type="checkbox" id="rc-ev-deathhe"> <span id="rc-ev-deathhe-t"></span></label>
+      <div class="rc-hint" id="rc-ev-deathhe-h"></div>
+      <label class="rc-chk"><input type="checkbox" id="rc-ev-deathgreg"> <span id="rc-ev-deathgreg-t"></span></label>
+      <div class="rc-hint" id="rc-ev-deathgreg-h"></div>
+      <div class="rc-warn" id="rc-miss" style="display:none"></div>
+      <details id="rc-miss-d" style="display:none"><summary id="rc-miss-sum"></summary><div class="rc-list" id="rc-miss-list"></div></details>
+    </div>
+
+    <div class="rc-block">
+      <h4 id="rc-b3"></h4>
+      <div class="rc-file"><b id="rc-f1-t"></b>
+        <div class="rc-hint" id="rc-f1-d"></div>
+        <div id="rc-f1-s" style="font-size:.76rem"></div>
+        <div style="margin-top:6px"><button type="button" class="pbtn pbtn-primary" id="rc-dl1"></button></div>
+      </div>
+      <div class="rc-file"><b id="rc-f2-t"></b>
+        <div class="rc-hint" id="rc-f2-d"></div>
+        <div id="rc-f2-s" style="font-size:.76rem"></div>
+        <div id="rc-f2-st" style="font-size:.72rem;color:#7A5828;margin-top:2px"></div>
+        <div style="margin-top:6px"><button type="button" class="pbtn pbtn-primary" id="rc-dl2"></button></div>
+      </div>
+      <div class="rc-notif" id="rc-notif"></div>
+    </div>
+    <div class="rc-hint" id="rc-foot" style="margin-top:10px"></div>
     <div class="rc-btns">
       <button type="button" class="pbtn pbtn-cancel" id="rc-reset"></button>
       <button type="button" class="pbtn pbtn-cancel" id="rc-close"></button>
@@ -1117,11 +1186,10 @@ function openHebcalHelp(){
   if(d){ d.open = true; try { d.scrollIntoView({ block: 'nearest' }); } catch(e){} }
 }
 
-// ---- Reminder circles: quick personal choices from the person panel (kept only in this browser) ----
+// ---- Family reminders: quick personal choices from the person panel (kept only in this browser) ----
 function rcPrefsNow(){
   const p = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
-  const d = window.TreeReminders ? TreeReminders.REMINDER_DEFAULTS : { near: 2, far: 4 };
-  return p || { me: '', near: d.near, far: d.far, pinned: [], muted: [] };
+  return p || (window.TreeReminders ? TreeReminders.defaultPrefs() : { me: '', personal: {} });
 }
 function rcSetMe(id){
   if(!window.TreeReminders) return;
@@ -1130,19 +1198,10 @@ function rcSetMe(id){
   showToast(t('rc_me_saved'), false);
   showPanel(id);
 }
-function rcTogglePin(id, on){
+function rcSetPerson(id, v){
   if(!window.TreeReminders) return;
   const p = rcPrefsNow();
-  p.pinned = p.pinned.filter(x => x !== id);
-  if(on){ p.pinned.push(id); p.muted = p.muted.filter(x => x !== id); }
-  TreeReminders.saveReminderPrefs(p);
-  showPanel(id);
-}
-function rcToggleMute(id, on){
-  if(!window.TreeReminders) return;
-  const p = rcPrefsNow();
-  p.muted = p.muted.filter(x => x !== id);
-  if(on){ p.muted.push(id); p.pinned = p.pinned.filter(x => x !== id); }
+  if(v) p.personal[id] = v; else delete p.personal[id];
   TreeReminders.saveReminderPrefs(p);
   showPanel(id);
 }
@@ -1228,24 +1287,23 @@ function showPanel(id){
   if(otherNoteText)  col1 += `<div class="p-sec"><h3>${t('fix_other')}</h3><div class="p-block">${otherNoteText}</div></div>`;
   // Yahrzeit reminder: personal choice (any logged-in role), kept only in this browser
   if(_sessionPassword && n.death_he && String(n.death_he).trim()){
-    const yzOn = getYahrzeitSel().indexOf(id) >= 0;
-    col1 += `<label style="display:block;margin-top:8px;font-size:.72rem;color:#5A3C10;cursor:pointer">
-      <input type="checkbox" ${yzOn ? 'checked' : ''} onchange="toggleYahrzeit('${id}', this.checked)"> ${t('yahrzeit_remind')}</label>`;
     { const hs = getHebrewCalStatus(); if(hs.state !== 'none') col1 += `<div style="margin-top:3px;font-size:.66rem;color:#7A5828">${t('hebcal_valid_until').replace('{to}', hs.to)}</div>`; }
   }
   // Contacts: only shown to authenticated users (guest or admin)
-  // Reminder circles: personal choices for living people (any logged-in role), kept only in this browser
-  if(_sessionPassword && window.TreeReminders && !(n.death && String(n.death).trim()) && !(n.death_he && String(n.death_he).trim())){
+  // Family reminders: one decision per person (any logged-in role), kept only in this browser
+  if(_sessionPassword && window.TreeReminders){
     const rp = rcPrefsNow();
+    const rcSt = TreeReminders.personState(rp, id) || '';
     const rcIsMe = rp.me === id;
-    const rcPin = rp.pinned.indexOf(id) >= 0, rcMute = rp.muted.indexOf(id) >= 0;
+    const rcOpt = (v, key) => `<option value="${v}" ${rcSt === v ? 'selected' : ''}>${t(key)}</option>`;
     col1 += `<div class="p-sec" style="margin-top:8px">
+      <h3>${t('rc2_card_h')}</h3>
+      <select onchange="rcSetPerson('${id}', this.value)" style="width:100%;padding:3px 5px;font-size:.7rem;font-family:inherit;border:1px solid rgba(184,144,48,.35);border-radius:3px;background:#FFFDF7;color:#28180A">
+        ${rcOpt('', 'rc2_ps_radius')}${rcOpt('always', 'rc2_ps_always')}${rcOpt('quiet', 'rc2_ps_quiet')}${rcOpt('never', 'rc2_ps_never')}
+      </select>
+      <div style="margin-top:3px;font-size:.64rem;color:#7A5828;line-height:1.4">${t('rc2_people_note')}</div>
       <button type="button" ${rcIsMe ? 'disabled' : ''} onclick="rcSetMe('${id}')"
-        style="padding:3px 9px;font-size:.68rem;background:rgba(184,144,48,.15);border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#5A3C10;font-family:inherit">\uD83D\uDE4B ${rcIsMe ? t('rc_is_me') : t('rc_btn_me')}</button>
-      <label style="display:block;margin-top:6px;font-size:.72rem;color:#5A3C10;cursor:pointer">
-        <input type="checkbox" ${rcPin ? 'checked' : ''} onchange="rcTogglePin('${id}', this.checked)"> \u2B50 ${t('rc_pin')}</label>
-      <label style="display:block;margin-top:3px;font-size:.72rem;color:#5A3C10;cursor:pointer">
-        <input type="checkbox" ${rcMute ? 'checked' : ''} onchange="rcToggleMute('${id}', this.checked)"> \uD83D\uDD15 ${t('rc_mute')}</label>
+        style="margin-top:6px;padding:3px 9px;font-size:.68rem;background:rgba(184,144,48,.15);border:1px solid rgba(184,144,48,.3);border-radius:3px;cursor:pointer;color:#5A3C10;font-family:inherit">\uD83D\uDE4B ${rcIsMe ? t('rc_is_me') : t('rc_btn_me')}</button>
     </div>`;
   }
   const hasContacts = n.phone || n.email || n.social;
@@ -4114,96 +4172,151 @@ document.getElementById('btn-contacts').addEventListener('click', () => {
 })
 
 // ── Calendar (ICS) export ────────────────────────────────────────────────
-// ---- Reminder circles: personal settings window (kept only in this browser) ----
-let rcDraft = null, rcLevels = null, rcLevelsFor = '';
+// ---- Family reminders window (settings v2, kept only in this browser) ----
+let rcDraft = null, rcLevels = null, rcLevelsFor = '', rcTimer = null;
+const RC_FULLDATE = /^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/;
+function rcEl(id){ return document.getElementById(id); }
 function rcLabel(id){
   const n = IDX.nodes[id]; if(!n) return id;
   const by = n.birth ? (n.birth.match(/\d{4}/)||[''])[0] : '';
   return pname(id) + (by ? ' (' + by + ')' : '') + ' [' + id + ']';
 }
-function rcParseMe(str){
+function rcParseId(str){
   const m = String(str || '').match(/\[(P\d+)\]\s*$/);
   return (m && IDX.nodes[m[1]]) ? m[1] : '';
 }
-function rcVal(elId){ const v = document.getElementById(elId).value; return v === 'all' ? 'all' : Number(v); }
-function rcFillSelect(elId, cur){
-  const sel = document.getElementById(elId);
+function rcLvlVal(elId){ const v = rcEl(elId).value; return v === 'all' ? 'all' : Number(v); }
+function rcFillLevel(elId, cur){
+  const sel = rcEl(elId);
   sel.innerHTML = '';
   ['0','1','2','3','4','5','6','7','all'].forEach(v => {
     const o = document.createElement('option');
-    o.value = v; o.textContent = t('rc_lvl_' + v);
+    o.value = v;
+    o.textContent = v === 'all' ? t('rc2_lvl_all') : (Number(v) <= 4 ? t('rc2_lvl_' + v) : t('rc2_lvl_far').replace('{n}', v));
     sel.appendChild(o);
   });
   sel.value = String(cur);
 }
-function rcLiving(){
-  const out = [];
-  Object.keys(IDX.nodes).forEach(id => {
-    const n = IDX.nodes[id];
-    if((n.death && String(n.death).trim()) || (n.death_he && String(n.death_he).trim())) return;
-    const hasB = (n.birth && String(n.birth).trim()) || (n.birth_he && String(n.birth_he).trim());
-    if(hasB) out.push(id);
-  });
-  return out;
+function rcExample(v){
+  if(v === 'all') return t('rc2_ex_all');
+  const n = Number(v);
+  return n <= 4 ? t('rc2_ex_' + n) : t('rc2_ex_far').replace('{n}', n);
 }
-function rcRow(left, right, onX){
+function rcRow(left, right){
   const row = document.createElement('div'); row.className = 'rc-row';
   const a = document.createElement('span'); a.textContent = left; row.appendChild(a);
-  if(onX){
-    const x = document.createElement('button'); x.type = 'button'; x.className = 'rc-x'; x.textContent = '\u2715';
-    x.addEventListener('click', onX); row.appendChild(x);
-  } else {
-    const b = document.createElement('span'); b.className = 'rc-m'; b.textContent = right; row.appendChild(b);
-  }
+  if(right){ if(typeof right === 'string'){ const b = document.createElement('span'); b.className = 'rc-m'; b.textContent = right; row.appendChild(b); } else row.appendChild(right); }
   return row;
 }
-function rcPmList(){
-  const box = document.getElementById('rc-pm-list');
-  box.innerHTML = '';
-  let n = 0;
-  rcDraft.pinned.forEach(id => {
-    if(!IDX.nodes[id]) return; n++;
-    box.appendChild(rcRow('\u2B50 ' + pname(id), '', () => { rcDraft.pinned = rcDraft.pinned.filter(x => x !== id); rcRecalc(); }));
+function rcSchedule(){ clearTimeout(rcTimer); rcTimer = setTimeout(rcRender, 150); }
+function rcRender(){
+  if(!rcDraft) return;
+  clearTimeout(rcTimer);
+  rcDraft.me = rcParseId(rcEl('rc-me').value);
+  rcDraft.near = rcLvlVal('rc-near');
+  rcDraft.far = rcLvlVal('rc-far');
+  if(rcDraft.near === 'all' && rcDraft.far !== 'all'){ rcDraft.far = 'all'; rcEl('rc-far').value = 'all'; }
+  if(rcDraft.near !== 'all' && rcDraft.far !== 'all' && rcDraft.far < rcDraft.near){ rcDraft.far = rcDraft.near; rcEl('rc-far').value = String(rcDraft.far); }
+  const ev = rcDraft.events;
+  ev.birthdays = rcEl('rc-ev-birth').checked;
+  const calEl = document.querySelector('input[name="rc-cal"]:checked');
+  if(calEl) ev.birthdayCal = calEl.value;
+  ev.deathHe = rcEl('rc-ev-deathhe').checked;
+  ev.deathGreg = rcEl('rc-ev-deathgreg').checked;
+  rcEl('rc-cal-greg').parentNode.parentNode.style.opacity = ev.birthdays ? '1' : '.5';
+
+  const P = Object.assign({}, rcDraft, { eventsExplicit: true });
+  const ids = Object.keys(IDX.nodes);
+  const warn = rcEl('rc-warn');
+  if(!rcDraft.me){ warn.className = 'rc-warn'; warn.textContent = t('rc2_warn_off'); }
+  else { warn.className = 'rc-warn ok'; warn.textContent = t('rc2_warn_on'); }
+  rcEl('rc-near-ex').textContent = t('rc2_inc') + rcExample(String(rcDraft.near));
+  rcEl('rc-far-ex').textContent = t('rc2_inc') + rcExample(String(rcDraft.far));
+  if(rcDraft.me && rcLevelsFor !== rcDraft.me){ rcLevels = TreeReminders.kinshipLevels(IDX, rcDraft.me); rcLevelsFor = rcDraft.me; }
+  const lv = rcDraft.me ? rcLevels : null;
+
+  // radius: who is inside
+  let full = 0, quiet = 0, skip = 0;
+  const rows = [];
+  ids.forEach(id => {
+    const m = TreeReminders.reminderMode(id, IDX, P, lv, 'greg');
+    if(m === 'full') full++; else if(m === 'quiet') quiet++; else skip++;
+    if(m !== 'skip') rows.push({ id: id, m: m, lv: (lv && lv[id] !== undefined) ? lv[id] : 99 });
   });
-  rcDraft.muted.forEach(id => {
-    if(!IDX.nodes[id]) return; n++;
-    box.appendChild(rcRow('\uD83D\uDD15 ' + pname(id), '', () => { rcDraft.muted = rcDraft.muted.filter(x => x !== id); rcRecalc(); }));
-  });
-  if(!n) box.textContent = t('rc_pm_none');
-}
-function rcRecalc(){
-  rcDraft.me = rcParseMe(document.getElementById('rc-me').value);
-  rcDraft.near = rcVal('rc-near');
-  rcDraft.far = rcVal('rc-far');
-  if(rcDraft.near === 'all' && rcDraft.far !== 'all'){ rcDraft.far = 'all'; document.getElementById('rc-far').value = 'all'; }
-  if(rcDraft.near !== 'all' && rcDraft.far !== 'all' && rcDraft.far < rcDraft.near){
-    rcDraft.far = rcDraft.near; document.getElementById('rc-far').value = String(rcDraft.far);
-  }
-  const living = rcLiving();
-  const cEl = document.getElementById('rc-count'), hEl = document.getElementById('rc-heb'), wl = document.getElementById('rc-who-list');
+  rcEl('rc-count').textContent = rcDraft.me
+    ? t('rc2_count').replace('{a}', full).replace('{b}', quiet).replace('{c}', skip)
+    : t('rc2_count_off').replace('{n}', ids.length);
+  rcEl('rc-count').style.cssText = 'margin-top:10px;font-size:.84rem;font-weight:600;color:#1C1208;line-height:1.45';
+  const wl = rcEl('rc-who-list');
   wl.innerHTML = '';
-  if(!rcDraft.me){
-    cEl.textContent = t('rc_off').replace('{n}', living.length);
-    hEl.textContent = '';
-  } else {
-    if(rcLevelsFor !== rcDraft.me){ rcLevels = TreeReminders.kinshipLevels(IDX, rcDraft.me); rcLevelsFor = rcDraft.me; }
-    let full = 0, quiet = 0, skip = 0, heb = 0;
-    const rows = [];
-    living.forEach(id => {
-      const m = TreeReminders.reminderMode(id, IDX, rcDraft, rcLevels, 'greg');
-      if(m === 'full') full++; else if(m === 'quiet') quiet++; else skip++;
-      if(m !== 'skip'){
-        const hb = IDX.nodes[id].birth_he;
-        if(hb && String(hb).trim()) heb++;
-        rows.push({ id: id, m: m, lv: (rcLevels[id] === undefined ? 99 : rcLevels[id]) });
-      }
+  rows.sort((x, y) => (x.lv - y.lv) || pname(x.id).localeCompare(pname(y.id)));
+  rows.forEach(r => wl.appendChild(rcRow(pname(r.id), t(r.m === 'full' ? 'rc2_mode_full' : 'rc2_mode_quiet'))));
+
+  // individual people
+  const pl = rcEl('rc-people-list');
+  pl.innerHTML = '';
+  const pids = Object.keys(rcDraft.personal).filter(id => IDX.nodes[id]);
+  if(!pids.length){ pl.textContent = t('rc2_people_none'); }
+  pids.sort((x, y) => pname(x).localeCompare(pname(y))).forEach(id => {
+    const sel = document.createElement('select');
+    sel.style.cssText = 'width:auto;max-width:60%';
+    const base = TreeReminders.reminderMode(id, IDX, Object.assign({}, P, { personal: {} }), lv, 'greg');
+    const now = t(base === 'full' ? 'rc2_res_full' : (base === 'quiet' ? 'rc2_res_quiet' : 'rc2_res_skip'));
+    [['', t('rc2_ps_radius') + t('rc2_ps_now').replace('{x}', now)], ['always', t('rc2_ps_always')], ['quiet', t('rc2_ps_quiet')], ['never', t('rc2_ps_never')]].forEach(o => {
+      const op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op);
     });
-    cEl.textContent = t('rc_count').replace('{a}', full).replace('{b}', quiet).replace('{c}', skip);
-    hEl.textContent = t('rc_heb').replace('{l}', heb);
-    rows.sort((x, y) => (x.lv - y.lv) || pname(x.id).localeCompare(pname(y.id)));
-    rows.forEach(r => { wl.appendChild(rcRow(pname(r.id), t(r.m === 'full' ? 'rc_mode_full' : 'rc_mode_quiet'), null)); });
+    sel.value = rcDraft.personal[id] || '';
+    sel.addEventListener('change', () => { if(sel.value) rcDraft.personal[id] = sel.value; else delete rcDraft.personal[id]; rcRender(); });
+    pl.appendChild(rcRow(pname(id), sel));
+  });
+
+  // missing data
+  const miss = [];
+  ids.forEach(id => {
+    const n = IDX.nodes[id];
+    if(TreeReminders.reminderMode(id, IDX, P, lv, 'greg') === 'skip') return;
+    const dead = !!((n.death && String(n.death).trim()) || (n.death_he && String(n.death_he).trim()));
+    if(!dead){
+      if(ev.birthdays && (ev.birthdayCal === 'greg' || ev.birthdayCal === 'both') && n.birth && String(n.birth).trim() && !RC_FULLDATE.test(String(n.birth).trim())) miss.push([id, 'rc2_miss_birth']);
+    } else {
+      if(ev.deathHe && !(n.death_he && String(n.death_he).trim())) miss.push([id, 'rc2_miss_he']);
+      if(ev.deathGreg && !(n.death && RC_FULLDATE.test(String(n.death).trim()))) miss.push([id, 'rc2_miss_greg']);
+    }
+  });
+  const missIds = {}; miss.forEach(m => { missIds[m[0]] = true; });
+  const nMiss = Object.keys(missIds).length;
+  rcEl('rc-miss').style.display = nMiss ? '' : 'none';
+  rcEl('rc-miss-d').style.display = nMiss ? '' : 'none';
+  rcEl('rc-miss').textContent = t('rc2_miss_count').replace('{n}', nMiss);
+  const ml = rcEl('rc-miss-list'); ml.innerHTML = '';
+  miss.forEach(m => ml.appendChild(rcRow(pname(m[0]), t(m[1]))));
+
+  // the two files, counted by the same code that builds them
+  const yr = new Date().getFullYear();
+  const g = TreeReminders.buildGregorianEvents({ idx: IDX, prefs: P, nowYear: yr, maxAge: 100, nameOf: pname, ageText: n => n, relOf: () => '', labels: {} });
+  const gTotal = g.count + g.deathCount;
+  rcEl('rc-f1-s').textContent = gTotal ? t('rc2_stat').replace('{b}', g.count).replace('{d}', g.deathCount).replace('{q}', g.quietCount) : t('rc2_empty');
+  rcEl('rc-dl1').disabled = !gTotal;
+  let hTotal = 0;
+  if(window.TreeHebrew && TreeHebrew.isSupported()){
+    try {
+      const plan = TreeReminders.planHebrew(IDX, P, []);
+      const h = TreeHebrew.buildHebrewIcs({ nodes: IDX.nodes, yahrzeitIds: plan.yzIds, yahrzeitMode: plan.yahrzeitMode, birthdayMode: plan.birthdayMode, nowYear: yr, years: 1, nameOf: pname, labels: {} });
+      hTotal = h.birthdayEvents + h.yahrzeitEvents;
+      rcEl('rc-f2-s').textContent = hTotal ? t('rc2_stat').replace('{b}', h.birthdayEvents).replace('{d}', h.yahrzeitEvents).replace('{q}', h.quietEvents) : t('rc2_empty');
+    } catch(e){ rcEl('rc-f2-s').textContent = String(e.message || e); }
+  } else {
+    rcEl('rc-f2-s').textContent = t('toast_hebrew_unsupported');
   }
-  rcPmList();
+  rcEl('rc-dl2').disabled = !hTotal;
+  const st = getHebrewCalStatus();
+  rcEl('rc-f2-st').textContent = st.state === 'none' ? t('hebcal_win_none') : t('hebcal_win_last').replace('{from}', st.from).replace('{to}', st.to).replace('{created}', st.created);
+}
+function rcSave(){
+  rcRender();
+  if(!rcDraft.me && rcEl('rc-me').value.trim()){ showToast(t('rc2_pick'), true); return false; }
+  rcDraft.eventsExplicit = true;
+  return TreeReminders.saveReminderPrefs(rcDraft);
 }
 function openRemindersWindow(){
   if(!_sessionPassword){
@@ -4213,41 +4326,66 @@ function openRemindersWindow(){
   }
   if(!window.TreeReminders){ showToast('tree-reminders.js is not loaded', true); return; }
   const saved = TreeReminders.loadReminderPrefs(IDX);
-  const d = TreeReminders.REMINDER_DEFAULTS;
-  rcDraft = saved
-    ? { me: saved.me, near: saved.near, far: saved.far, pinned: saved.pinned.slice(), muted: saved.muted.slice() }
-    : { me: '', near: d.near, far: d.far, pinned: [], muted: [] };
+  rcDraft = saved || TreeReminders.defaultPrefs();
+  rcDraft.events = Object.assign({}, rcDraft.events);
+  rcDraft.personal = Object.assign({}, rcDraft.personal);
+  let legacyN = 0;
+  if(!rcDraft.eventsExplicit){
+    const lg = TreeReminders.legacyYahrzeitIds(IDX);
+    lg.forEach(id => { if(!rcDraft.personal[id]) rcDraft.personal[id] = 'always'; });
+    legacyN = lg.length;
+  }
   rcLevels = null; rcLevelsFor = '';
-  const set = (id, key) => { document.getElementById(id).textContent = t(key); };
-  set('rc-title', 'rc_title'); set('rc-intro', 'rc_intro'); set('rc-me-lbl', 'rc_me_lbl');
-  set('rc-near-lbl', 'rc_near_lbl'); set('rc-far-lbl', 'rc_far_lbl');
-  set('rc-who-sum', 'rc_who'); set('rc-pm-sum', 'rc_pm');
-  set('rc-save', 'rc_save'); set('rc-reset', 'rc_reset'); set('rc-close', 'rc_close');
-  const meEl = document.getElementById('rc-me');
+  [['rc-title','rc2_title'],['rc-intro','rc2_intro'],['rc-b1','rc2_b1'],['rc-me-lbl','rc2_me_lbl'],['rc-me-hint','rc2_me_hint'],
+   ['rc-radius-h','rc2_radius'],['rc-p1a','rc2_p1a'],['rc-p1b','rc2_p1b'],['rc-p2a','rc2_p2a'],['rc-p2b','rc2_p2b'],['rc-p3','rc2_p3'],
+   ['rc-who-sum','rc2_show_who'],['rc-people-h','rc2_people_h'],['rc-people-p','rc2_people_p'],['rc-people-note','rc2_people_note'],
+   ['rc-add-btn','rc2_people_add'],['rc-b2','rc2_b2'],['rc-b2-p','rc2_b2_p'],['rc-ev-birth-t','rc2_ev_birth'],['rc-cal-lbl','rc2_cal_lbl'],
+   ['rc-cal-greg','rc2_cal_greg'],['rc-cal-he','rc2_cal_he'],['rc-cal-both','rc2_cal_both'],['rc-cal-hint','rc2_cal_hint'],
+   ['rc-ev-deathhe-t','rc2_ev_deathhe'],['rc-ev-deathhe-h','rc2_ev_deathhe_h'],['rc-ev-deathgreg-t','rc2_ev_deathgreg'],['rc-ev-deathgreg-h','rc2_ev_deathgreg_h'],
+   ['rc-miss-sum','rc2_miss_sum'],['rc-b3','rc2_b3'],['rc-f1-t','rc2_f1_t'],['rc-f1-d','rc2_f1_d'],['rc-f2-t','rc2_f2_t'],['rc-f2-d','rc2_f2_d'],
+   ['rc-dl1','rc2_dl'],['rc-dl2','rc2_dl'],['rc-notif','rc2_notif'],['rc-foot','rc2_foot'],['rc-save','rc2_save'],['rc-reset','rc2_reset'],['rc-close','rc2_close']
+  ].forEach(p => { rcEl(p[0]).textContent = t(p[1]); });
+  const lgEl = rcEl('rc-legacy');
+  lgEl.style.display = legacyN ? '' : 'none';
+  lgEl.textContent = legacyN ? t('rc2_legacy').replace('{n}', legacyN) : '';
+  const meEl = rcEl('rc-me');
   meEl.placeholder = t('ph_search');
   meEl.value = rcDraft.me ? rcLabel(rcDraft.me) : '';
-  rcFillSelect('rc-near', rcDraft.near);
-  rcFillSelect('rc-far', rcDraft.far);
-  document.getElementById('rc-overlay').classList.add('open');
-  rcRecalc();
+  rcEl('rc-add-in').placeholder = t('ph_search');
+  rcEl('rc-add-in').value = '';
+  rcFillLevel('rc-near', rcDraft.near);
+  rcFillLevel('rc-far', rcDraft.far);
+  rcEl('rc-ev-birth').checked = !!rcDraft.events.birthdays;
+  document.querySelectorAll('input[name="rc-cal"]').forEach(r => { r.checked = (r.value === rcDraft.events.birthdayCal); });
+  rcEl('rc-ev-deathhe').checked = !!rcDraft.events.deathHe;
+  rcEl('rc-ev-deathgreg').checked = !!rcDraft.events.deathGreg;
+  rcEl('rc-overlay').classList.add('open');
+  rcRender();
 }
-function closeRemindersWindow(){ const o = document.getElementById('rc-overlay'); if(o) o.classList.remove('open'); }
-document.getElementById('btn-reminders').addEventListener('click', openRemindersWindow);
-document.getElementById('rc-close').addEventListener('click', closeRemindersWindow);
-document.getElementById('rc-overlay').addEventListener('click', e => { if(e.target.id === 'rc-overlay') closeRemindersWindow(); });
-['input', 'change'].forEach(ev => document.getElementById('rc-me').addEventListener(ev, () => { if(rcDraft) rcRecalc(); }));
-['rc-near', 'rc-far'].forEach(id => document.getElementById(id).addEventListener('change', () => { if(rcDraft) rcRecalc(); }));
-document.getElementById('rc-save').addEventListener('click', () => {
+function closeRemindersWindow(){ const o = rcEl('rc-overlay'); if(o) o.classList.remove('open'); }
+rcEl('btn-reminders').addEventListener('click', openRemindersWindow);
+rcEl('rc-close').addEventListener('click', closeRemindersWindow);
+rcEl('rc-overlay').addEventListener('click', e => { if(e.target.id === 'rc-overlay') closeRemindersWindow(); });
+rcEl('rc-me').addEventListener('input', rcSchedule);
+rcEl('rc-me').addEventListener('change', rcRender);
+['rc-near','rc-far','rc-ev-birth','rc-ev-deathhe','rc-ev-deathgreg'].forEach(id => rcEl(id).addEventListener('change', rcRender));
+document.querySelectorAll('input[name="rc-cal"]').forEach(r => r.addEventListener('change', rcRender));
+rcEl('rc-add-btn').addEventListener('click', () => {
   if(!rcDraft) return;
-  rcRecalc();
-  if(!rcDraft.me && document.getElementById('rc-me').value.trim()){ showToast(t('rc_pick'), true); return; }
-  if(TreeReminders.saveReminderPrefs(rcDraft)){ closeRemindersWindow(); showToast(t('rc_saved'), false); }
+  const id = rcParseId(rcEl('rc-add-in').value);
+  if(!id){ showToast(t('rc2_pick'), true); return; }
+  if(!rcDraft.personal[id]) rcDraft.personal[id] = 'always';
+  rcEl('rc-add-in').value = '';
+  rcRender();
 });
-document.getElementById('rc-reset').addEventListener('click', () => {
+rcEl('rc-save').addEventListener('click', () => { if(rcSave()){ closeRemindersWindow(); showToast(t('rc2_saved'), false); } });
+rcEl('rc-reset').addEventListener('click', () => {
   TreeReminders.clearReminderPrefs();
   closeRemindersWindow();
-  showToast(t('rc_reset_done'), false);
+  showToast(t('rc2_reset_done'), false);
 });
+rcEl('rc-dl1').addEventListener('click', () => { if(rcSave()){ downloadRegularCalendar(); rcRender(); } });
+rcEl('rc-dl2').addEventListener('click', () => { if(rcSave()){ downloadHebrewCalendar(); rcRender(); } });
 document.getElementById('hebcal-circles-link').addEventListener('click', e => {
   e.preventDefault(); closeHebcalWindow(); openRemindersWindow();
 });
@@ -4260,7 +4398,7 @@ document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
     showToast(t('toast_hebrew_login'), true);
     return;
   }
-  openHebcalWindow();
+  openRemindersWindow();
 });
 document.getElementById('hebcal-close').addEventListener('click', closeHebcalWindow);
 document.getElementById('hebcal-overlay').addEventListener('click', e => { if(e.target.id === 'hebcal-overlay') closeHebcalWindow(); });
@@ -4329,7 +4467,7 @@ function downloadHebrewCalendar(){
   showToast(msg, res.skipped > 0);
 }
 
-document.getElementById('btn-calendar').addEventListener('click', () => {
+function downloadRegularCalendar(){
   if(!_sessionPassword){
     document.getElementById('btn-login').click();
     showToast(currentLang==='he'?'🔒 התחבר כדי להוריד את לוח השנה':currentLang==='en'?'🔒 Login to download birthday calendar':'🔒 Войдите чтобы скачать календарь', true);
@@ -4391,7 +4529,8 @@ document.getElementById('btn-calendar').addEventListener('click', () => {
             : currentLang==='en' ? `✓ Downloaded ${count} birthdays`
             : `✓ Скачано ${count} дней рождения`;
   showToast(msg + (deathCount ? t('toast_cal_deaths').replace('{k}', deathCount) : '') + (skippedYear ? t('toast_cal_skip_year').replace('{m}', skippedYear) : '') + (quietCount ? ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + quietCount + ')' : ''));
-});
+}
+document.getElementById('btn-calendar').addEventListener('click', openRemindersWindow);
 ;
 
 // ── Скачать резервную копию (JSON) — доступно admin и guest ───────────
