@@ -186,6 +186,8 @@ body.rtl #hebcal-box{direction:rtl;text-align:right}
 #rc-box{background:#fff;border-radius:6px;padding:18px 22px;max-width:520px;width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.5)}
 #rc-box h3{font-size:.95rem;font-weight:600;color:#1C1208;margin-bottom:8px}
 .rc-intro{font-size:.74rem;color:#555;line-height:1.5;margin-bottom:6px}
+.rc-helplink{display:inline-block;font-size:.72rem;color:#7A5828;text-decoration:underline;margin-bottom:6px;cursor:pointer}
+#help-bubble.over{z-index:700}
 .rc-lbl{display:block;font-size:.72rem;font-weight:600;color:#7A5828;margin:10px 0 3px}
 #rc-box input,#rc-box select{width:100%;padding:6px 9px;border:1px solid rgba(184,144,48,.4);border-radius:4px;font-family:inherit;font-size:.8rem;background:#FFFDF7;color:#28180A}
 #rc-count{margin-top:12px;font-size:.84rem;font-weight:600;color:#1C1208;line-height:1.45}
@@ -693,6 +695,7 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
   <div id="rc-box">
     <h3 id="rc-title"></h3>
     <div class="rc-intro" id="rc-intro"></div>
+    <a href="#" id="rc-help" class="rc-helplink"></a>
     <div class="rc-legacy" id="rc-legacy" style="display:none"></div>
 
     <div class="rc-block">
@@ -1186,6 +1189,16 @@ function openHebcalHelp(){
   if(d){ d.open = true; try { d.scrollIntoView({ block: 'nearest' }); } catch(e){} }
 }
 
+// opens the guide on the "Family reminders" section; the window stays open (guide is shown above it)
+function openRemindersHelp(){
+  const hb = document.getElementById('help-bubble');
+  if(!hb) return;
+  buildHelpBubble(currentLang);
+  hb.classList.add('open'); hb.classList.add('over');
+  try { helpOpen = true; } catch(e){}
+  const d = document.getElementById('hb-circles');
+  if(d){ d.open = true; try { d.scrollIntoView({ block: 'nearest' }); } catch(e){} }
+}
 // ---- Family reminders: quick personal choices from the person panel (kept only in this browser) ----
 function rcPrefsNow(){
   const p = window.TreeReminders ? TreeReminders.loadReminderPrefs(IDX) : null;
@@ -1994,7 +2007,7 @@ function buildHelpBubble(lang){
   if(circHelp) sections.push(circHelp);
   let html = '<div class="hb-title">' + L('help_title') + '</div>';
   for(const s of sections){
-    html += '<details class="hb-sec"' + (s === hebHelp ? ' id="hb-hebcal"' : '') + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
+    html += '<details class="hb-sec"' + (s === hebHelp ? ' id="hb-hebcal"' : (s === circHelp ? ' id="hb-circles"' : '')) + (s === sections[0] ? ' open' : '') + '><summary class="hb-h">' + s.h + '</summary><ul>' +
             s.items.map(x => '<li>' + x + '</li>').join('') + '</ul></details>';
   }
   const rows = [['\u2665','legend_spouses'],['\u2191','legend_parents'],
@@ -4343,7 +4356,7 @@ function openRemindersWindow(){
    ['rc-cal-greg','rc2_cal_greg'],['rc-cal-he','rc2_cal_he'],['rc-cal-both','rc2_cal_both'],['rc-cal-hint','rc2_cal_hint'],
    ['rc-ev-deathhe-t','rc2_ev_deathhe'],['rc-ev-deathhe-h','rc2_ev_deathhe_h'],['rc-ev-deathgreg-t','rc2_ev_deathgreg'],['rc-ev-deathgreg-h','rc2_ev_deathgreg_h'],
    ['rc-miss-sum','rc2_miss_sum'],['rc-b3','rc2_b3'],['rc-f1-t','rc2_f1_t'],['rc-f1-d','rc2_f1_d'],['rc-f2-t','rc2_f2_t'],['rc-f2-d','rc2_f2_d'],
-   ['rc-dl1','rc2_dl'],['rc-dl2','rc2_dl'],['rc-notif','rc2_notif'],['rc-foot','rc2_foot'],['rc-save','rc2_save'],['rc-reset','rc2_reset'],['rc-close','rc2_close']
+   ['rc-dl1','rc2_dl'],['rc-dl2','rc2_dl'],['rc-notif','rc2_notif'],['rc-foot','rc2_foot'],['rc-save','rc2_save'],['rc-reset','rc2_reset'],['rc-close','rc2_close'],['rc-help','rc2_help']
   ].forEach(p => { rcEl(p[0]).textContent = t(p[1]); });
   const lgEl = rcEl('rc-legacy');
   lgEl.style.display = legacyN ? '' : 'none';
@@ -4364,6 +4377,7 @@ function openRemindersWindow(){
 }
 function closeRemindersWindow(){ const o = rcEl('rc-overlay'); if(o) o.classList.remove('open'); }
 rcEl('btn-reminders').addEventListener('click', openRemindersWindow);
+rcEl('rc-help').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openRemindersHelp(); });
 rcEl('rc-close').addEventListener('click', closeRemindersWindow);
 rcEl('rc-overlay').addEventListener('click', e => { if(e.target.id === 'rc-overlay') closeRemindersWindow(); });
 rcEl('rc-me').addEventListener('input', rcSchedule);
