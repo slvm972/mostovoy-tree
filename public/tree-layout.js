@@ -621,11 +621,15 @@ function render(focalId){
                              fill:'rgba(255,255,255,.5)','pointer-events':'none'},g);
     rl.textContent = ROLE_LABELS[n.role] || n.role;
 
-    // social media indicator (top-left corner) — only for authenticated users
-    if(ndata.social && _sessionPassword){
-      const si = svgEl('text',{x:nx+24,y:ny+15,'font-size':'11',
-                               'pointer-events':'none'},g);
-      si.textContent = '🔗';
+    // contact icons (phone, e-mail, social link): logged-in users only, living persons only.
+    // Which icons to show is decided by contactIconsFor() in tree-card-icons.js; position by CONTACT_ICONS there.
+    if(_sessionPassword && typeof contactIconsFor === 'function'){
+      const cIcons = contactIconsFor(ndata);
+      for(let ci = 0; ci < cIcons.length; ci++){
+        const cit = svgEl('text',{x:nx+CONTACT_ICONS.x+ci*CONTACT_ICONS.step,y:ny+CONTACT_ICONS.y,
+                                  'font-size':CONTACT_ICONS.size,'pointer-events':'none'},g);
+        cit.textContent = cIcons[ci];
+      }
     }
 
     // name
