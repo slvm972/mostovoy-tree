@@ -509,6 +509,49 @@ function compareHebrewToGreg(rec, dt) {
   return 'big';
 }
 
+function hebrewFromGregorian(day, month, year, afterSunset) {
+  var d = +day, m = +month, y = +year;
+  if (!(d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1)) return null;
+  var dt = new Date(Date.UTC(2000, m - 1, d, 12));
+  dt.setUTCFullYear(y);
+  if (dt.getUTCDate() !== d || dt.getUTCMonth() !== m - 1) return null;
+  if (afterSunset) dt = new Date(dt.getTime() + DAY_MS);
+  return gregToHebrew(dt);
+}
+function gregorianFromHebrew(day, monthKey, year) {
+  var d = +day, y = +year;
+  if (!(d >= 1 && d <= 30 && y >= 1 && has(MONTH_MAX_DAYS, monthKey))) return null;
+  var gy = y - 3761;
+  var from = new Date(Date.UTC(2000, 0, 1, 12));
+  from.setUTCFullYear(gy);
+  var to = new Date(Date.UTC(2000, 11, 31, 12));
+  to.setUTCFullYear(gy + 1);
+  for (var ts = from.getTime(); ts <= to.getTime(); ts += DAY_MS) {
+    var h = gregToHebrew(new Date(ts));
+    if (h && h.day === d && h.monthKey === monthKey && h.year === y) {
+      var g = new Date(ts);
+      return { day: g.getUTCDate(), month: g.getUTCMonth() + 1, year: g.getUTCFullYear() };
+    }
+  }
+  return null;
+}
+function detectSyncState(gregString, heString) {
+  var he = (heString === undefined || heString === null) ? '' : String(heString).trim();
+  if (!he) return { state: 'none', afterSunset: false, reason: 'empty' };
+  var rec = parseHebrewDate(he);
+  if (!rec) return { state: 'manual', afterSunset: false, reason: 'unparsed' };
+  var dt = parseGreg(gregString);
+  if (!dt) return { state: 'manual', afterSunset: false, reason: 'greg_incomplete' };
+  var h0 = gregToHebrew(dt);
+  if (!h0) return { state: 'manual', afterSunset: false, reason: 'intl_unknown' };
+  var same = cmpOne(rec, h0);
+  if (same === 1) return { state: 'auto', afterSunset: false, reason: 'match' };
+  var next = cmpOne(rec, gregToHebrew(new Date(dt.getTime() + DAY_MS)));
+  if (next === 1) return { state: 'auto', afterSunset: true, reason: 'sunset' };
+  if (same === 2 || next === 2) return { state: 'manual', afterSunset: false, reason: 'ambiguous_adar' };
+  return { state: 'manual', afterSunset: false, reason: 'mismatch' };
+}
+
 var api = {
   parseHebrewDate: parseHebrewDate,
   parseDetailed: parseDetailed,
@@ -523,6 +566,9 @@ var api = {
   formatHebrewYear: formatHebrewYear,
   monthNameHe: monthNameHe,
   compareHebrewToGreg: compareHebrewToGreg,
+  hebrewFromGregorian: hebrewFromGregorian,
+  gregorianFromHebrew: gregorianFromHebrew,
+  detectSyncState: detectSyncState,
   toYMD: toYMD,
   isSupported: isSupported,
   DEFAULT_RULES: DEFAULT_RULES

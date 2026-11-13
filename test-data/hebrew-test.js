@@ -223,5 +223,45 @@ eq('compare: far apart', H.compareHebrewToGreg({ day: 13, monthKey: 'nisan', yea
 eq('compare: 7 Tamuz 5785 vs 7 MAR 2025 is a big difference', H.compareHebrewToGreg({ day: 7, monthKey: 'tamuz', year: 5785 }, H.parseGreg('7 MAR 2025')), 'big');
 eq('compare: plain Adar in a leap year is not an error', H.compareHebrewToGreg({ day: 9, monthKey: 'adar', year: 5787 }, H.parseGreg('18 FEB 2027')), 'big');
 
+// ---- Gregorian/Hebrew sync helpers ----
+function hf(d, m, y, s) { return J(H.hebrewFromGregorian(d, m, y, s)); }
+function gf(d, k, y) { return J(H.gregorianFromHebrew(d, k, y)); }
+function G(d, m, y) { return J({ day: d, month: m, year: y }); }
+function ds(g, h) { var r = H.detectSyncState(g, h); return r.state + '/' + (r.afterSunset ? 'sunset' : 'day') + '/' + r.reason; }
+eq('hebrewFromGregorian 8 APR 1971', hf(8, 4, 1971, false), E(13, 'nisan', 5731));
+eq('hebrewFromGregorian 8 APR 1971 after sunset', hf(8, 4, 1971, true), E(14, 'nisan', 5731));
+eq('hebrewFromGregorian 25 JAN 2021', hf(25, 1, 2021, false), E(12, 'shevat', 5781));
+eq('hebrewFromGregorian: 31 APR does not exist', H.hebrewFromGregorian(31, 4, 1971, false), null);
+eq('hebrewFromGregorian: 29 FEB 1971 does not exist', H.hebrewFromGregorian(29, 2, 1971, false), null);
+eq('hebrewFromGregorian: garbage day', H.hebrewFromGregorian('x', 4, 1971, false), null);
+eq('gregorianFromHebrew 13 Nisan 5731', gf(13, 'nisan', 5731), G(8, 4, 1971));
+eq('gregorianFromHebrew 12 Shevat 5781', gf(12, 'shevat', 5781), G(25, 1, 2021));
+eq('gregorianFromHebrew 9 Adar II 5787', gf(9, 'adar2', 5787), G(18, 3, 2027));
+eq('gregorianFromHebrew 9 Adar I 5787', gf(9, 'adar1', 5787), G(16, 2, 2027));
+eq('gregorianFromHebrew: plain Adar in a leap year is ambiguous', H.gregorianFromHebrew(9, 'adar', 5787), null);
+eq('gregorianFromHebrew: plain Adar in an ordinary year', gf(9, 'adar', 5785), G(9, 3, 2025));
+eq('gregorianFromHebrew: Tevet has no 30th day', H.gregorianFromHebrew(30, 'tevet', 5785), null);
+eq('gregorianFromHebrew: unknown month key', H.gregorianFromHebrew(1, 'foo', 5785), null);
+var rtBad = 0;
+[[8, 4, 1971], [25, 1, 2021], [29, 2, 2024], [1, 1, 1950], [31, 12, 1999], [15, 9, 2026], [2, 3, 2027], [9, 10, 1900]].forEach(function (a) {
+  var h = H.hebrewFromGregorian(a[0], a[1], a[2], false);
+  var g = h ? H.gregorianFromHebrew(h.day, h.monthKey, h.year) : null;
+  if (!g || g.day !== a[0] || g.month !== a[1] || g.year !== a[2]) rtBad++;
+});
+eq('round trip Gregorian -> Hebrew -> Gregorian', rtBad, 0);
+eq('sync: exact match', ds('8 APR 1971', A13), 'auto/day/match');
+eq('sync: after sunset', ds('7 APR 1971', A13), 'auto/sunset/sunset');
+eq('sync: Hebrew date a day earlier than Gregorian -> manual', ds('9 APR 1971', A13), 'manual/day/mismatch');
+eq('sync: far apart -> manual', ds('20 APR 1971', A13), 'manual/day/mismatch');
+eq('sync: no Hebrew date -> none', ds('8 APR 1971', ''), 'none/day/empty');
+eq('sync: blank Hebrew date -> none', ds('8 APR 1971', '   '), 'none/day/empty');
+eq('sync: no arguments -> none', ds(undefined, undefined), 'none/day/empty');
+eq('sync: unparsed Hebrew date -> manual', ds('8 APR 1971', 'Nisan 13 5731'), 'manual/day/unparsed');
+eq('sync: year-only Gregorian date -> manual', ds('1971', A13), 'manual/day/greg_incomplete');
+eq('sync: empty Gregorian date -> manual', ds('', A13), 'manual/day/greg_incomplete');
+eq('sync: plain Adar vs an Adar II date is ambiguous -> manual', ds('18 MAR 2027', H.formatHebrewDate({ day: 9, monthKey: 'adar', year: 5787 })), 'manual/day/ambiguous_adar');
+eq('sync: Adar II vs an Adar II date', ds('18 MAR 2027', H.formatHebrewDate({ day: 9, monthKey: 'adar2', year: 5787 })), 'auto/day/match');
+eq('sync: plain Adar in an ordinary year', ds('9 MAR 2025', H.formatHebrewDate({ day: 9, monthKey: 'adar', year: 5785 })), 'auto/day/match');
+
 console.log(bad === 0 ? ('HEBREW TEST: all ' + total + ' passed') : ('HEBREW TEST: ' + bad + ' of ' + total + ' FAILED'));
 process.exitCode = bad === 0 ? 0 : 1;
