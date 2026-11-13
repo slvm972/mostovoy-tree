@@ -368,6 +368,11 @@ body.rtl .rc-sub label{margin-right:0;margin-left:12px}
 #modal .hebw .hw-btn{margin-top:6px;margin-right:6px;font-size:.7rem;padding:3px 9px;background:rgba(184,144,48,.12);
   border:1px solid rgba(184,144,48,.35);border-radius:3px;cursor:pointer;color:#7A5828;font-family:inherit}
 body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
+#modal .hebw .hw-sync{margin-top:6px}
+#modal .hebw .hw-chk{display:flex;align-items:center;gap:6px;margin:4px 0 0;font-size:.74rem;font-weight:400;text-transform:none;letter-spacing:0;color:#5A3C10;cursor:pointer}
+#modal .hebw .hw-chk input{width:auto;margin:0;padding:0}
+#modal .hebw .hw-manual{display:inline-block;margin-top:4px;font-size:.72rem;color:#7A5828}
+#modal .hebw select:disabled{opacity:.6;cursor:not-allowed}
 </style>
 <script src="tree-i18n.js"></script>
 <script src="tree-names.js"></script>
@@ -2318,15 +2323,22 @@ function buildHebWidget(inputId){
     <div class="hw-pick">
       <div class="hw-row"><select class="hw-d"></select><select class="hw-m"></select></div>
       <div class="hw-row"><select class="hw-yn"></select><select class="hw-yl" dir="rtl"></select></div>
+      <div class="hw-sync" style="display:none">
+        <label class="hw-chk"><input type="checkbox" class="hw-sync-on"> <span class="hw-sync-lbl"></span></label>
+        <label class="hw-chk hw-ss-row" style="display:none"><input type="checkbox" class="hw-ss"> <span class="hw-ss-lbl"></span></label>
+        <div class="hw-note hw-ss-note" style="display:none"></div>
+        <a href="#" class="hw-manual" style="display:none"></a>
+      </div>
       <div class="hw-prev"></div>
       <div class="hw-warn hw-w"></div>
       <button type="button" class="hw-btn hw-fill"></button>
       <button type="button" class="hw-btn hw-clear"></button>
+      <button type="button" class="hw-btn hw-fill-g"></button>
       <div class="hw-note"></div>
     </div>`;
   input.insertAdjacentElement('afterend', host);
   const q = s => host.querySelector(s);
-  const w = { input: input, kind: kind, initialRaw: '', initialRec: null, legacy: false, redo: false };
+  const w = { input: input, kind: kind, gregId: gregId, initialRaw: '', initialRec: null, legacy: false, redo: false, sync: false, afterSunset: false, canSync: false, quiet: false };
   hebWidgets[inputId] = w;
 
   const yearsIn = [];
@@ -2405,6 +2417,40 @@ function buildHebWidget(inputId){
       }
     }
     q('.hw-w').textContent = warn;
+    showSyncUi();
+  }
+  function gregStr(){
+    const gr = dateWidgetRead(gregId);
+    return (gr.ok && DW_FULL_RE.test(gr.value)) ? gr.value : '';
+  }
+  function lockLists(on){
+    ['.hw-d', '.hw-m', '.hw-yn', '.hw-yl'].forEach(s => { q(s).disabled = on; });
+    ['.hw-fill', '.hw-clear', '.hw-fill-g'].forEach(s => { q(s).style.display = on ? 'none' : ''; });
+  }
+  function showSyncUi(){
+    const can = !!gregStr() && !w.legacy;
+    w.canSync = can;
+    const on = w.sync && can;
+    q('.hw-sync').style.display = can ? '' : 'none';
+    q('.hw-sync-on').checked = w.sync;
+    q('.hw-ss').checked = w.afterSunset;
+    ['.hw-ss-row', '.hw-ss-note', '.hw-manual'].forEach(s => { q(s).style.display = on ? '' : 'none'; });
+    lockLists(on);
+  }
+  function applySync(){
+    const gs = gregStr();
+    const dt = gs ? TreeHebrew.parseGreg(gs) : null;
+    const h = dt ? TreeHebrew.hebrewFromGregorian(dt.getUTCDate(), dt.getUTCMonth() + 1, dt.getUTCFullYear(), w.afterSunset) : null;
+    if(!h){ refresh(); return; }
+    w.redo = false; setLegacy(false); fill(h); sync();
+  }
+  function onGreg(){
+    if(w.sync && gregStr()) applySync(); else refresh();
+  }
+  function detectInitial(){
+    const st = w.legacy ? { state: 'manual' } : TreeHebrew.detectSyncState(gregStr(), w.initialRaw);
+    w.sync = st.state === 'auto';
+    w.afterSunset = st.state === 'auto' && !!st.afterSunset;
   }
   function sync(){
     const s = curSel();
@@ -2450,16 +2496,37 @@ function buildHebWidget(inputId){
   });
   q('.hw-clear').addEventListener('click', () => { w.redo = false; setLegacy(false); fill(null); sync(); });
   q('.hw-redo').addEventListener('click', () => { w.redo = true; setLegacy(false); fill(null); sync(); });
+  q('.hw-sync-on').addEventListener('change', () => {
+    w.sync = q('.hw-sync-on').checked;
+    w.afterSunset = q('.hw-ss').checked;
+    if(w.sync && gregStr()) applySync(); else refresh();
+  });
+  q('.hw-ss').addEventListener('change', () => {
+    w.afterSunset = q('.hw-ss').checked;
+    if(w.sync && gregStr()) applySync();
+  });
+  q('.hw-manual').addEventListener('click', ev => { ev.preventDefault(); w.sync = false; refresh(); });
+  q('.hw-fill-g').addEventListener('click', () => {
+    const s = curSel();
+    if(!s.day || !s.monthKey || !s.year){ showToast(t('hw_need_heb'), true); return; }
+    const g = TreeHebrew.gregorianFromHebrew(s.day, s.monthKey, s.year);
+    if(!g){ showToast(t('hw_fill_g_fail'), true); return; }
+    const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    w.quiet = true;
+    try { dateWidgetSet(gregId, g.day + ' ' + MON[g.month - 1] + ' ' + g.year); } finally { w.quiet = false; }
+    refresh();
+  });
+  w.reeval = function(){ if(w.quiet) return; detectInitial(); refresh(); };
 
   w.setRaw = v => HW_VALUE_DESC.set.call(input, v);
   w.load = function(raw){
     w.initialRaw = raw;
     w.redo = false;
     const trimmed = raw.trim();
-    if(!trimmed){ w.initialRec = null; setLegacy(false); fill(null); refresh(); return; }
+    if(!trimmed){ w.initialRec = null; setLegacy(false); fill(null); detectInitial(); refresh(); return; }
     const rec = TreeHebrew.parseHebrewDate(trimmed);
-    if(!rec){ w.initialRec = null; q('.hw-legacy').value = raw; setLegacy(true); fill(null); refresh(); return; }
-    w.initialRec = rec; setLegacy(false); fill(rec); refresh();
+    if(!rec){ w.initialRec = null; q('.hw-legacy').value = raw; setLegacy(true); fill(null); detectInitial(); refresh(); return; }
+    w.initialRec = rec; setLegacy(false); fill(rec); detectInitial(); refresh();
   };
   w.firstError = function(){
     if(w.legacy) return null;
@@ -2480,6 +2547,11 @@ function buildHebWidget(inputId){
     q('.hw-redo').textContent = t('hw_legacy_redo');
     q('.hw-legacy-hint').textContent = t('hw_legacy_hint');
     q('.hw-note').textContent = t('hw_sunset_note');
+    q('.hw-sync-lbl').textContent = t('hw_sync_on');
+    q('.hw-ss-lbl').textContent = t('hw_sync_sunset');
+    q('.hw-ss-note').textContent = t(kind === 'death' ? 'hw_sync_sunset_death' : 'hw_sync_sunset_birth');
+    q('.hw-manual').textContent = t('hw_manual');
+    q('.hw-fill-g').textContent = t('hw_fill_g');
     refresh();
   };
 
@@ -2489,10 +2561,17 @@ function buildHebWidget(inputId){
     set(v){ HW_VALUE_DESC.set.call(this, v); w.load(v === null || v === undefined ? '' : String(v)); }
   });
   const gh = document.getElementById(gregId);
-  if(gh){ gh.addEventListener('change', refresh); gh.addEventListener('input', refresh); }
+  if(gh){ gh.addEventListener('change', onGreg); gh.addEventListener('input', onGreg); }
   w.refreshLabels();
   w.load(HW_VALUE_DESC.get.call(input));
 }
+function hebWidgetOnGregSet(gregId){
+  Object.keys(hebWidgets).forEach(k => { const w = hebWidgets[k]; if(w.gregId === gregId && w.reeval) w.reeval(); });
+}
+(function(){
+  const dwSetOrig = dateWidgetSet;
+  dateWidgetSet = function(id, rawValue){ dwSetOrig(id, rawValue); hebWidgetOnGregSet(id); };
+})();
 function initHebWidgets(){ ['ff-birth-he', 'ff-death-he'].forEach(buildHebWidget); }
 function hebWidgetRefreshLabels(){ Object.keys(hebWidgets).forEach(k => hebWidgets[k].refreshLabels()); }
 function hebWidgetFirstError(){
