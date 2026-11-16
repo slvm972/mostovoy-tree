@@ -401,10 +401,7 @@ body.rtl #modal .hebw .hw-btn{margin-right:0;margin-left:6px}
   <button class="btn" id="btn-edit" style="display:none;margin-left:auto;background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-i="btn_edit">✏️ Дополнить</button>
   <button class="btn" id="btn-print" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Печать A1" data-title="tooltip_print">🖨</button>
   <button class="btn" id="btn-contacts" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать контакты" data-title="tooltip_contacts">📇</button>
-  <!-- FIX-GUARD:SINGLE-CALENDAR-BTN — exactly one #btn-calendar must exist. Duplicate = REGRESSION -->
-  <button class="btn" id="btn-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать календарь дней рождения" data-title="tooltip_calendar">📅</button>
-  <button class="btn" id="btn-reminders" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_reminders">&#9881;</button>
-  <button class="btn" id="btn-hebrew-calendar" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_hebrew_calendar">&#128334;</button>
+  <button class="btn" id="btn-reminders" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" data-title="tooltip_reminders">&#128276;</button>
   <button class="btn" id="btn-backup" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать резервную копию (JSON)" data-title="tooltip_backup">📦</button>
   <button class="btn" id="btn-gedcom" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Скачать GEDCOM (для переноса в другие сервисы)" data-title="tooltip_gedcom">📤</button>
   <button class="btn" id="btn-login" style="background:rgba(237,216,144,.15);border-color:rgba(237,216,144,.4)" title="Выйти" data-title="tooltip_logout">🔑</button>
@@ -1137,10 +1134,10 @@ function hebcalDue(){ const s = getHebrewCalStatus(); return s.state === 'soon' 
 function refreshHebcalHints(allowToast){
   const st = getHebrewCalStatus();
   const due = st.state === 'soon' || st.state === 'expired';
-  const btn = document.getElementById('btn-hebrew-calendar');
+  const btn = document.getElementById('btn-reminders');
   if(btn){
     btn.classList.toggle('hebcal-due', due);
-    btn.title = t('tooltip_hebrew_calendar') + (st.state !== 'none' ? ' (' + t('hebcal_valid_until').replace('{to}', st.to) + ')' : '');
+    btn.title = t('tooltip_reminders') + (st.state !== 'none' ? ' (' + t('hebcal_valid_until').replace('{to}', st.to) + ')' : '');
   }
   if(!due) return;
   const info = document.getElementById('info');
@@ -3822,15 +3819,6 @@ function runDiagnostics(){
       warn('MAX_GC не найден в коде вообще — проверить вручную');
     }
 
-    const calendarBtnCount = document.querySelectorAll('#btn-calendar').length;
-    if(calendarBtnCount === 1){
-      ok('Нет регрессии: одна кнопка календаря');
-    } else if(calendarBtnCount > 1){
-      fail('РЕГРЕССИЯ: дубль кнопки календаря', calendarBtnCount + ' штук');
-    } else {
-      warn('Кнопка календаря не найдена вообще');
-    }
-
     if(/function pLinkParent\(id, childId, otherParentId\)/.test(scriptText) && /function detachSingleParent/.test(scriptText)){
       ok('Нет регрессии: кнопка отвязки от одного родителя (✂) присутствует');
     } else {
@@ -4485,15 +4473,6 @@ document.getElementById('hebcal-circles-link').addEventListener('click', e => {
 });
 
 // ---- Hebrew-date reminders (.ics, 5 years): birthdays by Hebrew date + yahrzeits chosen on this device ----
-document.getElementById('btn-hebrew-calendar').title = t('tooltip_hebrew_calendar');
-document.getElementById('btn-hebrew-calendar').addEventListener('click', () => {
-  if(!_sessionPassword){
-    document.getElementById('btn-login').click();
-    showToast(t('toast_hebrew_login'), true);
-    return;
-  }
-  openRemindersWindow();
-});
 document.getElementById('hebcal-close').addEventListener('click', closeHebcalWindow);
 document.getElementById('hebcal-overlay').addEventListener('click', e => { if(e.target.id === 'hebcal-overlay') closeHebcalWindow(); });
 document.getElementById('hebcal-howto').addEventListener('click', e => { e.stopPropagation(); openHebcalHelp(); });
@@ -4624,7 +4603,6 @@ function downloadRegularCalendar(){
             : `✓ Скачано ${count} дней рождения`;
   showToast(msg + (deathCount ? t('toast_cal_deaths').replace('{k}', deathCount) : '') + (skippedYear ? t('toast_cal_skip_year').replace('{m}', skippedYear) : '') + (quietCount ? ' (' + ({ ru: '\u0438\u0437 \u043d\u0438\u0445 \u0431\u0435\u0437 \u0441\u0438\u0433\u043d\u0430\u043b\u0430', he: '\u05de\u05d4\u05dd \u05dc\u05dc\u05d0 \u05d4\u05ea\u05e8\u05d0\u05d4' }[currentLang] || 'of them without alert') + ': ' + quietCount + ')' : ''));
 }
-document.getElementById('btn-calendar').addEventListener('click', openRemindersWindow);
 ;
 
 // ── Скачать резервную копию (JSON) — доступно admin и guest ───────────
