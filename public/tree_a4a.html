@@ -2019,7 +2019,7 @@ function buildHelpBubble(lang){
   for(const [glyph, key] of rows){
     html += '<div class="lg-row"><span class="lg-b">' + glyph + '</span><span>' + L(key) + '</span></div>';
   }
-  html += '<div class="lg-row"><span class="lg-s">\uD83D\uDD17</span><span>' + L('legend_social') + '</span></div>';
+  html += '<div class="lg-row"><span class="lg-s">📞</span><span>' + L('legend_phone') + '</span></div><div class="lg-row"><span class="lg-s">✉️</span><span>' + L('legend_email') + '</span></div><div class="lg-row"><span class="lg-s">🔗</span><span>' + L('legend_social') + '</span></div>';
   html += '<div class="lg-tip">' + L('legend_tip') + '</div></div>';
   hb.innerHTML = html;
   // клики внутри справки не должны закрывать её (document-обработчик закрывает по любому клику)
