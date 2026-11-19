@@ -5,3 +5,9 @@ desktop.ini
 *.ini
 .aider*
 tools/tree-fallback.json
+# local secrets and deploy configs with password hashes
+.dev.vars
+.env
+.env.*
+!.env.example
+wrangler.worker.toml
