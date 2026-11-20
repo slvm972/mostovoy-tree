@@ -64,6 +64,33 @@ function childFamilyConflict(IDX, cid, targetFamId) {
 
 // ── Route handler ──────────────────────────────────────
 
+// ── Login rate limiting (brute-force protection) ──────────
+// Failed password attempts are counted per client IP in KV. After
+// RL_MAX_FAILS failures the IP gets HTTP 429 until RL_WINDOW_SEC seconds
+// pass without a new failure. A KV problem never locks everybody out.
+const RL_MAX_FAILS  = 10;
+const RL_WINDOW_SEC = 900;
+
+function rlKey(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  return 'rl_login_' + ip;
+}
+
+async function rlBlocked(request, env) {
+  try {
+    const n = parseInt(await env.TREE_KV.get(rlKey(request)) || '0', 10);
+    return n >= RL_MAX_FAILS;
+  } catch(e) { return false; }
+}
+
+async function rlFail(request, env) {
+  try {
+    const key = rlKey(request);
+    const n = parseInt(await env.TREE_KV.get(key) || '0', 10) + 1;
+    await env.TREE_KV.put(key, String(n), { expirationTtl: RL_WINDOW_SEC });
+  } catch(e) { /* counting is best effort */ }
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -73,6 +100,12 @@ export default {
     // CORS preflight
     if(method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    // ── Brute-force guard: too many failed attempts from this IP ──
+    const rlHasPassword = !!(request.headers.get('X-Password') || request.headers.get('Authorization'));
+    if((rlHasPassword || (path === '/api/login' && method === 'POST')) && await rlBlocked(request, env)) {
+      return json({ ok: false, error: 'Слишком много неверных попыток. Попробуйте позже.' }, 429);
     }
 
     // ── Subscription freeze check ────────────────────────
@@ -99,6 +132,7 @@ export default {
       if(await checkPassword(password, await getGuestHash(env))) {
         return json({ ok: true, role: 'guest' });
       }
+      await rlFail(request, env);
       return err('Неверный пароль', 401);
     }
 
@@ -1111,8 +1145,8 @@ export default {
       if(auth !== 'admin') return err('Только для администратора', 403);
 
       const body = await request.json().catch(() => null);
-      if(!body || !body.password || body.password.length < 4) {
-        return err('Пароль должен быть не короче 4 символов');
+      if(!body || !body.password || body.password.length < 8) {
+        return err('Пароль должен быть не короче 8 символов');
       }
       // Guard against setting the guest password equal to the admin
       // password — would let guests silently gain admin rights since
@@ -1272,5 +1306,6 @@ async function getRole(request, env) {
   if(!pass) return null;
   if(await checkPassword(pass, env.ADMIN_PASSWORD_HASH)) return 'admin';
   if(await checkPassword(pass, await getGuestHash(env))) return 'guest';
+  await rlFail(request, env);
   return null;
 }
